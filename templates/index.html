@@ -350,6 +350,12 @@
             padding: 10px;
             border-radius: 4px;
         }
+
+        /* Remove all session footer related styles */
+        .session-footer, .session-details, .session-info-container,
+        .session-id-display, .session-join, .separator, .clickable {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -404,21 +410,7 @@
             </div>
         </div>
         
-        <!-- Add back the session info footer with sharing link -->
-        <div class="session-footer">
-            <div class="session-details">
-                <div class="session-info-container">
-                    <span id="session-info" class="session-info">Session active</span>
-                    <span class="separator">|</span>
-                    <span>Share Code: </span>
-                    <span id="session-id-value" class="session-id-display clickable" title="Click to copy">Loading...</span>
-                </div>
-                <div class="session-join">
-                    <input type="text" id="join-session-id" placeholder="Enter session code">
-                    <button id="join-btn" class="action-btn join-btn">Join</button>
-                </div>
-            </div>
-        </div>
+        <!-- Remove the session footer element completely -->
     </div>
 
 <script>
@@ -437,14 +429,20 @@ document.addEventListener('DOMContentLoaded', function() {
     let playerName = null;
     let seenMessages = new Set();
     
-    // Session data - simplified to just store game ID
+    // Session data - just store game ID locally
     let currentGameId = localStorage.getItem('currentGameId') || null;
     
-    // Player tracking - just player 1
+    // Player tracking
     const playerNames = {
         1: null,
         2: null
     };
+    
+    // Track processed messages to avoid duplicates
+    const processedMessageIds = new Set();
+    
+    // Keep track of last message from each player to avoid duplicates
+    const lastPlayerMessages = {};
     
     // Get DOM elements once
     const chatWindow = document.getElementById('chat-window');
@@ -459,18 +457,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const additionalPlayersContainer = document.getElementById('additional-players');
     let nextPlayerNumber = 3; // Start with player 3 since we already have 1 and 2
     
-    // Add these variables back for session joining
-    const joinSessionInput = document.getElementById('join-session-id');
-    const joinBtn = document.getElementById('join-btn');
-    const sessionIdValue = document.getElementById('session-id-value');
-    
-    // Add these variables near the top of your script
-    let originalUserId = localStorage.getItem('originalUserId') || null;
+    // Add variables for update polling
     let lastMessageCount = 0;
     let updateCheckInterval = null;
     let isCheckingForUpdates = false;
-    let lastSentMessage = "";  // To avoid duplicate messages
-
+    let lastSentMessage = "";
+    
     // Remaining functions from your original code
     function createLoadingDivForDM(id, textId) {
         debugLog("Creating loading div:", id, textId);
@@ -615,6 +607,102 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
     
+    // Improved message tracking to prevent duplicates
+    function messageExists(role, content) {
+        // Create a simple hash for the message
+        const msgHash = `${role}-${content.substring(0, 50)}`;
+        
+        // Check if we've seen this message before
+        if (processedMessageIds.has(msgHash)) {
+            return true;
+        }
+        
+        // Add to our set of processed messages
+        processedMessageIds.add(msgHash);
+        
+        // Keep the set from growing too large
+        if (processedMessageIds.size > 100) {
+            // Convert to array, keep only the most recent 50
+            const msgArray = Array.from(processedMessageIds);
+            processedMessageIds.clear();
+            for (let i = msgArray.length - 50; i < msgArray.length; i++) {
+                if (i >= 0) processedMessageIds.add(msgArray[i]);
+            }
+        }
+        
+        return false;
+    }
+    
+    // Improved addMessage with duplicate detection
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false) {
+        // Skip if this appears to be the current user's message that we already displayed
+        if (fromUpdate && sender.toLowerCase() === (playerNames[1] || 'player 1').toLowerCase() && 
+            text === lastSentMessage) {
+            debugLog("Skipping duplicate recent message");
+            return false;
+        }
+        
+        // Check if this is a duplicate message
+        const role = sender.toLowerCase() === 'dm' ? 'assistant' : 'user';
+        if (messageExists(role, text)) {
+            debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
+            return false;
+        }
+        
+        // Track the last message from this sender
+        lastPlayerMessages[sender] = text;
+        
+        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
+        
+        // Create message element
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${sender.toLowerCase() === 'dm' ? 'dm-message' : 'player-message'}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${sender.toUpperCase()}: `;
+        nameSpan.style.fontWeight = 'bold';
+        msgDiv.appendChild(nameSpan);
+        
+        // Add content span
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        return true;
+    }
+    
+    // Modified addSystemMessage with duplicate detection
+    function addSystemMessage(text, fromUpdate = false) {
+        // Check for duplicates
+        if (messageExists('system', text)) {
+            debugLog("Skipping duplicate system message");
+            return;
+        }
+        
+        debugLog("Adding system message:", text);
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system-message';
+        msgDiv.style.color = '#6272a4';
+        msgDiv.style.fontStyle = 'italic';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = "SYSTEM: ";
+        nameSpan.style.fontWeight = 'bold';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    // Modified sendMessage function
     function sendMessage(inputElement, playerNumber) {
         const userMessage = inputElement.value.trim();
         if (!userMessage) return;
@@ -984,11 +1072,6 @@ document.addEventListener('DOMContentLoaded', function() {
             chatWindow.innerHTML = '';
             addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
         });
-        
-        // Add this call to update the session ID display
-        if (currentGameId) {
-            updateSessionId();
-        }
     }
     
     function createNewGame() {
@@ -1019,9 +1102,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Store in local storage
                 localStorage.setItem('currentGameId', currentGameId);
-                
-                // Update session ID display
-                updateSessionId();
                 
                 // Add welcome message
                 addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
@@ -1073,7 +1153,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function showPlayer2() {
         if (player2Container.classList.contains('hidden')) {
             player2Container.classList.remove('hidden');
-            isMultiplayerActive = true;
+            
+            // Move the isMultiplayerActive flag set to after the API call completes
+            // to prevent race conditions with other functions
             
             // Notify the DM about the new player
             addSystemMessage("Player 2 has joined the game. Please enter your name.");
@@ -1101,6 +1183,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 debugLog("Player 2 welcome response:", data);
                 if (data && data.message_id) {
                     sendStreamRequest(data.message_id, loadingDiv);
+                    // Only set multiplayer active after successful API response
+                    isMultiplayerActive = true;
                 } else {
                     throw new Error("Invalid response data");
                 }
@@ -1119,7 +1203,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add click handler for Add Player button
     addPlayerBtn.addEventListener('click', function() {
-        showPlayer2();
+        if (isGenerating) {
+            return; // Don't add players while generating a response
+        }
+        
+        if (player2Container.classList.contains('hidden')) {
+            // First click should only show Player 2
+            showPlayer2();
+        } else {
+            // Player 2 is already visible, add the next player
+            addPlayer(nextPlayerNumber);
+        }
     });
 
     // Add event listener for Player 2 send button
@@ -1180,20 +1274,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update showPlayer2 function to make it more generic
     function addPlayer(playerNum) {
-        if (playerNum === 2) {
-            // Special case for Player 2 which already exists in HTML
-            if (player2Container.classList.contains('hidden')) {
-                player2Container.classList.remove('hidden');
-                isMultiplayerActive = true;
-            } else {
-                // Player 2 already visible
-                return;
-            }
-        } else {
-            // Create UI for the new player
-            const newPlayerContainer = createPlayerInput(playerNum);
-            additionalPlayersContainer.appendChild(newPlayerContainer);
+        // Don't allow adding more players while generating
+        if (isGenerating) {
+            return;
         }
+        
+        // Don't allow adding Player 2 through this function - use showPlayer2() instead
+        if (playerNum === 2) {
+            if (player2Container.classList.contains('hidden')) {
+                showPlayer2();
+            }
+            return;
+        }
+        
+        // Create UI for the new player 3+
+        const newPlayerContainer = createPlayerInput(playerNum);
+        additionalPlayersContainer.appendChild(newPlayerContainer);
         
         // Reset this player's name
         playerNames[playerNum] = null;
@@ -1262,108 +1358,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Add function to update session ID display
-    function updateSessionId() {
-        if (currentGameId) {
-            try {
-                // Extract the short ID portion to share
-                let sessionIdShort;
-                if (currentGameId.includes('_')) {
-                    sessionIdShort = currentGameId.split('_').pop();
-                } else {
-                    sessionIdShort = currentGameId;
-                }
-                
-                // Update the display
-                sessionIdValue.textContent = sessionIdShort;
-                sessionIdValue.title = "Click to copy share code";
-                debugLog("Session ID updated to:", sessionIdShort);
-                
-                // Add click event to copy share code
-                sessionIdValue.onclick = function() {
-                    navigator.clipboard.writeText(sessionIdShort).then(() => {
-                        const originalText = sessionIdValue.textContent;
-                        sessionIdValue.textContent = "Copied!";
-                        setTimeout(() => {
-                            sessionIdValue.textContent = originalText;
-                        }, 1000);
-                    });
-                };
-            } catch (err) {
-                debugLog("Error updating session ID:", err);
-                sessionIdValue.textContent = "Error";
-            }
-        } else {
-            sessionIdValue.textContent = "No session";
-        }
-    }
-
-    // Add join session functionality
-    joinBtn.addEventListener('click', function() {
-        const sessionId = joinSessionInput.value.trim();
-        if (!sessionId) {
-            alert("Please enter a session code to join");
-            return;
-        }
-        
-        // Show joining status
-        addSystemMessage(`Attempting to join session ${sessionId}...`);
-        
-        fetch('/join_session', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                session_id: sessionId
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Store the session info
-                currentGameId = data.game_id;
-                
-                // Save to localStorage for persistence
-                localStorage.setItem('currentGameId', currentGameId);
-                
-                // Display success message
-                addSystemMessage(`Successfully joined session! You are now playing in ${sessionId}.`);
-                
-                // Clear the chat and load the joined session's history
-                chatWindow.innerHTML = '';
-                
-                // Display the history messages
-                if (data.history && Array.isArray(data.history)) {
-                    displayMessages(data.history);
-                }
-                
-                // This is where we add Player 2 (for the first joiner)
-                if (!isMultiplayerActive) {
-                    addPlayer(2);
-                }
-                
-                // Update session info display
-                updateSessionId();
-                
-                // Set the initial message count for update checking
-                if (data.history && Array.isArray(data.history)) {
-                    lastMessageCount = data.history.length;
-                    
-                    // Start polling for updates
-                    startUpdatePolling();
-                }
-            } else {
-                // Show error message with more details if available
-                const errorMsg = data.error || "Unknown error";
-                addSystemMessage(`Failed to join session: ${errorMsg}`);
-                debugLog("Join session error details:", data);
-            }
-        })
-        .catch(error => {
-            debugLog("Error joining session:", error);
-            addSystemMessage(`Error joining session: ${error.message}`);
-        });
-    });
-
     // Add a function to check for updates
     function checkForUpdates() {
         if (!currentGameId || isCheckingForUpdates || isGenerating) {
@@ -1377,8 +1371,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 game_id: currentGameId,
-                last_message_count: lastMessageCount,
-                original_user_id: originalUserId
+                last_message_count: lastMessageCount
             })
         })
         .then(response => {
@@ -1388,48 +1381,46 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.json();
         })
         .then(data => {
-            // Store the original user ID if provided
-            if (data.success && data.original_user_id && !originalUserId) {
-                originalUserId = data.original_user_id;
-                localStorage.setItem('originalUserId', originalUserId);
-                debugLog("Stored original user ID:", originalUserId);
-            }
-            
             if (data.success && data.has_updates) {
                 // Process new messages
                 let newMessages = data.updates;
-                debugLog(`Received ${newMessages.length} new messages from other players`);
+                let addedMessages = 0;
                 
                 // Append new messages to the chat window
                 newMessages.forEach(msg => {
+                    let wasAdded = false;
+                    
                     if (msg.role === 'assistant') {
-                        addMessage('DM', msg.content, false, true);
-                        checkForPlayerNames(msg.content);
+                        wasAdded = addMessage('DM', msg.content, false, true);
+                        if (wasAdded) checkForPlayerNames(msg.content);
                     }
                     else if (msg.role === 'user') {
-                        // For user messages, try to use the player's name if available
                         let playerNum = 1;
                         if (msg.player && msg.player.startsWith('player')) {
                             playerNum = parseInt(msg.player.substring(6));
                         }
                         
                         const sender = playerNames[playerNum] || `Player ${playerNum}`;
-                        addMessage(sender, msg.content, false, true);
+                        wasAdded = addMessage(sender, msg.content, false, true);
                     }
                     else if (msg.role === 'system') {
                         addSystemMessage(msg.content, true);
+                        wasAdded = true;
                     }
+                    
+                    if (wasAdded) addedMessages++;
                 });
                 
                 // Update the message count
                 lastMessageCount = data.message_count;
                 
                 // Check if we need to show other players' inputs
-                checkForMissingPlayers(newMessages);
+                if (addedMessages > 0) {
+                    checkForMissingPlayers(newMessages);
+                }
             } else if (data.success) {
                 // Update our message count if server has a different count
                 if (data.message_count !== lastMessageCount) {
-                    debugLog("Syncing message count:", data.message_count);
                     lastMessageCount = data.message_count;
                 }
             }

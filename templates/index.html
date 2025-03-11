@@ -464,6 +464,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const joinBtn = document.getElementById('join-btn');
     const sessionIdValue = document.getElementById('session-id-value');
     
+    // Add these variables to track updates
+    let lastMessageCount = 0;
+    let updateCheckInterval = null;
+    let isCheckingForUpdates = false;
+
     // Remaining functions from your original code
     function createLoadingDivForDM(id, textId) {
         debugLog("Creating loading div:", id, textId);
@@ -711,7 +716,7 @@ document.addEventListener('DOMContentLoaded', function() {
         inputElement.focus();
     }
     
-    function addSystemMessage(text) {
+    function addSystemMessage(text, fromUpdate = false) {
         debugLog("Adding system message:", text);
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message system-message';
@@ -732,7 +737,15 @@ document.addEventListener('DOMContentLoaded', function() {
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
     
-    function addMessage(sender, text, isTypewriter = false) {
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false) {
+        // Skip if this appears to be the current user's message that we already displayed
+        // This prevents duplicating messages that are both sent and received via polling
+        if (fromUpdate && sender.toLowerCase() === (playerNames[1] || 'player 1').toLowerCase() && 
+            text === lastSentMessage) {
+            debugLog("Skipping duplicate message", text.substring(0, 20) + "...");
+            return;
+        }
+        
         debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
         
         // Create message element
@@ -952,6 +965,12 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Focus input
             userInput.focus();
+            
+            // Set the initial message count for update checking
+            lastMessageCount = data.history.length;
+            
+            // Start polling for updates
+            startUpdatePolling();
         })
         .catch(error => {
             debugLog('Error loading history:', error);
@@ -1001,6 +1020,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Add welcome message
                 addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+                
+                // Reset message count and start polling
+                lastMessageCount = 1; // Start with 1 for the welcome message
+                startUpdatePolling();
             } else {
                 throw new Error("Failed to create new game");
             }
@@ -1315,6 +1338,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Update session info display
                 updateSessionId();
+                
+                // Set the initial message count for update checking
+                if (data.history && Array.isArray(data.history)) {
+                    lastMessageCount = data.history.length;
+                    
+                    // Start polling for updates
+                    startUpdatePolling();
+                }
             } else {
                 // Show error message with more details if available
                 const errorMsg = data.error || "Unknown error";
@@ -1328,6 +1359,80 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Add function to check for updates from other players
+    function checkForUpdates() {
+        if (!currentGameId || isCheckingForUpdates || isGenerating) {
+            return; // Don't check if no game is active or already checking or AI is generating
+        }
+        
+        isCheckingForUpdates = true;
+        
+        fetch('/get_updates', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                game_id: currentGameId,
+                last_message_count: lastMessageCount
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.has_updates) {
+                // Process new messages
+                let newMessages = data.updates;
+                debugLog(`Received ${newMessages.length} new messages from other players`);
+                
+                // Append new messages to the chat window
+                newMessages.forEach(msg => {
+                    if (msg.role === 'assistant') {
+                        addMessage('DM', msg.content, false, true);
+                        checkForPlayerNames(msg.content);
+                    }
+                    else if (msg.role === 'user') {
+                        // For user messages, try to use the player's name if available
+                        let playerNum = 1;
+                        if (msg.player && msg.player.startsWith('player')) {
+                            playerNum = parseInt(msg.player.substring(6));
+                        }
+                        
+                        const sender = playerNames[playerNum] || `Player ${playerNum}`;
+                        addMessage(sender, msg.content, false, true);
+                    }
+                    else if (msg.role === 'system') {
+                        addSystemMessage(msg.content, true);
+                    }
+                });
+                
+                // Update the message count
+                lastMessageCount = data.message_count;
+            }
+        })
+        .catch(error => {
+            debugLog("Error checking for updates:", error);
+        })
+        .finally(() => {
+            isCheckingForUpdates = false;
+        });
+    }
+
+    // Keep track of the last sent message to avoid duplicates
+    let lastSentMessage = "";
+
+    // Start the update interval when we initialize a game or join one
+    function startUpdatePolling() {
+        // Clear any existing interval
+        if (updateCheckInterval) {
+            clearInterval(updateCheckInterval);
+        }
+        
+        // Start a new interval to check for updates
+        updateCheckInterval = setInterval(() => {
+            checkForUpdates();
+        }, 3000); // Check every 3 seconds
+        
+        debugLog("Started update polling");
+    }
+
     // Initialize
     try {
         if (currentGameId) {
@@ -1340,6 +1445,13 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
         debugLog("Error during initialization:", error);
     }
+    
+    // Clean up interval when leaving the page
+    window.addEventListener('beforeunload', function() {
+        if (updateCheckInterval) {
+            clearInterval(updateCheckInterval);
+        }
+    });
 });
 </script>
 </body>

@@ -358,5 +358,71 @@ def join_session():
         app.logger.error(f"Error joining session: {str(e)}")
         return jsonify({"success": False, "error": f"Failed to load session: {str(e)}"})
 
+# Add a new endpoint to get messages after a certain timestamp
+
+@app.route('/get_updates', methods=['POST'])
+def get_updates():
+    """Get updates to chat history since last timestamp"""
+    user_id = get_user_id()
+    data = request.get_json()
+    game_id = data.get('game_id')
+    last_message_count = data.get('last_message_count', 0)
+    
+    # Check if this is a joined session
+    if not game_id:
+        return jsonify({"success": False, "error": "No game ID provided"})
+    
+    # Try to find the actual file for this game (might be from another user)
+    found_user_id = user_id
+    found_file_path = None
+    
+    # First check if the current user has this game file
+    file_path = get_chat_file_path(user_id, game_id)
+    if os.path.exists(file_path):
+        found_file_path = file_path
+    else:
+        # If not, search for it in other users' files
+        short_id = game_id.split('_')[-1] if '_' in game_id else game_id
+        all_files = [f for f in os.listdir(CHAT_DIR) if f.startswith("chat_history_") and short_id in f]
+        
+        if all_files:
+            file_path = os.path.join(CHAT_DIR, all_files[0])
+            if os.path.exists(file_path):
+                found_file_path = file_path
+                # Extract user_id from filename
+                parts = all_files[0].replace("chat_history_", "").replace(".json", "").split("_")
+                if len(parts) >= 2:
+                    found_user_id = parts[0]
+    
+    if not found_file_path:
+        return jsonify({"success": False, "error": "Game session not found"})
+    
+    try:
+        # Read the full chat history
+        with open(found_file_path, 'r') as file:
+            chat_history = json.load(file)
+        
+        # Check if there are new messages
+        if len(chat_history) > last_message_count:
+            # Return only the new messages
+            new_messages = chat_history[last_message_count:]
+            return jsonify({
+                "success": True, 
+                "has_updates": True,
+                "updates": new_messages,
+                "message_count": len(chat_history)
+            })
+        else:
+            # No new messages
+            return jsonify({
+                "success": True,
+                "has_updates": False,
+                "message_count": len(chat_history)
+            })
+            
+    except Exception as e:
+        app.logger.error(f"Error checking for updates: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
 if __name__ == '__main__':
     app.run(debug=True)

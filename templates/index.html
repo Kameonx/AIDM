@@ -923,7 +923,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Add New Game button functionality - simplified
+    // Update New Game button functionality to properly clear all additional players
     newGameBtn.addEventListener('click', function() {
         debugLog("New game button clicked");
         
@@ -941,11 +941,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 playerName = null;
                 seenMessages = new Set();
                 
-                // Reset player name
-                playerNames[1] = null;
+                // Reset all player data
+                playerNames = { 1: null, 2: null }; // Reset to initial state
+                
+                // Reset UI elements
                 player2Container.classList.add('hidden');
                 isMultiplayerActive = false;
-                playerNames[2] = null;
+                
+                // Clear all additional players
+                additionalPlayersContainer.innerHTML = '';
+                
+                // Reset next player number
+                nextPlayerNumber = 3;
+                
+                // Clear processed message tracking
+                processedMessageIds.clear();
                 
                 // Start completely fresh game
                 createNewGame();
@@ -1001,6 +1011,17 @@ document.addEventListener('DOMContentLoaded', function() {
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
     
+    // First, add a function to ensure a welcome message is displayed
+    function ensureWelcomeMessage() {
+        // Check if there's any DM message in the chat window
+        const dmMessages = chatWindow.querySelectorAll('.dm-message');
+        if (dmMessages.length === 0) {
+            // No DM messages found, add a welcome message
+            addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+            debugLog("Added fallback welcome message");
+        }
+    }
+
     function initialize() {
         debugLog("Initializing game");
         
@@ -1009,8 +1030,16 @@ document.addEventListener('DOMContentLoaded', function() {
         seenMessages.clear();
         isGenerating = false;
         
-        // Reset player name
-        playerNames[1] = null;
+        // Reset player tracking
+        playerNames = { 1: null, 2: null };
+        
+        // Clear player 2 and additional players UI
+        player2Container.classList.add('hidden');
+        additionalPlayersContainer.innerHTML = '';
+        
+        // Reset additional player tracking
+        isMultiplayerActive = false;
+        nextPlayerNumber = 3;
         
         if (!currentGameId) {
             debugLog("No game ID, creating new game");
@@ -1042,16 +1071,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Process history data
             displayMessages(data.history);
             
-            // Check for welcome message
-            const hasWelcomeMessage = data.history.some(msg => 
-                msg.role === 'assistant' && 
-                msg.content.includes("What is your name?")
-            );
-            
-            if (!hasWelcomeMessage) {
-                // Add welcome message if missing
-                addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?");
-            }
+            // Ensure welcome message is displayed (add it if missing)
+            ensureWelcomeMessage();
             
             // Store session info
             localStorage.setItem('currentGameId', currentGameId);
@@ -1071,9 +1092,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Create default welcome message
             chatWindow.innerHTML = '';
             addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+            
+            // Focus input
+            userInput.focus();
         });
     }
-    
+
     function createNewGame() {
         debugLog("Creating new game");
         
@@ -1084,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reset player name
         playerNames[1] = null;
         
-        // Create welcome message
+        // Create loading message
         addMessage('DM', 'Creating a new adventure for you...', false);
         
         // Request new game from server
@@ -1103,12 +1127,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Store in local storage
                 localStorage.setItem('currentGameId', currentGameId);
                 
-                // Add welcome message
+                // Clear loading message
+                chatWindow.innerHTML = '';
+                
+                // Add welcome message - make sure this is displayed
                 addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+                debugLog("Added welcome message for new game");
                 
                 // Reset message count and start polling
                 lastMessageCount = 1; // Start with 1 for the welcome message
                 startUpdatePolling();
+                
+                // Focus input field
+                userInput.focus();
             } else {
                 throw new Error("Failed to create new game");
             }
@@ -1116,9 +1147,12 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             debugLog("Error creating new game:", error);
             addSystemMessage("Error: " + error.message);
+            
+            // Add welcome message anyway so user can interact
+            ensureWelcomeMessage();
         });
     }
-    
+
     // Set up event handlers
     sendBtn.addEventListener('click', function() {
         sendMessage(userInput, 1);
@@ -1508,8 +1542,13 @@ document.addEventListener('DOMContentLoaded', function() {
             debugLog("No previous session, creating new game");
             createNewGame();
         }
+        
+        // Add a final check after small delay to ensure welcome message is displayed
+        setTimeout(ensureWelcomeMessage, 500);
     } catch (error) {
         debugLog("Error during initialization:", error);
+        // Add welcome message anyway as fallback
+        ensureWelcomeMessage();
     }
 });
 </script>

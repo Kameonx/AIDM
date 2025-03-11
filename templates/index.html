@@ -464,10 +464,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const joinBtn = document.getElementById('join-btn');
     const sessionIdValue = document.getElementById('session-id-value');
     
-    // Add these variables to track updates
+    // Add these variables near the top of your script
+    let originalUserId = localStorage.getItem('originalUserId') || null;
     let lastMessageCount = 0;
     let updateCheckInterval = null;
     let isCheckingForUpdates = false;
+    let lastSentMessage = "";  // To avoid duplicate messages
 
     // Remaining functions from your original code
     function createLoadingDivForDM(id, textId) {
@@ -616,6 +618,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function sendMessage(inputElement, playerNumber) {
         const userMessage = inputElement.value.trim();
         if (!userMessage) return;
+        
+        // Store this message to avoid duplicates when polling
+        lastSentMessage = userMessage;
         
         if (isGenerating) {
             debugLog("Already generating, ignoring send");
@@ -963,14 +968,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // Store session info
             localStorage.setItem('currentGameId', currentGameId);
             
-            // Focus input
-            userInput.focus();
-            
             // Set the initial message count for update checking
             lastMessageCount = data.history.length;
             
             // Start polling for updates
             startUpdatePolling();
+            
+            // Focus input
+            userInput.focus();
         })
         .catch(error => {
             debugLog('Error loading history:', error);
@@ -1359,7 +1364,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Add function to check for updates from other players
+    // Add a function to check for updates
     function checkForUpdates() {
         if (!currentGameId || isCheckingForUpdates || isGenerating) {
             return; // Don't check if no game is active or already checking or AI is generating
@@ -1372,11 +1377,24 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 game_id: currentGameId,
-                last_message_count: lastMessageCount
+                last_message_count: lastMessageCount,
+                original_user_id: originalUserId
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            // Store the original user ID if provided
+            if (data.success && data.original_user_id && !originalUserId) {
+                originalUserId = data.original_user_id;
+                localStorage.setItem('originalUserId', originalUserId);
+                debugLog("Stored original user ID:", originalUserId);
+            }
+            
             if (data.success && data.has_updates) {
                 // Process new messages
                 let newMessages = data.updates;
@@ -1405,6 +1423,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Update the message count
                 lastMessageCount = data.message_count;
+                
+                // Check if we need to show other players' inputs
+                checkForMissingPlayers(newMessages);
+            } else if (data.success) {
+                // Update our message count if server has a different count
+                if (data.message_count !== lastMessageCount) {
+                    debugLog("Syncing message count:", data.message_count);
+                    lastMessageCount = data.message_count;
+                }
             }
         })
         .catch(error => {
@@ -1415,23 +1442,71 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Keep track of the last sent message to avoid duplicates
-    let lastSentMessage = "";
+    // Add this function to check for missing player inputs
+    function checkForMissingPlayers(messages) {
+        // Find unique player numbers from messages
+        const playerNumbers = new Set();
+        
+        messages.forEach(msg => {
+            if (msg.player && msg.player.startsWith('player')) {
+                const playerNum = parseInt(msg.player.substring(6));
+                if (!isNaN(playerNum) && playerNum > 1) {  // Ignore player 1 (self)
+                    playerNumbers.add(playerNum);
+                }
+            }
+        });
+        
+        // For each player number, make sure their input is visible
+        playerNumbers.forEach(playerNum => {
+            if (playerNum === 2) {
+                // Make sure player 2 input is visible
+                if (player2Container.classList.contains('hidden')) {
+                    player2Container.classList.remove('hidden');
+                    isMultiplayerActive = true;
+                }
+            } 
+            else if (playerNum >= 3) {
+                // Check if we need to add input for player 3+
+                const containerExists = document.getElementById(`player${playerNum}-container`);
+                if (!containerExists) {
+                    const newPlayerContainer = createPlayerInput(playerNum);
+                    additionalPlayersContainer.appendChild(newPlayerContainer);
+                    
+                    // Update nextPlayerNumber if needed
+                    if (playerNum >= nextPlayerNumber) {
+                        nextPlayerNumber = playerNum + 1;
+                    }
+                    
+                    isMultiplayerActive = true;
+                }
+            }
+        });
+    }
 
-    // Start the update interval when we initialize a game or join one
+    // Add function to start polling
     function startUpdatePolling() {
         // Clear any existing interval
         if (updateCheckInterval) {
             clearInterval(updateCheckInterval);
         }
         
+        // First do an immediate check
+        checkForUpdates();
+        
         // Start a new interval to check for updates
         updateCheckInterval = setInterval(() => {
             checkForUpdates();
-        }, 3000); // Check every 3 seconds
+        }, 2000); // Check more frequently (every 2 seconds)
         
         debugLog("Started update polling");
     }
+
+    // Add cleanup for the interval when leaving the page
+    window.addEventListener('beforeunload', function() {
+        if (updateCheckInterval) {
+            clearInterval(updateCheckInterval);
+        }
+    });
 
     // Initialize
     try {
@@ -1445,13 +1520,6 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
         debugLog("Error during initialization:", error);
     }
-    
-    // Clean up interval when leaving the page
-    window.addEventListener('beforeunload', function() {
-        if (updateCheckInterval) {
-            clearInterval(updateCheckInterval);
-        }
-    });
 });
 </script>
 </body>

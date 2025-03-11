@@ -295,71 +295,7 @@ def load_history():
     # Return the chat history
     return jsonify({"history": chat_history})
 
-# Re-add the join_session endpoint
-
-@app.route('/join_session', methods=['POST'])
-def join_session():
-    """Join an existing game session"""
-    user_id = get_user_id()
-    data = request.json
-    session_id = data.get('session_id')
-    
-    if not session_id:
-        return jsonify({"success": False, "error": "No session ID provided"})
-    
-    # Debug info - log all available files
-    all_files = [f for f in os.listdir(CHAT_DIR) if f.startswith("chat_history_")]
-    app.logger.info(f"Looking for session: {session_id}")
-    app.logger.info(f"Available files: {all_files}")
-    
-    # Find matching session file
-    found_user_id = None
-    found_game_id = None
-    
-    # First attempt: Look for exact match with the session ID
-    for filename in all_files:
-        if filename.endswith(f"_{session_id}.json"):
-            parts = filename.replace("chat_history_", "").replace(".json", "").split("_")
-            if len(parts) >= 2:
-                found_user_id = parts[0]
-                found_game_id = '_'.join(parts[1:])
-                break
-    
-    # Second attempt: Check if it's a substring in any filename as a fallback
-    if not found_game_id:
-        for filename in all_files:
-            if session_id in filename:
-                parts = filename.replace("chat_history_", "").replace(".json", "").split("_")
-                if len(parts) >= 2:
-                    found_user_id = parts[0]
-                    found_game_id = '_'.join(parts[1:])
-                    break
-    
-    # If still not found, report error
-    if not found_game_id:
-        app.logger.warning(f"Session not found. ID: {session_id}")
-        return jsonify({"success": False, "error": "Session not found. Please check the ID and try again."})
-    
-    # Load the existing chat history
-    file_path = get_chat_file_path(found_user_id, found_game_id)
-    if not os.path.exists(file_path):
-        return jsonify({"success": False, "error": "Session history file not found"})
-    
-    try:
-        with open(file_path, 'r') as file:
-            chat_history = json.load(file)
-            
-        return jsonify({
-            "success": True,
-            "game_id": found_game_id,
-            "history": chat_history
-        })
-    except Exception as e:
-        app.logger.error(f"Error joining session: {str(e)}")
-        return jsonify({"success": False, "error": f"Failed to load session: {str(e)}"})
-
-# Add the get_updates endpoint to check for new messages
-
+# Simplify the get_updates endpoint
 @app.route('/get_updates', methods=['POST'])
 def get_updates():
     """Get updates to chat history since last timestamp"""
@@ -367,55 +303,18 @@ def get_updates():
     data = request.get_json()
     game_id = data.get('game_id')
     last_message_count = int(data.get('last_message_count', 0))
-    original_user_id = data.get('original_user_id')  # Add this line
     
     if not game_id:
         return jsonify({"success": False, "error": "No game ID provided"})
     
-    # If original_user_id is provided, use that instead
-    file_user_id = original_user_id if original_user_id else user_id
-    
-    # First try the exact path
-    file_path = get_chat_file_path(file_user_id, game_id)
-    
-    # If file doesn't exist and we don't have original_user_id, search for it
-    if not os.path.exists(file_path) and not original_user_id:
-        app.logger.info(f"File not found at {file_path}, searching by game ID")
-        
-        # Look for files containing this game ID
-        short_id = game_id.split('_')[-1] if '_' in game_id else game_id
-        all_files = []
-        
-        for f in os.listdir(CHAT_DIR):
-            if f.startswith("chat_history_") and f.endswith(".json"):
-                if short_id in f:
-                    all_files.append(f)
-        
-        app.logger.info(f"Found {len(all_files)} potential matches: {all_files}")
-        
-        if all_files:
-            # Sort by last modified time to get the most recent
-            all_files.sort(key=lambda f: os.path.getmtime(os.path.join(CHAT_DIR, f)), reverse=True)
-            filename = all_files[0]
-            file_path = os.path.join(CHAT_DIR, filename)
-            
-            # Extract the original user ID
-            parts = filename.replace("chat_history_", "").replace(".json", "").split("_")
-            if len(parts) >= 2:
-                file_user_id = parts[0]
-                app.logger.info(f"Using file from user {file_user_id}")
+    # Get the chat file path for this user and game
+    file_path = get_chat_file_path(user_id, game_id)
     
     if not os.path.exists(file_path):
-        app.logger.error(f"No matching file found for game_id {game_id}")
+        app.logger.error(f"Game session file not found: {file_path}")
         return jsonify({
             "success": False, 
-            "error": "Game session file not found",
-            "debug_info": {
-                "user_id": user_id,
-                "original_user_id": original_user_id,
-                "game_id": game_id,
-                "file_path": file_path
-            }
+            "error": "Game session file not found"
         })
     
     try:
@@ -423,10 +322,8 @@ def get_updates():
         with open(file_path, 'r') as file:
             chat_history = json.load(file)
         
-        # Return the original user ID so client can store it for future requests
         result = {
             "success": True,
-            "original_user_id": file_user_id,
             "message_count": len(chat_history)
         }
         

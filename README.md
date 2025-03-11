@@ -4,7 +4,7 @@ AIDM README
 
 🔳 Using AIDM
 
-🐍 Visit the web app hosted here: 
+🐍 Visit the web app hosted here: https://aidm.onrender.com/
 
 😿 If the site is down you may also follow the steps below:
 

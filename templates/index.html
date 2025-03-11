@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D&D AI Dungeon</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #1d1f21;
+            color: #ffffff;
+            font-family: 'Consolas', monospace;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #282a36;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,128,128,0.3);
+        }
+        
+        .chat-window {
+            height: 500px;
+            border: 2px solid #61afef;
+            padding: 15px;
+            overflow-y: scroll;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            margin: 10px 0;
+        }
+        
+        .dm-message {
+            color: #bd93f9;
+        }
+        
+        .player-message {
+            color: #50fa7b;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 10px;
+            background: #2c2e32;
+            border: 2px solid #44475a;
+            color: #ffffff;
+        }
+        
+        .action-btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Consolas', monospace;
+            font-weight: bold;
+            color: white;
+            transition: filter 0.3s;
+        }
+        
+        .action-btn:hover {
+            filter: brightness(1.2);
+        }
+        
+        .copy-btn {
+            background-color: #50fa7b;
+            color: #282a36;
+        }
+        
+        .send-btn {
+            background-color: #61afef;
+        }
+
+        .error-message {
+            color: #ff5555;
+        }
+        
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .new-game-btn {
+            background-color: #ff5555;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Consolas', monospace;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        .new-game-btn:hover {
+            background-color: #ff3333;
+        }
+        
+        .session-info {
+            font-size: 0.8em;
+            color: #6272a4;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .typing {
+            font-style: italic;
+            opacity: 0.7;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background-color: #bd93f9;
+            animation: blink 1s infinite;
+            margin-left: 2px;
+            vertical-align: middle;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+
+        .session-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            background: #2c2e32;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .session-id-display {
+            font-family: monospace;
+            color: #8be9fd;
+        }
+        
+        .session-join {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .session-join input {
+            width: 150px;
+        }
+        
+        .join-btn {
+            background-color: #61afef;
+            color: white;
+        }
+        
+        .player-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .player-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .player-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .player-label {
+            width: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            font-weight: bold;
+            color: #50fa7b;
+        }
+        
+        .buttons-container {
+            display: flex;
+            justify-content: flex-end; /* Align to the right */
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .copy-btn {
+            background-color: #50fa7b;
+            color: #282a36;
+            width: auto; /* Make it auto width */
+        }
+
+        /* Add this style for proper text formatting */
+        .message-content {
+            white-space: pre-wrap; /* This preserves whitespace and enables wrapping */
+        }
+
+        .session-footer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 10px;
+            background: #2c2e32;
+            padding: 10px;
+            border-radius: 4px;
+            gap: 10px;
+        }
+        
+        .session-info {
+            font-size: 0.9em;
+            color: #8be9fd;
+            text-align: center;
+        }
+        
+        .session-details {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+        
+        .session-id {
+            font-family: monospace;
+            color: #8be9fd;
+        }
+        
+        .session-join {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .session-join input {
+            width: 150px;
+        }
+
+        /* Remove the now-unused session-controls styles */
+        .session-controls {
+            display: none; /* Hide the old container */
+        }
+
+        /* Update session footer styles */
+        .session-footer {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            background: #2c2e32;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .session-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .session-info-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .session-info {
+            font-size: 0.9em;
+            color: #8be9fd;
+        }
+        
+        .separator {
+            color: #6272a4;
+        }
+        
+        .buttons-container {
+            display: flex;
+            justify-content: space-between; /* Space between add and copy buttons */
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .spacer {
+            flex: 1; /* This pushes the copy button to the right */
+        }
+
+        /* Updated buttons container for just the copy button */
+        .buttons-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 15px;
+        }
+        
+        /* Keep only the copy button styles */
+        .copy-btn {
+            background-color: #50fa7b;
+            color: #282a36;
+            width: auto;
+        }
+
+        /* Add style for the Add Player button */
+        .add-player-btn {
+            background-color: #ff79c6;
+            color: #282a36;
+        }
+        
+        /* This class is used to hide elements */
+        .hidden {
+            display: none;
+        }
+        
+        /* Update buttons container to show both buttons properly */
+        .buttons-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        
+        .spacer {
+            flex: 1; /* This pushes the copy button to the right */
+        }
+
+        /* Add style for clickable session ID */
+        .clickable {
+            cursor: pointer;
+        }
+        .clickable:hover {
+            text-decoration: underline;
+        }
+        
+        /* Show the session footer again */
+        .session-footer {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            background: #2c2e32;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-container">
+            <h1 style="color: #8be9fd;">🧙 AI Dungeon Master</h1>
+            <button id="new-game-btn" class="new-game-btn">New Game</button>
+        </div>
+        
+        <div class="chat-window" id="chat-window"></div>
+        
+        <div class="player-inputs">
+            <div class="player-input">
+                <div class="player-label" id="player1-label">Player 1:</div>
+                <input 
+                    type="text" 
+                    id="user-input" 
+                    placeholder="Type your message..." 
+                    autocomplete="off"
+                    class="player1-input"
+                >
+                <button id="send-btn" class="action-btn send-btn" title="Send message">
+                    📤 Send
+                </button>
+            </div>
+            
+            <!-- Add Player 2 container (hidden by default) -->
+            <div class="player-input hidden" id="player2-container">
+                <div class="player-label" id="player2-label">Player 2:</div>
+                <input 
+                    type="text" 
+                    id="player2-input" 
+                    placeholder="Type your message..." 
+                    autocomplete="off"
+                    class="player2-input"
+                >
+                <button id="send-player2-btn" class="action-btn send-btn" title="Send message">
+                    📤 Send
+                </button>
+            </div>
+            
+            <div id="additional-players"></div>
+            
+            <div class="buttons-container">
+                <button id="add-player-btn" class="action-btn add-player-btn" title="Add another player">
+                    👤+ Add Player
+                </button>
+                <div class="spacer"></div>
+                <button id="copy-chat-btn" class="action-btn copy-btn" title="Copy entire chat">
+                    📋 Copy
+                </button>
+            </div>
+        </div>
+        
+        <!-- Add back the session info footer with sharing link -->
+        <div class="session-footer">
+            <div class="session-details">
+                <div class="session-info-container">
+                    <span id="session-info" class="session-info">Session active</span>
+                    <span class="separator">|</span>
+                    <span>Share Code: </span>
+                    <span id="session-id-value" class="session-id-display clickable" title="Click to copy">Loading...</span>
+                </div>
+                <div class="session-join">
+                    <input type="text" id="join-session-id" placeholder="Enter session code">
+                    <button id="join-btn" class="action-btn join-btn">Join</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Debug setup
+    const DEBUG = true;
+    function debugLog(...args) {
+        if (DEBUG) console.log(...args);
+    }
+    
+    debugLog("=== CLEAN INITIALIZATION STARTED ===");
+    
+    // Core variables
+    let isGenerating = false;
+    let awaitingName = true;
+    let playerName = null;
+    let seenMessages = new Set();
+    
+    // Session data - simplified to just store game ID
+    let currentGameId = localStorage.getItem('currentGameId') || null;
+    
+    // Player tracking - just player 1
+    const playerNames = {
+        1: null,
+        2: null
+    };
+    
+    // Get DOM elements once
+    const chatWindow = document.getElementById('chat-window');
+    const userInput = document.getElementById('user-input');
+    const newGameBtn = document.getElementById('new-game-btn');
+    const sendBtn = document.getElementById('send-btn');
+    const copyChatBtn = document.getElementById('copy-chat-btn');
+    const player2Container = document.getElementById('player2-container');
+    const player2Input = document.getElementById('player2-input');
+    const sendPlayer2Btn = document.getElementById('send-player2-btn');
+    const addPlayerBtn = document.getElementById('add-player-btn');
+    const additionalPlayersContainer = document.getElementById('additional-players');
+    let nextPlayerNumber = 3; // Start with player 3 since we already have 1 and 2
+    
+    // Add these variables back for session joining
+    const joinSessionInput = document.getElementById('join-session-id');
+    const joinBtn = document.getElementById('join-btn');
+    const sessionIdValue = document.getElementById('session-id-value');
+    
+    // Remaining functions from your original code
+    function createLoadingDivForDM(id, textId) {
+        debugLog("Creating loading div:", id, textId);
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message dm-message';
+        loadingDiv.id = id;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = 'DM: ';
+        nameSpan.style.fontWeight = 'bold';
+        
+        const responseText = document.createElement('span');
+        responseText.id = textId || 'response-text';
+        responseText.className = 'typing message-content';
+        responseText.textContent = '';
+        
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        responseText.appendChild(cursor);
+        
+        loadingDiv.appendChild(nameSpan);
+        loadingDiv.appendChild(responseText);
+        chatWindow.appendChild(loadingDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        return loadingDiv;
+    }
+    
+    function sendStreamRequest(messageId, loadingDiv) {
+        debugLog("Starting stream request for message ID:", messageId);
+        
+        // Create EventSource URL with all parameters - simplified
+        const eventSourceUrl = new URL('/stream', window.location.href);
+        eventSourceUrl.searchParams.append('t', Date.now());
+        eventSourceUrl.searchParams.append('game_id', currentGameId || '');
+        eventSourceUrl.searchParams.append('message_id', messageId || '');
+        
+        debugLog("Stream URL:", eventSourceUrl.toString());
+        
+        // Create error recovery timeout
+        let responseTimeout = setTimeout(() => {
+            debugLog("Response timeout - closing connection");
+            eventSource.close();
+            const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+            if (responseTextElem) {
+                responseTextElem.classList.remove('typing');
+                const oldCursor = responseTextElem.querySelector('.cursor');
+                if (oldCursor) oldCursor.remove();
+                
+                if (!responseTextElem.textContent) {
+                    responseTextElem.textContent = "Response timeout. Please try again.";
+                    loadingDiv.classList.add('error-message');
+                }
+            }
+            
+            isGenerating = false;
+        }, 30000);
+        
+        // Create EventSource for streaming
+        const eventSource = new EventSource(eventSourceUrl.toString());
+        
+        eventSource.onopen = function(e) {
+            debugLog("EventSource connection opened");
+        };
+        
+        // Handle incoming messages
+        eventSource.onmessage = function(event) {
+            try {
+                debugLog("Received message chunk:", event.data.substring(0, 50) + "...");
+                const data = JSON.parse(event.data);
+                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                
+                if (responseTextElem) {
+                    // Handle content
+                    const formattedContent = data.content.replace(/\\n/g, '\n');
+                    
+                    if (data.error === true) {
+                        loadingDiv.classList.add('error-message');
+                    }
+                    
+                    responseTextElem.classList.remove('typing');
+                    
+                    const oldCursor = responseTextElem.querySelector('.cursor');
+                    if (oldCursor) oldCursor.remove();
+                    
+                    responseTextElem.textContent += formattedContent;
+                    
+                    const cursor = document.createElement('span');
+                    cursor.className = 'cursor';
+                    responseTextElem.appendChild(cursor);
+                    
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                    
+                    if (data.full) {
+                        checkForPlayerNames(data.full);
+                    }
+                }
+            } catch (e) {
+                debugLog("Error parsing event data:", e);
+            }
+        };
+        
+        // Handle stream completion
+        eventSource.addEventListener('done', function() {
+            debugLog("Stream complete");
+            clearTimeout(responseTimeout);
+            
+            const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+            if (responseTextElem) {
+                const oldCursor = responseTextElem.querySelector('.cursor');
+                if (oldCursor) oldCursor.remove();
+            }
+            
+            eventSource.close();
+            isGenerating = false;
+        });
+        
+        // Handle errors
+        eventSource.onerror = function(e) {
+            debugLog("EventSource error:", e);
+            clearTimeout(responseTimeout);
+            
+            try {
+                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                if (responseTextElem) {
+                    const oldCursor = responseTextElem.querySelector('.cursor');
+                    if (oldCursor) oldCursor.remove();
+                    responseTextElem.classList.remove('typing');
+                    
+                    if (!responseTextElem.textContent) {
+                        loadingDiv.classList.add('error-message');
+                        responseTextElem.textContent = "Connection error. Please try again.";
+                    }
+                }
+                
+                eventSource.close();
+            } catch (err) {
+                debugLog("Error handling EventSource error:", err);
+            } finally {
+                isGenerating = false;
+            }
+        };
+    }
+    
+    function sendMessage(inputElement, playerNumber) {
+        const userMessage = inputElement.value.trim();
+        if (!userMessage) return;
+        
+        if (isGenerating) {
+            debugLog("Already generating, ignoring send");
+            return;
+        }
+        
+        // Validate game session
+        if (!currentGameId) {
+            debugLog("No game ID, creating new game");
+            addSystemMessage("No active game session. Creating a new one...");
+            createNewGame();
+            setTimeout(() => {
+                sendMessage(inputElement, playerNumber);
+            }, 1500);
+            return;
+        }
+        
+        debugLog(`Sending message for Player ${playerNumber}:`, userMessage.substring(0, 30));
+        
+        // Set generating state
+        isGenerating = true;
+        
+        // Extract name if first message
+        const extractedName = extractName(userMessage);
+        if (extractedName && !playerNames[playerNumber]) {
+            updatePlayerLabel(playerNumber, extractedName);
+            if (playerNumber === 1) {
+                playerName = extractedName;
+                awaitingName = false;
+            }
+        }
+        
+        // Get sender name
+        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
+        
+        // Add user message to chat
+        addMessage(sender, userMessage);
+        
+        // Clear input field
+        inputElement.value = '';
+        
+        // Create loading indicator
+        const loadingId = `typing-indicator-${Date.now()}`;
+        const textId = `response-text-${Date.now()}`;
+        const loadingDiv = createLoadingDivForDM(loadingId, textId);
+        
+        // Prepare player context
+        const playerContext = {};
+        Object.entries(playerNames).forEach(([num, name]) => {
+            if (name) playerContext[num] = name;
+        });
+        
+        // Send to server - simplified
+        fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                message: userMessage,
+                game_id: currentGameId,
+                player_number: playerNumber,
+                player_names: playerContext
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            debugLog("Message sent successfully, response:", data);
+            if (data && data.message_id) {
+                sendStreamRequest(data.message_id, loadingDiv);
+            } else {
+                throw new Error("Invalid response data");
+            }
+        })
+        .catch(error => {
+            debugLog('Error sending message:', error);
+            
+            if (loadingDiv && loadingDiv.parentNode) {
+                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                if (responseTextElem) {
+                    responseTextElem.textContent = "Error: " + error.message;
+                    loadingDiv.classList.add('error-message');
+                } else {
+                    loadingDiv.remove();
+                    addSystemMessage("Error: " + error.message);
+                }
+            } else {
+                addSystemMessage("Error: Failed to send message. " + error.message);
+            }
+            
+            isGenerating = false;
+        });
+        
+        // Focus input field
+        inputElement.focus();
+    }
+    
+    function addSystemMessage(text) {
+        debugLog("Adding system message:", text);
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system-message';
+        msgDiv.style.color = '#6272a4';
+        msgDiv.style.fontStyle = 'italic';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = "SYSTEM: ";
+        nameSpan.style.fontWeight = 'bold';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    function addMessage(sender, text, isTypewriter = false) {
+        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
+        
+        // Create message element
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${sender.toLowerCase() === 'dm' ? 'dm-message' : 'player-message'}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${sender.toUpperCase()}: `;
+        nameSpan.style.fontWeight = 'bold';
+        msgDiv.appendChild(nameSpan);
+        
+        // Add content span
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    function checkForPlayerNames(text) {
+        // Look for "Player X is named Y" patterns for all players
+        const nameRegex = /Player (\d+) is (?:now |)named ([A-Za-z]+)/gi;
+        let match;
+        
+        while ((match = nameRegex.exec(text)) !== null) {
+            const playerNum = parseInt(match[1]);
+            const playerName = match[2];
+            
+            if (playerNum && playerName) {
+                debugLog(`Found name for Player ${playerNum}: ${playerName}`);
+                updatePlayerLabel(playerNum, playerName);
+            }
+        }
+    }
+    
+    function extractName(input) {
+        const namePatterns = [
+            /my name is ([A-Za-z]+)/i,
+            /i am ([A-Za-z]+)/i,
+            /call me ([A-Za-z]+)/i,
+            /name's ([A-Za-z]+)/i,
+            /name is ([A-Za-z]+)/i,
+            /^([A-Za-z]+)$/i  // Just a name by itself
+        ];
+        
+        for (const pattern of namePatterns) {
+            const match = input.match(pattern);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+        
+        return null;
+    }
+    
+    function extractNameFromDMResponse(response) {
+        const namePatterns = [
+            /so your name is ([A-Za-z]+)/i,
+            /welcome, ([A-Za-z]+)/i,
+            /hello, ([A-Za-z]+)/i
+        ];
+        
+        for (const pattern of namePatterns) {
+            const match = response.match(pattern);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+        
+        return null;
+    }
+    
+    function updatePlayerLabel(playerNumber, name) {
+        debugLog(`Updating Player ${playerNumber} label to ${name}`);
+        
+        const labelElement = document.getElementById(`player${playerNumber}-label`);
+        if (labelElement) {
+            labelElement.textContent = `${name}:`;
+            playerNames[playerNumber] = name;
+        }
+    }
+    
+    // Add New Game button functionality - simplified
+    newGameBtn.addEventListener('click', function() {
+        debugLog("New game button clicked");
+        
+        // Confirm with the user
+        if (confirm("Start a new game? This will clear your current adventure.")) {
+            try {
+                // Clear existing state
+                currentGameId = null;
+                localStorage.removeItem('currentGameId');
+                
+                // Reset UI and state
+                chatWindow.innerHTML = '';
+                isGenerating = false;
+                awaitingName = true;
+                playerName = null;
+                seenMessages = new Set();
+                
+                // Reset player name
+                playerNames[1] = null;
+                player2Container.classList.add('hidden');
+                isMultiplayerActive = false;
+                playerNames[2] = null;
+                
+                // Start completely fresh game
+                createNewGame();
+            } catch (err) {
+                debugLog("Error creating new game:", err);
+                addSystemMessage("Error: " + err.message);
+                
+                // Force a complete reset
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        }
+    });
+    
+    // Fix the displayMessages function - simplified
+    function displayMessages(messages) {
+        debugLog("Displaying messages from history:", messages.length);
+        chatWindow.innerHTML = '';  // Clear existing messages
+        
+        messages.forEach(msg => {
+            if (msg.role === 'assistant') {
+                // DM messages
+                addMessage('DM', msg.content);
+                
+                // Check for player names in DM response
+                const extractedName = extractNameFromDMResponse(msg.content);
+                if (extractedName) {
+                    // Try to match this with a pending player name
+                    if (!playerNames[1]) {
+                        playerNames[1] = extractedName;
+                        updatePlayerLabel(1, extractedName);
+                    }
+                }
+            }
+            else if (msg.role === 'user') {
+                // Player messages
+                const sender = playerNames[1] || `Player 1`;
+                addMessage(sender, msg.content);
+                
+                // Extract name if present
+                const extractedName = extractName(msg.content);
+                if (extractedName && !playerNames[1]) {
+                    updatePlayerLabel(1, extractedName);
+                }
+            }
+            else if (msg.role === 'system') {
+                // System messages
+                addSystemMessage(msg.content);
+            }
+        });
+        
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    function initialize() {
+        debugLog("Initializing game");
+        
+        // Clear chat window and reset flags
+        chatWindow.innerHTML = '';
+        seenMessages.clear();
+        isGenerating = false;
+        
+        // Reset player name
+        playerNames[1] = null;
+        
+        if (!currentGameId) {
+            debugLog("No game ID, creating new game");
+            createNewGame();
+            return;
+        }
+        
+        // Load chat history
+        fetch('/load_history', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                game_id: currentGameId
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            debugLog("Loaded history:", data);
+            
+            if (!data.history || !Array.isArray(data.history)) {
+                throw new Error("Invalid history data");
+            }
+            
+            // Process history data
+            displayMessages(data.history);
+            
+            // Check for welcome message
+            const hasWelcomeMessage = data.history.some(msg => 
+                msg.role === 'assistant' && 
+                msg.content.includes("What is your name?")
+            );
+            
+            if (!hasWelcomeMessage) {
+                // Add welcome message if missing
+                addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?");
+            }
+            
+            // Store session info
+            localStorage.setItem('currentGameId', currentGameId);
+            
+            // Focus input
+            userInput.focus();
+        })
+        .catch(error => {
+            debugLog('Error loading history:', error);
+            
+            // Create default welcome message
+            chatWindow.innerHTML = '';
+            addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+        });
+        
+        // Add this call to update the session ID display
+        if (currentGameId) {
+            updateSessionId();
+        }
+    }
+    
+    function createNewGame() {
+        debugLog("Creating new game");
+        
+        // Reset UI state
+        chatWindow.innerHTML = '';
+        isGenerating = false;
+        
+        // Reset player name
+        playerNames[1] = null;
+        
+        // Create welcome message
+        addMessage('DM', 'Creating a new adventure for you...', false);
+        
+        // Request new game from server
+        fetch('/new_game', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        })
+        .then(response => response.json())
+        .then(data => {
+            debugLog("New game created:", data);
+            
+            if (data.success && data.game_id) {
+                currentGameId = data.game_id;
+                
+                // Store in local storage
+                localStorage.setItem('currentGameId', currentGameId);
+                
+                // Update session ID display
+                updateSessionId();
+                
+                // Add welcome message
+                addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+            } else {
+                throw new Error("Failed to create new game");
+            }
+        })
+        .catch(error => {
+            debugLog("Error creating new game:", error);
+            addSystemMessage("Error: " + error.message);
+        });
+    }
+    
+    // Set up event handlers
+    sendBtn.addEventListener('click', function() {
+        sendMessage(userInput, 1);
+    });
+    
+    userInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !isGenerating) {
+            sendMessage(userInput, 1);
+        }
+    });
+    
+    // Set up copy button functionality
+    copyChatBtn.addEventListener('click', function() {
+        const messages = Array.from(chatWindow.querySelectorAll('.message')).map(msg => {
+            const sender = msg.querySelector('span').textContent;
+            const content = msg.querySelector('.message-content').textContent;
+            return `${sender} ${content}`;
+        }).join('\n\n');
+        
+        navigator.clipboard.writeText(messages).then(() => {
+            alert('Chat copied to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy chat: ', err);
+            alert('Failed to copy chat');
+        });
+    });
+    
+    // Add these variables back
+    let isMultiplayerActive = false;
+
+    // Add this function to show Player 2
+    function showPlayer2() {
+        if (player2Container.classList.contains('hidden')) {
+            player2Container.classList.remove('hidden');
+            isMultiplayerActive = true;
+            
+            // Notify the DM about the new player
+            addSystemMessage("Player 2 has joined the game. Please enter your name.");
+            
+            // Create loading div for DM's response
+            const loadingDiv = createLoadingDivForDM('dm-welcome-player2', 'response-text-welcome-player2');
+            
+            // Notify DM
+            isGenerating = true;
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: `A new player has joined the game. Please welcome Player 2 and ask for their name.`,
+                    game_id: currentGameId,
+                    player_number: 'system',
+                    is_system: true
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                debugLog("Player 2 welcome response:", data);
+                if (data && data.message_id) {
+                    sendStreamRequest(data.message_id, loadingDiv);
+                } else {
+                    throw new Error("Invalid response data");
+                }
+            })
+            .catch(error => {
+                debugLog('Error adding Player 2:', error);
+                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+                addSystemMessage("Error adding Player 2: " + error.message);
+                isGenerating = false;
+            });
+            
+            // Focus the player 2 input box
+            setTimeout(() => player2Input.focus(), 100);
+        }
+    }
+
+    // Add click handler for Add Player button
+    addPlayerBtn.addEventListener('click', function() {
+        showPlayer2();
+    });
+
+    // Add event listener for Player 2 send button
+    sendPlayer2Btn.addEventListener('click', function() {
+        sendMessage(player2Input, 2);
+    });
+
+    // Add event listener for Player 2 input
+    player2Input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !isGenerating) {
+            sendMessage(player2Input, 2);
+        }
+    });
+
+    // Add function to create dynamic player input for players 3+
+    function createPlayerInput(playerNumber) {
+        debugLog(`Creating input for Player ${playerNumber}`);
+        const playerInputDiv = document.createElement('div');
+        playerInputDiv.className = 'player-input';
+        playerInputDiv.id = `player${playerNumber}-container`;
+        
+        const playerLabelDiv = document.createElement('div');
+        playerLabelDiv.className = 'player-label';
+        playerLabelDiv.id = `player${playerNumber}-label`;
+        playerLabelDiv.textContent = `Player ${playerNumber}:`;
+        
+        const playerInput = document.createElement('input');
+        playerInput.type = 'text';
+        playerInput.id = `player${playerNumber}-input`;
+        playerInput.placeholder = 'Type your message...';
+        playerInput.autocomplete = 'off';
+        playerInput.className = `player${playerNumber}-input`;
+        
+        // Add Enter key functionality
+        playerInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !isGenerating) {
+                sendMessage(playerInput, playerNumber);
+            }
+        });
+        
+        const sendButton = document.createElement('button');
+        sendButton.className = 'action-btn send-btn';
+        sendButton.id = `send-player${playerNumber}-btn`;
+        sendButton.textContent = '📤 Send';
+        sendButton.title = 'Send message';
+        
+        // Add click handler to the button
+        sendButton.addEventListener('click', function() {
+            sendMessage(playerInput, playerNumber);
+        });
+        
+        playerInputDiv.appendChild(playerLabelDiv);
+        playerInputDiv.appendChild(playerInput);
+        playerInputDiv.appendChild(sendButton);
+        
+        return playerInputDiv;
+    }
+
+    // Update showPlayer2 function to make it more generic
+    function addPlayer(playerNum) {
+        if (playerNum === 2) {
+            // Special case for Player 2 which already exists in HTML
+            if (player2Container.classList.contains('hidden')) {
+                player2Container.classList.remove('hidden');
+                isMultiplayerActive = true;
+            } else {
+                // Player 2 already visible
+                return;
+            }
+        } else {
+            // Create UI for the new player
+            const newPlayerContainer = createPlayerInput(playerNum);
+            additionalPlayersContainer.appendChild(newPlayerContainer);
+        }
+        
+        // Reset this player's name
+        playerNames[playerNum] = null;
+        
+        // Notify the DM about the new player
+        const joinMessage = `Player ${playerNum} has joined the game. Please enter your name.`;
+        addSystemMessage(joinMessage);
+        
+        // Create loading div for DM's response
+        const loadingDiv = createLoadingDivForDM(
+            `dm-welcome-player${playerNum}`, 
+            `response-text-welcome-player${playerNum}`
+        );
+        
+        // Notify DM
+        isGenerating = true;
+        fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: `A new player has joined the game. Please welcome Player ${playerNum} and ask for their name.`,
+                game_id: currentGameId,
+                player_number: 'system',
+                is_system: true
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            debugLog(`Player ${playerNum} welcome response:`, data);
+            if (data && data.message_id) {
+                sendStreamRequest(data.message_id, loadingDiv);
+                
+                // Focus the new player's input field
+                setTimeout(() => {
+                    const inputField = document.getElementById(`player${playerNum}-input`);
+                    if (inputField) inputField.focus();
+                }, 100);
+                
+                // Update next player number
+                if (playerNum >= nextPlayerNumber) {
+                    nextPlayerNumber = playerNum + 1;
+                }
+            } else {
+                throw new Error("Invalid response data");
+            }
+        })
+        .catch(error => {
+            debugLog(`Error adding Player ${playerNum}:`, error);
+            if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+            addSystemMessage(`Error adding Player ${playerNum}: ${error.message}`);
+            isGenerating = false;
+        });
+    }
+
+    // Update Add Player button to add the next player
+    addPlayerBtn.addEventListener('click', function() {
+        if (!isMultiplayerActive) {
+            // First click adds player 2
+            addPlayer(2);
+        } else {
+            // Subsequent clicks add player 3, 4, etc.
+            addPlayer(nextPlayerNumber);
+        }
+    });
+
+    // Add function to update session ID display
+    function updateSessionId() {
+        if (currentGameId) {
+            try {
+                // Extract the short ID portion to share
+                let sessionIdShort;
+                if (currentGameId.includes('_')) {
+                    sessionIdShort = currentGameId.split('_').pop();
+                } else {
+                    sessionIdShort = currentGameId;
+                }
+                
+                // Update the display
+                sessionIdValue.textContent = sessionIdShort;
+                sessionIdValue.title = "Click to copy share code";
+                debugLog("Session ID updated to:", sessionIdShort);
+                
+                // Add click event to copy share code
+                sessionIdValue.onclick = function() {
+                    navigator.clipboard.writeText(sessionIdShort).then(() => {
+                        const originalText = sessionIdValue.textContent;
+                        sessionIdValue.textContent = "Copied!";
+                        setTimeout(() => {
+                            sessionIdValue.textContent = originalText;
+                        }, 1000);
+                    });
+                };
+            } catch (err) {
+                debugLog("Error updating session ID:", err);
+                sessionIdValue.textContent = "Error";
+            }
+        } else {
+            sessionIdValue.textContent = "No session";
+        }
+    }
+
+    // Add join session functionality
+    joinBtn.addEventListener('click', function() {
+        const sessionId = joinSessionInput.value.trim();
+        if (!sessionId) {
+            alert("Please enter a session code to join");
+            return;
+        }
+        
+        // Show joining status
+        addSystemMessage(`Attempting to join session ${sessionId}...`);
+        
+        fetch('/join_session', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                session_id: sessionId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Store the session info
+                currentGameId = data.game_id;
+                
+                // Save to localStorage for persistence
+                localStorage.setItem('currentGameId', currentGameId);
+                
+                // Display success message
+                addSystemMessage(`Successfully joined session! You are now playing in ${sessionId}.`);
+                
+                // Clear the chat and load the joined session's history
+                chatWindow.innerHTML = '';
+                
+                // Display the history messages
+                if (data.history && Array.isArray(data.history)) {
+                    displayMessages(data.history);
+                }
+                
+                // This is where we add Player 2 (for the first joiner)
+                if (!isMultiplayerActive) {
+                    addPlayer(2);
+                }
+                
+                // Update session info display
+                updateSessionId();
+            } else {
+                // Show error message with more details if available
+                const errorMsg = data.error || "Unknown error";
+                addSystemMessage(`Failed to join session: ${errorMsg}`);
+                debugLog("Join session error details:", data);
+            }
+        })
+        .catch(error => {
+            debugLog("Error joining session:", error);
+            addSystemMessage(`Error joining session: ${error.message}`);
+        });
+    });
+
+    // Initialize
+    try {
+        if (currentGameId) {
+            debugLog("Restoring session:", currentGameId);
+            initialize();
+        } else {
+            debugLog("No previous session, creating new game");
+            createNewGame();
+        }
+    } catch (error) {
+        debugLog("Error during initialization:", error);
+    }
+});
+</script>
+</body>
+</html>

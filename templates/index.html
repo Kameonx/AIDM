@@ -325,7 +325,8 @@
         <div class="players-container" id="players-container">
             <!-- Player 1 (always visible) -->
             <div class="player-row" id="player1-row">
-                <div class="player-label" id="player1-label">Player 1:</div>
+                <!-- Updated to use the passed player1_name -->
+                <div class="player-label" id="player1-label">{{ player1_name }}:</div>
                 <textarea name="user_query" id="player1-input" placeholder="Type your message here..." rows="1"></textarea>
                 <button type="button" class="send-button" id="player1-send">
                     <span>Send</span>

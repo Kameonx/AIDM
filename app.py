@@ -45,6 +45,15 @@ def save_chat_history(user_id, chat_history):
     with open(file_path, 'w') as file:
         json.dump(chat_history, file)
 
+def extract_player_name(chat_history, player_num):
+    """Return the name for a player from chat history, defaulting if not found."""
+    for msg in chat_history:
+        if msg.get("role") == "assistant":
+            m = re.search(rf"(?:So your name is|Player {player_num} is now named) ([A-Za-z]+)", msg.get("content", ""))
+            if m:
+                return m.group(1)
+    return f"Player {player_num}"
+
 @app.route('/', methods=['GET', 'POST'])
 def chat():
     # Get the user ID from session
@@ -93,7 +102,8 @@ def chat():
         chat_history.append({"role": "assistant", "content": dm_welcome})
         save_chat_history(user_id, chat_history)
     
-    response = make_response(render_template('index.html', chat_history=chat_history))
+    player1_name = extract_player_name(chat_history, 1)
+    response = make_response(render_template('index.html', chat_history=chat_history, player1_name=player1_name))
     response.set_cookie('user_id', user_id, max_age=60*60*24*365)  # Set cookie to expire in 1 year
     return response
 

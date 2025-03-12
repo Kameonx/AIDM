@@ -3,1554 +3,1051 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>D&D AI Dungeon</title>
+    <title>D&D AI Dungeon Master</title>
     <style>
         body {
             margin: 0;
+            padding: 0;
             min-height: 100vh;
-            background: #1d1f21;
-            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #1a1a1a;
+            color: white;
             font-family: 'Consolas', monospace;
         }
         
         .container {
-            max-width: 800px;
-            margin: 20px auto;
-            padding: 20px;
+            padding: 40px;
             background: #282a36;
-            border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,128,128,0.3);
+            border-radius: 15px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 0 30px rgba(0,128,128,0.3);
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
         }
         
-        .chat-window {
-            height: 500px;
-            border: 2px solid #61afef;
-            padding: 15px;
-            overflow-y: scroll;
+        .chat-header {
+            text-align: center;
             margin-bottom: 20px;
         }
         
+        .chat-history {
+            flex-grow: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            background: #2c2e32;
+            padding: 15px;
+            border-radius: 10px;
+            position: relative;
+            border: 2px solid #61afef;
+        }
+        
         .message {
-            margin: 10px 0;
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            position: relative;
         }
         
-        .dm-message {
-            color: #bd93f9;
-        }
-        
-        .player-message {
+        .user-message {
+            background: #2a4365;
             color: #50fa7b;
         }
         
-        .input-container {
+        .bot-message {
+            background: #353535;
+            color: #bd93f9;
+        }
+        
+        .input-area {
             display: flex;
+            flex-direction: column;
             gap: 10px;
-            margin-top: 10px;
         }
         
-        input {
-            flex: 1;
-            padding: 10px;
-            background: #2c2e32;
-            border: 2px solid #44475a;
-            color: #ffffff;
-        }
-        
-        .action-btn {
-            padding: 10px 15px;
+        textarea {
+            padding: 12px;
             border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: 'Consolas', monospace;
-            font-weight: bold;
+            border-radius: 5px;
+            font-size: 16px;
+            background: #2c2e32;
             color: white;
-            transition: filter 0.3s;
+            resize: none;
+            min-height: 50px;
+            max-height: 120px;
+            line-height: 1.4;
+            font-family: inherit;
+            width: 100%;
+            box-sizing: border-box;
+            border: 2px solid #44475a;
+            flex-grow: 1;
+            min-width: 0;
         }
         
-        .action-btn:hover {
-            filter: brightness(1.2);
-        }
-        
-        .copy-btn {
-            background-color: #50fa7b;
-            color: #282a36;
-        }
-        
-        .send-btn {
-            background-color: #61afef;
-        }
-
-        .error-message {
-            color: #ff5555;
-        }
-        
-        .header-container {
+        .buttons-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            gap: 10px;
         }
         
-        .new-game-btn {
-            background-color: #ff5555;
-            color: white;
+        .right-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            padding: 12px 20px;
             border: none;
-            padding: 8px 15px;
             border-radius: 4px;
+            font-size: 16px;
             cursor: pointer;
-            font-family: 'Consolas', monospace;
-            font-weight: bold;
             transition: background-color 0.3s;
+            white-space: nowrap;
+            min-width: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Consolas', monospace;
         }
         
-        .new-game-btn:hover {
-            background-color: #ff3333;
+        .send-button {
+            background: #61afef;
+            color: white;
+            transition: all 0.3s ease;
         }
         
-        .session-info {
-            font-size: 0.8em;
-            color: #6272a4;
-            text-align: center;
-            margin-top: 10px;
-        }
-
-        .typing {
-            font-style: italic;
-            opacity: 0.7;
+        .loading {
+            background: #44475a;
+            color: rgba(255, 255, 255, 0.8);
+            pointer-events: none;
         }
         
-        .cursor {
-            display: inline-block;
-            width: 8px;
-            height: 16px;
-            background-color: #bd93f9;
-            animation: blink 1s infinite;
-            margin-left: 2px;
+        .spinner {
+            display: none;
             vertical-align: middle;
+            margin-left: 5px;
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        .loading .spinner {
+            display: inline-block;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .message-role {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .message-content {
+            white-space: pre-wrap;
+        }
+        
+        #thinking-indicator {
+            display: none;
+            margin-top: 10px;
+            text-align: center;
+            font-style: italic;
+            color: #6272a4;
+        }
+        
+        .dot-typing {
+          position: relative;
+          display: inline-block;
+          margin-left: 4px;
+        }
+        
+        .dot-typing::after {
+          content: "";
+          display: inline-block;
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          animation: dot-typing 1.5s infinite linear;
+          background-color: #6272a4;
+          margin: 0 2px;
+        }
+        
+        @keyframes dot-typing {
+          0% { box-shadow: 4px 0 0 0 #6272a4, 12px 0 0 0 #6272a4; }
+          25% { box-shadow: 4px 0 0 0 transparent, 12px 0 0 0 #6272a4; }
+          50% { box-shadow: 4px 0 0 0 #6272a4, 12px 0 0 0 transparent; }
+          75% { box-shadow: 4px 0 0 0 transparent, 12px 0 0 0 transparent; }
+          100% { box-shadow: 4px 0 0 0 #6272a4, 12px 0 0 0 #6272a4; }
+        }
+        
+        .clear-button {
+            background: #ff5555;
+            color: white;
+            padding: 12px 20px;
+            font-size: 16px;
+        }
+        
+        .copy-chat-button {
+            background: #50fa7b;
+            border: none;
+            color: #282a36;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 12px 20px;
+            border-radius: 5px;
+        }
+        
+        .left-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .typing {
+            display: inline-block;
+            animation: blink 0.7s infinite;
         }
         
         @keyframes blink {
-            0%, 100% { opacity: 0; }
-            50% { opacity: 1; }
-        }
-
-        .session-controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            background: #2c2e32;
-            padding: 10px;
-            border-radius: 4px;
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
         }
         
-        .session-id-display {
-            font-family: monospace;
-            color: #8be9fd;
-        }
-        
-        .session-join {
-            display: flex;
-            gap: 5px;
-        }
-        
-        .session-join input {
-            width: 150px;
-        }
-        
-        .join-btn {
-            background-color: #61afef;
-            color: white;
-        }
-        
-        .player-inputs {
+        /* Player management styles */
+        .players-container {
             display: flex;
             flex-direction: column;
             gap: 10px;
             margin-bottom: 15px;
         }
         
-        .player-input {
+        .player-row {
             display: flex;
-            gap: 10px;
             align-items: center;
-        }
-        
-        .player-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
+            gap: 10px;
+            flex-wrap: nowrap;
+            width: 100%;
         }
         
         .player-label {
             width: 80px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            font-weight: bold;
+            min-width: 80px;
             color: #50fa7b;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
-        .buttons-container {
+        .player-controls {
             display: flex;
-            justify-content: flex-end; /* Align to the right */
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        .copy-btn {
-            background-color: #50fa7b;
-            color: #282a36;
-            width: auto; /* Make it auto width */
-        }
-
-        /* Add this style for proper text formatting */
-        .message-content {
-            white-space: pre-wrap; /* This preserves whitespace and enables wrapping */
-        }
-
-        .session-footer {
-            display: flex;
-            flex-direction: column;
+            justify-content: space-between;
             align-items: center;
             margin-top: 10px;
-            background: #2c2e32;
-            padding: 10px;
-            border-radius: 4px;
-            gap: 10px;
         }
         
-        .session-info {
-            font-size: 0.9em;
-            color: #8be9fd;
-            text-align: center;
+        .add-player-button {
+            background: #ff79c6;
+            color: #282a36;
         }
         
-        .session-details {
+        .remove-player-button {
+            background: #ff5555;
+            color: white;
+            padding: 8px;
+            font-size: 12px;
+            min-width: 30px;
+            max-width: 30px;
+            height: 30px;
+            border-radius: 50%;
             display: flex;
+            align-items: center;
             justify-content: center;
-            align-items: center;
-            gap: 15px;
-            width: 100%;
-            flex-wrap: wrap;
+            margin-right: 5px;
         }
         
-        .session-id {
-            font-family: monospace;
+        .system-message {
+            background: #44475a;
             color: #8be9fd;
+            font-style: italic;
         }
         
-        .session-join {
-            display: flex;
-            gap: 5px;
-        }
-        
-        .session-join input {
-            width: 150px;
-        }
-
-        /* Remove the now-unused session-controls styles */
-        .session-controls {
-            display: none; /* Hide the old container */
-        }
-
-        /* Update session footer styles */
-        .session-footer {
-            display: flex;
-            align-items: center;
-            margin-top: 10px;
-            background: #2c2e32;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        
-        .session-details {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-        }
-        
-        .session-info-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .session-info {
-            font-size: 0.9em;
-            color: #8be9fd;
-        }
-        
-        .separator {
-            color: #6272a4;
-        }
-        
-        .buttons-container {
-            display: flex;
-            justify-content: space-between; /* Space between add and copy buttons */
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        .spacer {
-            flex: 1; /* This pushes the copy button to the right */
-        }
-
-        /* Updated buttons container for just the copy button */
-        .buttons-container {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 15px;
-        }
-        
-        /* Keep only the copy button styles */
-        .copy-btn {
-            background-color: #50fa7b;
-            color: #282a36;
-            width: auto;
-        }
-
-        /* Add style for the Add Player button */
-        .add-player-btn {
-            background-color: #ff79c6;
-            color: #282a36;
-        }
-        
-        /* This class is used to hide elements */
         .hidden {
-            display: none;
-        }
-        
-        /* Update buttons container to show both buttons properly */
-        .buttons-container {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 15px;
-        }
-        
-        .spacer {
-            flex: 1; /* This pushes the copy button to the right */
-        }
-
-        /* Add style for clickable session ID */
-        .clickable {
-            cursor: pointer;
-        }
-        .clickable:hover {
-            text-decoration: underline;
-        }
-        
-        /* Show the session footer again */
-        .session-footer {
-            display: flex;
-            align-items: center;
-            margin-top: 10px;
-            background: #2c2e32;
-            padding: 10px;
-            border-radius: 4px;
-        }
-
-        /* Remove all session footer related styles */
-        .session-footer, .session-details, .session-info-container,
-        .session-id-display, .session-join, .separator, .clickable {
             display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header-container">
+        <div class="chat-header">
             <h1 style="color: #8be9fd;">🧙 AI Dungeon Master</h1>
-            <button id="new-game-btn" class="new-game-btn">New Game</button>
         </div>
         
-        <div class="chat-window" id="chat-window"></div>
+        <div class="chat-history" id="chat-history">
+            {% if chat_history %}
+                {% for message in chat_history %}
+                    <div class="message {% if message.role == 'user' %}user-message{% elif message.role == 'system' %}system-message{% else %}bot-message{% endif %}">
+                        <div class="message-role">
+                            {% if message.role == 'user' %}
+                                {% if message.player %}
+                                    {{ message.player|replace("player", "Player ") }}
+                                {% else %}
+                                    You
+                                {% endif %}
+                            {% elif message.role == 'system' %}
+                                System
+                            {% else %}
+                                DM
+                            {% endif %}
+                        </div>
+                        <div class="message-content">{{ message.content }}</div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="message bot-message">
+                    <div class="message-role">DM</div>
+                    <div class="message-content">Hello adventurer! Let's begin your quest. What is your name?</div>
+                </div>
+            {% endif %}
+            <div id="thinking-indicator">
+                DM is thinking<span class="dot-typing"></span>
+            </div>
+        </div>
         
-        <div class="player-inputs">
-            <div class="player-input">
+        <!-- Players container -->
+        <div class="players-container" id="players-container">
+            <!-- Player 1 (always visible) -->
+            <div class="player-row" id="player1-row">
                 <div class="player-label" id="player1-label">Player 1:</div>
-                <input 
-                    type="text" 
-                    id="user-input" 
-                    placeholder="Type your message..." 
-                    autocomplete="off"
-                    class="player1-input"
-                >
-                <button id="send-btn" class="action-btn send-btn" title="Send message">
-                    📤 Send
+                <textarea name="user_query" id="player1-input" placeholder="Type your message here..." rows="1"></textarea>
+                <button type="button" class="send-button" id="player1-send">
+                    <span>Send</span>
+                    <span class="spinner" id="player1-spinner" style="display: none;"></span>
                 </button>
             </div>
             
-            <!-- Add Player 2 container (hidden by default) -->
-            <div class="player-input hidden" id="player2-container">
-                <div class="player-label" id="player2-label">Player 2:</div>
-                <input 
-                    type="text" 
-                    id="player2-input" 
-                    placeholder="Type your message..." 
-                    autocomplete="off"
-                    class="player2-input"
-                >
-                <button id="send-player2-btn" class="action-btn send-btn" title="Send message">
-                    📤 Send
-                </button>
-            </div>
-            
-            <div id="additional-players"></div>
-            
-            <div class="buttons-container">
-                <button id="add-player-btn" class="action-btn add-player-btn" title="Add another player">
-                    👤+ Add Player
-                </button>
-                <div class="spacer"></div>
-                <button id="copy-chat-btn" class="action-btn copy-btn" title="Copy entire chat">
-                    📋 Copy
-                </button>
-            </div>
+            <!-- Additional players will be added here dynamically -->
         </div>
         
-        <!-- Remove the session footer element completely -->
+        <div class="buttons-row">
+            <button type="button" id="add-player-button" class="add-player-button">
+                👤+ Add Player
+            </button>
+            <div class="right-buttons">
+                <button type="button" id="copy-chat-button" class="copy-chat-button">
+                    📋 Copy Chat
+                </button>
+                <button type="button" class="clear-button" id="clear-button">🗑️ New Game</button>
+            </div>
+        </div>
     </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Debug setup
-    const DEBUG = true;
-    function debugLog(...args) {
-        if (DEBUG) console.log(...args);
-    }
     
-    debugLog("=== CLEAN INITIALIZATION STARTED ===");
-    
-    // Core variables
-    let isGenerating = false;
-    let awaitingName = true;
-    let playerName = null;
-    let seenMessages = new Set();
-    
-    // Session data - just store game ID locally
-    let currentGameId = localStorage.getItem('currentGameId') || null;
-    
-    // Player tracking
-    const playerNames = {
-        1: null,
-        2: null
-    };
-    
-    // Track processed messages to avoid duplicates
-    const processedMessageIds = new Set();
-    
-    // Keep track of last message from each player to avoid duplicates
-    const lastPlayerMessages = {};
-    
-    // Get DOM elements once
-    const chatWindow = document.getElementById('chat-window');
-    const userInput = document.getElementById('user-input');
-    const newGameBtn = document.getElementById('new-game-btn');
-    const sendBtn = document.getElementById('send-btn');
-    const copyChatBtn = document.getElementById('copy-chat-btn');
-    const player2Container = document.getElementById('player2-container');
-    const player2Input = document.getElementById('player2-input');
-    const sendPlayer2Btn = document.getElementById('send-player2-btn');
-    const addPlayerBtn = document.getElementById('add-player-btn');
-    const additionalPlayersContainer = document.getElementById('additional-players');
-    let nextPlayerNumber = 3; // Start with player 3 since we already have 1 and 2
-    
-    // Add variables for update polling
-    let lastMessageCount = 0;
-    let updateCheckInterval = null;
-    let isCheckingForUpdates = false;
-    let lastSentMessage = "";
-    
-    // Remaining functions from your original code
-    function createLoadingDivForDM(id, textId) {
-        debugLog("Creating loading div:", id, textId);
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'message dm-message';
-        loadingDiv.id = id;
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = 'DM: ';
-        nameSpan.style.fontWeight = 'bold';
-        
-        const responseText = document.createElement('span');
-        responseText.id = textId || 'response-text';
-        responseText.className = 'typing message-content';
-        responseText.textContent = '';
-        
-        const cursor = document.createElement('span');
-        cursor.className = 'cursor';
-        responseText.appendChild(cursor);
-        
-        loadingDiv.appendChild(nameSpan);
-        loadingDiv.appendChild(responseText);
-        chatWindow.appendChild(loadingDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-        
-        return loadingDiv;
-    }
-    
-    function sendStreamRequest(messageId, loadingDiv) {
-        debugLog("Starting stream request for message ID:", messageId);
-        
-        // Create EventSource URL with all parameters - simplified
-        const eventSourceUrl = new URL('/stream', window.location.href);
-        eventSourceUrl.searchParams.append('t', Date.now());
-        eventSourceUrl.searchParams.append('game_id', currentGameId || '');
-        eventSourceUrl.searchParams.append('message_id', messageId || '');
-        
-        debugLog("Stream URL:", eventSourceUrl.toString());
-        
-        // Create error recovery timeout
-        let responseTimeout = setTimeout(() => {
-            debugLog("Response timeout - closing connection");
-            eventSource.close();
-            const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
-            if (responseTextElem) {
-                responseTextElem.classList.remove('typing');
-                const oldCursor = responseTextElem.querySelector('.cursor');
-                if (oldCursor) oldCursor.remove();
-                
-                if (!responseTextElem.textContent) {
-                    responseTextElem.textContent = "Response timeout. Please try again.";
-                    loadingDiv.classList.add('error-message');
-                }
-            }
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatHistory = document.querySelector('.chat-history');
+            const playersContainer = document.getElementById('players-container');
+            const player1Input = document.getElementById('player1-input');
+            const player1SendButton = document.getElementById('player1-send');
+            const thinkingIndicator = document.getElementById('thinking-indicator');
+            const clearButton = document.getElementById('clear-button');
+            const copyChatButton = document.getElementById('copy-chat-button');
+            const addPlayerButton = document.getElementById('add-player-button');
             
-            isGenerating = false;
-        }, 30000);
-        
-        // Create EventSource for streaming
-        const eventSource = new EventSource(eventSourceUrl.toString());
-        
-        eventSource.onopen = function(e) {
-            debugLog("EventSource connection opened");
-        };
-        
-        // Handle incoming messages
-        eventSource.onmessage = function(event) {
-            try {
-                debugLog("Received message chunk:", event.data.substring(0, 50) + "...");
-                const data = JSON.parse(event.data);
-                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
-                
-                if (responseTextElem) {
-                    // Handle content
-                    const formattedContent = data.content.replace(/\\n/g, '\n');
-                    
-                    if (data.error === true) {
-                        loadingDiv.classList.add('error-message');
-                    }
-                    
-                    responseTextElem.classList.remove('typing');
-                    
-                    const oldCursor = responseTextElem.querySelector('.cursor');
-                    if (oldCursor) oldCursor.remove();
-                    
-                    responseTextElem.textContent += formattedContent;
-                    
-                    const cursor = document.createElement('span');
-                    cursor.className = 'cursor';
-                    responseTextElem.appendChild(cursor);
-                    
-                    chatWindow.scrollTop = chatWindow.scrollHeight;
-                    
-                    if (data.full) {
-                        checkForPlayerNames(data.full);
-                    }
-                }
-            } catch (e) {
-                debugLog("Error parsing event data:", e);
-            }
-        };
-        
-        // Handle stream completion
-        eventSource.addEventListener('done', function() {
-            debugLog("Stream complete");
-            clearTimeout(responseTimeout);
+            // Track players and game state
+            let isGenerating = false;
+            let currentPlayers = 1; // Start with one player
+            let nextPlayerNumber = 2; // Next player to add will be player 2
+            let playerNames = {
+                1: null // Player 1's name (will be filled in once they introduce themselves)
+            };
             
-            const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
-            if (responseTextElem) {
-                const oldCursor = responseTextElem.querySelector('.cursor');
-                if (oldCursor) oldCursor.remove();
-            }
+            // Track available player numbers
+            let availablePlayerNumbers = [];
             
-            eventSource.close();
-            isGenerating = false;
-        });
-        
-        // Handle errors
-        eventSource.onerror = function(e) {
-            debugLog("EventSource error:", e);
-            clearTimeout(responseTimeout);
-            
-            try {
-                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
-                if (responseTextElem) {
-                    const oldCursor = responseTextElem.querySelector('.cursor');
-                    if (oldCursor) oldCursor.remove();
-                    responseTextElem.classList.remove('typing');
-                    
-                    if (!responseTextElem.textContent) {
-                        loadingDiv.classList.add('error-message');
-                        responseTextElem.textContent = "Connection error. Please try again.";
-                    }
-                }
-                
-                eventSource.close();
-            } catch (err) {
-                debugLog("Error handling EventSource error:", err);
-            } finally {
-                isGenerating = false;
-            }
-        };
-    }
-    
-    // Improved message tracking to prevent duplicates
-    function messageExists(role, content) {
-        // Create a simple hash for the message
-        const msgHash = `${role}-${content.substring(0, 50)}`;
-        
-        // Check if we've seen this message before
-        if (processedMessageIds.has(msgHash)) {
-            return true;
-        }
-        
-        // Add to our set of processed messages
-        processedMessageIds.add(msgHash);
-        
-        // Keep the set from growing too large
-        if (processedMessageIds.size > 100) {
-            // Convert to array, keep only the most recent 50
-            const msgArray = Array.from(processedMessageIds);
-            processedMessageIds.clear();
-            for (let i = msgArray.length - 50; i < msgArray.length; i++) {
-                if (i >= 0) processedMessageIds.add(msgArray[i]);
-            }
-        }
-        
-        return false;
-    }
-    
-    // Improved addMessage with duplicate detection
-    function addMessage(sender, text, isTypewriter = false, fromUpdate = false) {
-        // Skip if this appears to be the current user's message that we already displayed
-        if (fromUpdate && sender.toLowerCase() === (playerNames[1] || 'player 1').toLowerCase() && 
-            text === lastSentMessage) {
-            debugLog("Skipping duplicate recent message");
-            return false;
-        }
-        
-        // Check if this is a duplicate message
-        const role = sender.toLowerCase() === 'dm' ? 'assistant' : 'user';
-        if (messageExists(role, text)) {
-            debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
-            return false;
-        }
-        
-        // Track the last message from this sender
-        lastPlayerMessages[sender] = text;
-        
-        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
-        
-        // Create message element
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${sender.toLowerCase() === 'dm' ? 'dm-message' : 'player-message'}`;
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = `${sender.toUpperCase()}: `;
-        nameSpan.style.fontWeight = 'bold';
-        msgDiv.appendChild(nameSpan);
-        
-        // Add content span
-        const contentSpan = document.createElement('span');
-        contentSpan.className = 'message-content';
-        contentSpan.textContent = text;
-        msgDiv.appendChild(contentSpan);
-        
-        chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-        return true;
-    }
-    
-    // Modified addSystemMessage with duplicate detection
-    function addSystemMessage(text, fromUpdate = false) {
-        // Check for duplicates
-        if (messageExists('system', text)) {
-            debugLog("Skipping duplicate system message");
-            return;
-        }
-        
-        debugLog("Adding system message:", text);
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'message system-message';
-        msgDiv.style.color = '#6272a4';
-        msgDiv.style.fontStyle = 'italic';
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = "SYSTEM: ";
-        nameSpan.style.fontWeight = 'bold';
-        msgDiv.appendChild(nameSpan);
-        
-        const contentSpan = document.createElement('span');
-        contentSpan.className = 'message-content';
-        contentSpan.textContent = text;
-        msgDiv.appendChild(contentSpan);
-        
-        chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
-    
-    // Modified sendMessage function
-    function sendMessage(inputElement, playerNumber) {
-        const userMessage = inputElement.value.trim();
-        if (!userMessage) return;
-        
-        // Store this message to avoid duplicates when polling
-        lastSentMessage = userMessage;
-        
-        if (isGenerating) {
-            debugLog("Already generating, ignoring send");
-            return;
-        }
-        
-        // Validate game session
-        if (!currentGameId) {
-            debugLog("No game ID, creating new game");
-            addSystemMessage("No active game session. Creating a new one...");
-            createNewGame();
-            setTimeout(() => {
-                sendMessage(inputElement, playerNumber);
-            }, 1500);
-            return;
-        }
-        
-        debugLog(`Sending message for Player ${playerNumber}:`, userMessage.substring(0, 30));
-        
-        // Set generating state
-        isGenerating = true;
-        
-        // Extract name if first message
-        const extractedName = extractName(userMessage);
-        if (extractedName && !playerNames[playerNumber]) {
-            updatePlayerLabel(playerNumber, extractedName);
-            if (playerNumber === 1) {
-                playerName = extractedName;
-                awaitingName = false;
-            }
-        }
-        
-        // Get sender name
-        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
-        
-        // Add user message to chat
-        addMessage(sender, userMessage);
-        
-        // Clear input field
-        inputElement.value = '';
-        
-        // Create loading indicator
-        const loadingId = `typing-indicator-${Date.now()}`;
-        const textId = `response-text-${Date.now()}`;
-        const loadingDiv = createLoadingDivForDM(loadingId, textId);
-        
-        // Prepare player context
-        const playerContext = {};
-        Object.entries(playerNames).forEach(([num, name]) => {
-            if (name) playerContext[num] = name;
-        });
-        
-        // Send to server - simplified
-        fetch('/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                message: userMessage,
-                game_id: currentGameId,
-                player_number: playerNumber,
-                player_names: playerContext
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            debugLog("Message sent successfully, response:", data);
-            if (data && data.message_id) {
-                sendStreamRequest(data.message_id, loadingDiv);
-            } else {
-                throw new Error("Invalid response data");
-            }
-        })
-        .catch(error => {
-            debugLog('Error sending message:', error);
-            
-            if (loadingDiv && loadingDiv.parentNode) {
-                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
-                if (responseTextElem) {
-                    responseTextElem.textContent = "Error: " + error.message;
-                    loadingDiv.classList.add('error-message');
-                } else {
-                    loadingDiv.remove();
-                    addSystemMessage("Error: " + error.message);
-                }
-            } else {
-                addSystemMessage("Error: Failed to send message. " + error.message);
-            }
-            
-            isGenerating = false;
-        });
-        
-        // Focus input field
-        inputElement.focus();
-    }
-    
-    function addSystemMessage(text, fromUpdate = false) {
-        debugLog("Adding system message:", text);
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'message system-message';
-        msgDiv.style.color = '#6272a4';
-        msgDiv.style.fontStyle = 'italic';
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = "SYSTEM: ";
-        nameSpan.style.fontWeight = 'bold';
-        msgDiv.appendChild(nameSpan);
-        
-        const contentSpan = document.createElement('span');
-        contentSpan.className = 'message-content';
-        contentSpan.textContent = text;
-        msgDiv.appendChild(contentSpan);
-        
-        chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
-    
-    function addMessage(sender, text, isTypewriter = false, fromUpdate = false) {
-        // Skip if this appears to be the current user's message that we already displayed
-        // This prevents duplicating messages that are both sent and received via polling
-        if (fromUpdate && sender.toLowerCase() === (playerNames[1] || 'player 1').toLowerCase() && 
-            text === lastSentMessage) {
-            debugLog("Skipping duplicate message", text.substring(0, 20) + "...");
-            return;
-        }
-        
-        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
-        
-        // Create message element
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${sender.toLowerCase() === 'dm' ? 'dm-message' : 'player-message'}`;
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = `${sender.toUpperCase()}: `;
-        nameSpan.style.fontWeight = 'bold';
-        msgDiv.appendChild(nameSpan);
-        
-        // Add content span
-        const contentSpan = document.createElement('span');
-        contentSpan.className = 'message-content';
-        contentSpan.textContent = text;
-        msgDiv.appendChild(contentSpan);
-        
-        chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
-    
-    function checkForPlayerNames(text) {
-        // Look for "Player X is named Y" patterns for all players
-        const nameRegex = /Player (\d+) is (?:now |)named ([A-Za-z]+)/gi;
-        let match;
-        
-        while ((match = nameRegex.exec(text)) !== null) {
-            const playerNum = parseInt(match[1]);
-            const playerName = match[2];
-            
-            if (playerNum && playerName) {
-                debugLog(`Found name for Player ${playerNum}: ${playerName}`);
-                updatePlayerLabel(playerNum, playerName);
-            }
-        }
-    }
-    
-    function extractName(input) {
-        const namePatterns = [
-            /my name is ([A-Za-z]+)/i,
-            /i am ([A-Za-z]+)/i,
-            /call me ([A-Za-z]+)/i,
-            /name's ([A-Za-z]+)/i,
-            /name is ([A-Za-z]+)/i,
-            /^([A-Za-z]+)$/i  // Just a name by itself
-        ];
-        
-        for (const pattern of namePatterns) {
-            const match = input.match(pattern);
-            if (match && match[1]) {
-                return match[1];
-            }
-        }
-        
-        return null;
-    }
-    
-    function extractNameFromDMResponse(response) {
-        const namePatterns = [
-            /so your name is ([A-Za-z]+)/i,
-            /welcome, ([A-Za-z]+)/i,
-            /hello, ([A-Za-z]+)/i
-        ];
-        
-        for (const pattern of namePatterns) {
-            const match = response.match(pattern);
-            if (match && match[1]) {
-                return match[1];
-            }
-        }
-        
-        return null;
-    }
-    
-    function updatePlayerLabel(playerNumber, name) {
-        debugLog(`Updating Player ${playerNumber} label to ${name}`);
-        
-        const labelElement = document.getElementById(`player${playerNumber}-label`);
-        if (labelElement) {
-            labelElement.textContent = `${name}:`;
-            playerNames[playerNumber] = name;
-        }
-    }
-    
-    // Update New Game button functionality to properly clear all additional players
-    newGameBtn.addEventListener('click', function() {
-        debugLog("New game button clicked");
-        
-        // Confirm with the user
-        if (confirm("Start a new game? This will clear your current adventure.")) {
-            try {
-                // Clear existing state
-                currentGameId = null;
-                localStorage.removeItem('currentGameId');
-                
-                // Reset UI and state
-                chatWindow.innerHTML = '';
-                isGenerating = false;
-                awaitingName = true;
-                playerName = null;
-                seenMessages = new Set();
-                
-                // Reset all player data
-                playerNames = { 1: null, 2: null }; // Reset to initial state
-                
-                // Reset UI elements
-                player2Container.classList.add('hidden');
-                isMultiplayerActive = false;
-                
-                // Clear all additional players
-                additionalPlayersContainer.innerHTML = '';
-                
-                // Reset next player number
-                nextPlayerNumber = 3;
-                
-                // Clear processed message tracking
-                processedMessageIds.clear();
-                
-                // Start completely fresh game
-                createNewGame();
-            } catch (err) {
-                debugLog("Error creating new game:", err);
-                addSystemMessage("Error: " + err.message);
-                
-                // Force a complete reset
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            }
-        }
-    });
-    
-    // Fix the displayMessages function - simplified
-    function displayMessages(messages) {
-        debugLog("Displaying messages from history:", messages.length);
-        chatWindow.innerHTML = '';  // Clear existing messages
-        
-        messages.forEach(msg => {
-            if (msg.role === 'assistant') {
-                // DM messages
-                addMessage('DM', msg.content);
-                
-                // Check for player names in DM response
-                const extractedName = extractNameFromDMResponse(msg.content);
-                if (extractedName) {
-                    // Try to match this with a pending player name
-                    if (!playerNames[1]) {
-                        playerNames[1] = extractedName;
-                        updatePlayerLabel(1, extractedName);
-                    }
-                }
-            }
-            else if (msg.role === 'user') {
-                // Player messages
-                const sender = playerNames[1] || `Player 1`;
-                addMessage(sender, msg.content);
-                
-                // Extract name if present
-                const extractedName = extractName(msg.content);
-                if (extractedName && !playerNames[1]) {
-                    updatePlayerLabel(1, extractedName);
-                }
-            }
-            else if (msg.role === 'system') {
-                // System messages
-                addSystemMessage(msg.content);
-            }
-        });
-        
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
-    
-    // First, add a function to ensure a welcome message is displayed
-    function ensureWelcomeMessage() {
-        // Check if there's any DM message in the chat window
-        const dmMessages = chatWindow.querySelectorAll('.dm-message');
-        if (dmMessages.length === 0) {
-            // No DM messages found, add a welcome message
-            addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
-            debugLog("Added fallback welcome message");
-        }
-    }
-
-    function initialize() {
-        debugLog("Initializing game");
-        
-        // Clear chat window and reset flags
-        chatWindow.innerHTML = '';
-        seenMessages.clear();
-        isGenerating = false;
-        
-        // Reset player tracking
-        playerNames = { 1: null, 2: null };
-        
-        // Clear player 2 and additional players UI
-        player2Container.classList.add('hidden');
-        additionalPlayersContainer.innerHTML = '';
-        
-        // Reset additional player tracking
-        isMultiplayerActive = false;
-        nextPlayerNumber = 3;
-        
-        if (!currentGameId) {
-            debugLog("No game ID, creating new game");
-            createNewGame();
-            return;
-        }
-        
-        // Load chat history
-        fetch('/load_history', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                game_id: currentGameId
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            debugLog("Loaded history:", data);
-            
-            if (!data.history || !Array.isArray(data.history)) {
-                throw new Error("Invalid history data");
-            }
-            
-            // Process history data
-            displayMessages(data.history);
-            
-            // Ensure welcome message is displayed (add it if missing)
-            ensureWelcomeMessage();
-            
-            // Store session info
-            localStorage.setItem('currentGameId', currentGameId);
-            
-            // Set the initial message count for update checking
-            lastMessageCount = data.history.length;
-            
-            // Start polling for updates
-            startUpdatePolling();
-            
-            // Focus input
-            userInput.focus();
-        })
-        .catch(error => {
-            debugLog('Error loading history:', error);
-            
-            // Create default welcome message
-            chatWindow.innerHTML = '';
-            addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
-            
-            // Focus input
-            userInput.focus();
-        });
-    }
-
-    function createNewGame() {
-        debugLog("Creating new game");
-        
-        // Reset UI state
-        chatWindow.innerHTML = '';
-        isGenerating = false;
-        
-        // Reset player name
-        playerNames[1] = null;
-        
-        // Create loading message
-        addMessage('DM', 'Creating a new adventure for you...', false);
-        
-        // Request new game from server
-        fetch('/new_game', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({})
-        })
-        .then(response => response.json())
-        .then(data => {
-            debugLog("New game created:", data);
-            
-            if (data.success && data.game_id) {
-                currentGameId = data.game_id;
-                
-                // Store in local storage
-                localStorage.setItem('currentGameId', currentGameId);
-                
-                // Clear loading message
-                chatWindow.innerHTML = '';
-                
-                // Add welcome message - make sure this is displayed
-                addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
-                debugLog("Added welcome message for new game");
-                
-                // Reset message count and start polling
-                lastMessageCount = 1; // Start with 1 for the welcome message
-                startUpdatePolling();
-                
-                // Focus input field
-                userInput.focus();
-            } else {
-                throw new Error("Failed to create new game");
-            }
-        })
-        .catch(error => {
-            debugLog("Error creating new game:", error);
-            addSystemMessage("Error: " + error.message);
-            
-            // Add welcome message anyway so user can interact
-            ensureWelcomeMessage();
-        });
-    }
-
-    // Set up event handlers
-    sendBtn.addEventListener('click', function() {
-        sendMessage(userInput, 1);
-    });
-    
-    userInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !isGenerating) {
-            sendMessage(userInput, 1);
-        }
-    });
-    
-    // Set up copy button functionality
-    copyChatBtn.addEventListener('click', function() {
-        const messages = Array.from(chatWindow.querySelectorAll('.message')).map(msg => {
-            const sender = msg.querySelector('span').textContent;
-            const content = msg.querySelector('.message-content').textContent;
-            return `${sender} ${content}`;
-        }).join('\n\n');
-        
-        navigator.clipboard.writeText(messages).then(() => {
-            alert('Chat copied to clipboard!');
-        }).catch(err => {
-            console.error('Failed to copy chat: ', err);
-            alert('Failed to copy chat');
-        });
-    });
-    
-    // Add these variables back
-    let isMultiplayerActive = false;
-
-    // Add this function to show Player 2
-    function showPlayer2() {
-        if (player2Container.classList.contains('hidden')) {
-            player2Container.classList.remove('hidden');
-            
-            // Move the isMultiplayerActive flag set to after the API call completes
-            // to prevent race conditions with other functions
-            
-            // Notify the DM about the new player
-            addSystemMessage("Player 2 has joined the game. Please enter your name.");
-            
-            // Create loading div for DM's response
-            const loadingDiv = createLoadingDivForDM('dm-welcome-player2', 'response-text-welcome-player2');
-            
-            // Notify DM
-            isGenerating = true;
-            fetch('/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    message: `A new player has joined the game. Please welcome Player 2 and ask for their name.`,
-                    game_id: currentGameId,
-                    player_number: 'system',
-                    is_system: true
-                })
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                return response.json();
-            })
-            .then(data => {
-                debugLog("Player 2 welcome response:", data);
-                if (data && data.message_id) {
-                    sendStreamRequest(data.message_id, loadingDiv);
-                    // Only set multiplayer active after successful API response
-                    isMultiplayerActive = true;
-                } else {
-                    throw new Error("Invalid response data");
-                }
-            })
-            .catch(error => {
-                debugLog('Error adding Player 2:', error);
-                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                addSystemMessage("Error adding Player 2: " + error.message);
-                isGenerating = false;
-            });
-            
-            // Focus the player 2 input box
-            setTimeout(() => player2Input.focus(), 100);
-        }
-    }
-
-    // Add click handler for Add Player button
-    addPlayerBtn.addEventListener('click', function() {
-        if (isGenerating) {
-            return; // Don't add players while generating a response
-        }
-        
-        if (player2Container.classList.contains('hidden')) {
-            // First click should only show Player 2
-            showPlayer2();
-        } else {
-            // Player 2 is already visible, add the next player
-            addPlayer(nextPlayerNumber);
-        }
-    });
-
-    // Add event listener for Player 2 send button
-    sendPlayer2Btn.addEventListener('click', function() {
-        sendMessage(player2Input, 2);
-    });
-
-    // Add event listener for Player 2 input
-    player2Input.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !isGenerating) {
-            sendMessage(player2Input, 2);
-        }
-    });
-
-    // Add function to create dynamic player input for players 3+
-    function createPlayerInput(playerNumber) {
-        debugLog(`Creating input for Player ${playerNumber}`);
-        const playerInputDiv = document.createElement('div');
-        playerInputDiv.className = 'player-input';
-        playerInputDiv.id = `player${playerNumber}-container`;
-        
-        const playerLabelDiv = document.createElement('div');
-        playerLabelDiv.className = 'player-label';
-        playerLabelDiv.id = `player${playerNumber}-label`;
-        playerLabelDiv.textContent = `Player ${playerNumber}:`;
-        
-        const playerInput = document.createElement('input');
-        playerInput.type = 'text';
-        playerInput.id = `player${playerNumber}-input`;
-        playerInput.placeholder = 'Type your message...';
-        playerInput.autocomplete = 'off';
-        playerInput.className = `player${playerNumber}-input`;
-        
-        // Add Enter key functionality
-        playerInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !isGenerating) {
-                sendMessage(playerInput, playerNumber);
-            }
-        });
-        
-        const sendButton = document.createElement('button');
-        sendButton.className = 'action-btn send-btn';
-        sendButton.id = `send-player${playerNumber}-btn`;
-        sendButton.textContent = '📤 Send';
-        sendButton.title = 'Send message';
-        
-        // Add click handler to the button
-        sendButton.addEventListener('click', function() {
-            sendMessage(playerInput, playerNumber);
-        });
-        
-        playerInputDiv.appendChild(playerLabelDiv);
-        playerInputDiv.appendChild(playerInput);
-        playerInputDiv.appendChild(sendButton);
-        
-        return playerInputDiv;
-    }
-
-    // Update showPlayer2 function to make it more generic
-    function addPlayer(playerNum) {
-        // Don't allow adding more players while generating
-        if (isGenerating) {
-            return;
-        }
-        
-        // Don't allow adding Player 2 through this function - use showPlayer2() instead
-        if (playerNum === 2) {
-            if (player2Container.classList.contains('hidden')) {
-                showPlayer2();
-            }
-            return;
-        }
-        
-        // Create UI for the new player 3+
-        const newPlayerContainer = createPlayerInput(playerNum);
-        additionalPlayersContainer.appendChild(newPlayerContainer);
-        
-        // Reset this player's name
-        playerNames[playerNum] = null;
-        
-        // Notify the DM about the new player
-        const joinMessage = `Player ${playerNum} has joined the game. Please enter your name.`;
-        addSystemMessage(joinMessage);
-        
-        // Create loading div for DM's response
-        const loadingDiv = createLoadingDivForDM(
-            `dm-welcome-player${playerNum}`, 
-            `response-text-welcome-player${playerNum}`
-        );
-        
-        // Notify DM
-        isGenerating = true;
-        fetch('/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                message: `A new player has joined the game. Please welcome Player ${playerNum} and ask for their name.`,
-                game_id: currentGameId,
-                player_number: 'system',
-                is_system: true
-            })
-        })
-        .then(response => {
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-            return response.json();
-        })
-        .then(data => {
-            debugLog(`Player ${playerNum} welcome response:`, data);
-            if (data && data.message_id) {
-                sendStreamRequest(data.message_id, loadingDiv);
-                
-                // Focus the new player's input field
-                setTimeout(() => {
-                    const inputField = document.getElementById(`player${playerNum}-input`);
-                    if (inputField) inputField.focus();
-                }, 100);
-                
-                // Update next player number
-                if (playerNum >= nextPlayerNumber) {
-                    nextPlayerNumber = playerNum + 1;
-                }
-            } else {
-                throw new Error("Invalid response data");
-            }
-        })
-        .catch(error => {
-            debugLog(`Error adding Player ${playerNum}:`, error);
-            if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-            addSystemMessage(`Error adding Player ${playerNum}: ${error.message}`);
-            isGenerating = false;
-        });
-    }
-
-    // Update Add Player button to add the next player
-    addPlayerBtn.addEventListener('click', function() {
-        if (!isMultiplayerActive) {
-            // First click adds player 2
-            addPlayer(2);
-        } else {
-            // Subsequent clicks add player 3, 4, etc.
-            addPlayer(nextPlayerNumber);
-        }
-    });
-
-    // Add a function to check for updates
-    function checkForUpdates() {
-        if (!currentGameId || isCheckingForUpdates || isGenerating) {
-            return; // Don't check if no game is active or already checking or AI is generating
-        }
-        
-        isCheckingForUpdates = true;
-        
-        fetch('/get_updates', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                game_id: currentGameId,
-                last_message_count: lastMessageCount
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Server returned ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success && data.has_updates) {
-                // Process new messages
-                let newMessages = data.updates;
-                let addedMessages = 0;
-                
-                // Append new messages to the chat window
-                newMessages.forEach(msg => {
-                    let wasAdded = false;
-                    
-                    if (msg.role === 'assistant') {
-                        wasAdded = addMessage('DM', msg.content, false, true);
-                        if (wasAdded) checkForPlayerNames(msg.content);
-                    }
-                    else if (msg.role === 'user') {
-                        let playerNum = 1;
-                        if (msg.player && msg.player.startsWith('player')) {
-                            playerNum = parseInt(msg.player.substring(6));
-                        }
-                        
-                        const sender = playerNames[playerNum] || `Player ${playerNum}`;
-                        wasAdded = addMessage(sender, msg.content, false, true);
-                    }
-                    else if (msg.role === 'system') {
-                        addSystemMessage(msg.content, true);
-                        wasAdded = true;
-                    }
-                    
-                    if (wasAdded) addedMessages++;
+            // Auto-resize textarea based on content
+            function setupTextareaResizing(textarea) {
+                textarea.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
                 });
                 
-                // Update the message count
-                lastMessageCount = data.message_count;
+                // Handle Enter key to submit (Shift+Enter for new line)
+                textarea.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (textarea.value.trim() !== '') {
+                            // Get player number from the textarea ID
+                            const playerNum = textarea.id.replace('player', '').replace('-input', '');
+                            submitPlayerMessage(textarea, playerNum);
+                        }
+                    }
+                });
+            }
+            
+            // Setup initial player 1 textarea
+            setupTextareaResizing(player1Input);
+            
+            // Fix Player 1 row layout
+            updatePlayer1Row();
+            
+            // Copy full chat functionality
+            copyChatButton.addEventListener('click', function() {
+                const messages = document.querySelectorAll('.message');
+                let fullChatText = '';
                 
-                // Check if we need to show other players' inputs
-                if (addedMessages > 0) {
-                    checkForMissingPlayers(newMessages);
-                }
-            } else if (data.success) {
-                // Update our message count if server has a different count
-                if (data.message_count !== lastMessageCount) {
-                    lastMessageCount = data.message_count;
-                }
-            }
-        })
-        .catch(error => {
-            debugLog("Error checking for updates:", error);
-        })
-        .finally(() => {
-            isCheckingForUpdates = false;
-        });
-    }
-
-    // Add this function to check for missing player inputs
-    function checkForMissingPlayers(messages) {
-        // Find unique player numbers from messages
-        const playerNumbers = new Set();
-        
-        messages.forEach(msg => {
-            if (msg.player && msg.player.startsWith('player')) {
-                const playerNum = parseInt(msg.player.substring(6));
-                if (!isNaN(playerNum) && playerNum > 1) {  // Ignore player 1 (self)
-                    playerNumbers.add(playerNum);
-                }
-            }
-        });
-        
-        // For each player number, make sure their input is visible
-        playerNumbers.forEach(playerNum => {
-            if (playerNum === 2) {
-                // Make sure player 2 input is visible
-                if (player2Container.classList.contains('hidden')) {
-                    player2Container.classList.remove('hidden');
-                    isMultiplayerActive = true;
-                }
-            } 
-            else if (playerNum >= 3) {
-                // Check if we need to add input for player 3+
-                const containerExists = document.getElementById(`player${playerNum}-container`);
-                if (!containerExists) {
-                    const newPlayerContainer = createPlayerInput(playerNum);
-                    additionalPlayersContainer.appendChild(newPlayerContainer);
+                messages.forEach(message => {
+                    const role = message.querySelector('.message-role').textContent;
+                    const content = message.querySelector('.message-content').textContent;
+                    fullChatText += `${role}:\n${content}\n\n`;
+                });
+                
+                copyToClipboard(fullChatText.trim());
+                alert('Chat copied to clipboard!');
+            });
+            
+            // Clear chat button functionality
+            clearButton.addEventListener('click', function() {
+                if (confirm('Start a new game? This will clear your current adventure.')) {
+                    // Also remove all players except player 1
+                    const playerRows = document.querySelectorAll('.player-row');
+                    playerRows.forEach(row => {
+                        if (row.id !== 'player1-row') {
+                            row.remove();
+                        }
+                    });
                     
-                    // Update nextPlayerNumber if needed
-                    if (playerNum >= nextPlayerNumber) {
-                        nextPlayerNumber = playerNum + 1;
+                    // Reset player tracking
+                    currentPlayers = 1;
+                    nextPlayerNumber = 2;
+                    playerNames = { 1: null };
+                    
+                    // Reset player 1 label
+                    document.getElementById('player1-label').textContent = 'Player 1:';
+                    
+                    // Clear the chat history on server
+                    fetch('/clear', {
+                        method: 'POST',
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                }
+            });
+            
+            // Add player button functionality - updated to use lowest available number
+            addPlayerButton.addEventListener('click', function() {
+                if (isGenerating) {
+                    return; // Don't add players while generating a response
+                }
+                
+                // Find the lowest available player number (excluding 1)
+                let playerNum = nextPlayerNumber;
+                if (availablePlayerNumbers.length > 0) {
+                    // If we have recycled numbers, use the lowest one
+                    availablePlayerNumbers.sort((a, b) => a - b);
+                    playerNum = availablePlayerNumbers.shift();
+                }
+                
+                addPlayer(playerNum);
+            });
+            
+            // Add a new player row
+            function addPlayer(playerNum) {
+                // Create player row
+                const playerRow = document.createElement('div');
+                playerRow.className = 'player-row';
+                playerRow.id = `player${playerNum}-row`;
+                
+                // Create remove button - now first element
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'remove-player-button';
+                removeButton.textContent = '✕';
+                removeButton.title = `Remove Player ${playerNum}`;
+                
+                // Create player label
+                const playerLabel = document.createElement('div');
+                playerLabel.className = 'player-label';
+                playerLabel.id = `player${playerNum}-label`;
+                playerLabel.textContent = `Player ${playerNum}:`;
+                
+                // Create textarea
+                const textarea = document.createElement('textarea');
+                textarea.id = `player${playerNum}-input`;
+                textarea.placeholder = 'Type your message here...';
+                textarea.rows = 1;
+                
+                // Setup textarea events
+                setupTextareaResizing(textarea);
+                
+                // Create send button
+                const sendButton = document.createElement('button');
+                sendButton.type = 'button';
+                sendButton.className = 'send-button';
+                sendButton.id = `player${playerNum}-send`;
+                sendButton.innerHTML = `<span>Send</span><span class="spinner" id="player${playerNum}-spinner" style="display: none;"></span>`;
+                
+                // Add event listener to send button
+                sendButton.addEventListener('click', () => {
+                    if (textarea.value.trim() !== '') {
+                        submitPlayerMessage(textarea, playerNum);
+                    }
+                });
+                
+                // Add event listener to remove button
+                removeButton.addEventListener('click', () => {
+                    removePlayer(playerNum);
+                });
+                
+                // Append all elements to player row - note the new order
+                playerRow.appendChild(removeButton);  // Remove button first
+                playerRow.appendChild(playerLabel);   // Then label
+                playerRow.appendChild(textarea);      // Then textarea
+                playerRow.appendChild(sendButton);    // Then send button
+                
+                // Add to players container
+                playersContainer.appendChild(playerRow);
+                
+                // Update tracking (modified to handle number recycling)
+                currentPlayers++;
+                
+                // If we used the nextPlayerNumber, increment it
+                if (playerNum === nextPlayerNumber) {
+                    nextPlayerNumber++;
+                }
+                
+                playerNames[playerNum] = null;
+                
+                // Focus the new textarea
+                setTimeout(() => textarea.focus(), 0);
+                
+                // Tell the server about the new player
+                notifyServerAboutNewPlayer(playerNum);
+            }
+            
+            // Modify the existing player 1 row to match new structure
+            function updatePlayer1Row() {
+                const player1Row = document.getElementById('player1-row');
+                const player1Label = document.getElementById('player1-label');
+                
+                // Create a dummy remove button (disabled) for player 1
+                const dummyRemoveBtn = document.createElement('button');
+                dummyRemoveBtn.type = 'button';
+                dummyRemoveBtn.className = 'remove-player-button';
+                dummyRemoveBtn.style.visibility = 'hidden';  // Hide it but keep the space
+                
+                // Insert at the beginning
+                player1Row.insertBefore(dummyRemoveBtn, player1Label);
+            }
+            
+            // Notify server about new player - modified to better signal a join event
+            function notifyServerAboutNewPlayer(playerNum) {
+                fetch('/add_player', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        player_number: playerNum
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Add prominent system message about player joining
+                        addSystemMessage(`▶️ NEW PLAYER: Player ${playerNum} has joined the game! ▶️`);
+                        
+                        // Create a placeholder for the DM response
+                        const botMessageDiv = document.createElement('div');
+                        botMessageDiv.className = 'message bot-message';
+                        
+                        const roleDiv = document.createElement('div');
+                        roleDiv.className = 'message-role';
+                        roleDiv.textContent = 'DM';
+                        
+                        const contentDiv = document.createElement('div');
+                        contentDiv.className = 'message-content';
+                        contentDiv.innerHTML = '<span class="typing">|</span>';
+                        
+                        botMessageDiv.appendChild(roleDiv);
+                        botMessageDiv.appendChild(contentDiv);
+                        
+                        chatHistory.appendChild(botMessageDiv);
+                        scrollToBottom();
+                        
+                        // Create a forced "welcome" message as if from Player 1
+                        // This ensures the DM responds directly to the new player joining
+                        const forceWelcomeMessage = {
+                            message_id: Date.now(),
+                            player_number: 1,
+                            action_type: 'joined',
+                            force_welcome: true, // Special flag to force welcome message
+                            welcome_player: playerNum // Which player to welcome
+                        };
+                        
+                        // Request DM response to new player joining with enhanced instructions
+                        fetch('/stream', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(forceWelcomeMessage)
+                        })
+                        .then(response => {
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            
+                            function processStream() {
+                                return reader.read().then(({ done, value }) => {
+                                    if (done) {
+                                        // Remove cursor when done
+                                        const finalText = contentDiv.textContent.replace('|', '');
+                                        contentDiv.textContent = finalText;
+                                        resetUI();
+                                        return;
+                                    }
+                                    
+                                    const chunk = decoder.decode(value);
+                                    const lines = chunk.split('\n\n');
+                                    
+                                    for (const line of lines) {
+                                        if (line.startsWith('data: ')) {
+                                            try {
+                                                const eventData = JSON.parse(line.substring(6));
+                                                
+                                                if (eventData.error) {
+                                                    contentDiv.textContent = eventData.full;
+                                                    resetUI();
+                                                    return;
+                                                }
+                                                
+                                                // Update the content with new text
+                                                contentDiv.innerHTML = eventData.full + '<span class="typing">|</span>';
+                                                scrollToBottom();
+                                            } catch (e) {
+                                                console.error('Error parsing SSE data:', e);
+                                            }
+                                        }
+                                    }
+                                    
+                                    return processStream();
+                                });
+                            }
+                            
+                            processStream();
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error adding player:', error);
+                });
+            }
+            
+            // Notify server about player removal - modified to signal a leave event
+            function notifyServerAboutPlayerRemoval(playerNum) {
+                fetch('/remove_player', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        player_number: playerNum
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Get player name if available
+                        const playerName = playerNames[playerNum] || `Player ${playerNum}`;
+                        
+                        // Add system message about player leaving
+                        addSystemMessage(`${playerName} has left the game.`);
+                        
+                        // Create a placeholder for the DM response
+                        const botMessageDiv = document.createElement('div');
+                        botMessageDiv.className = 'message bot-message';
+                        
+                        const roleDiv = document.createElement('div');
+                        roleDiv.className = 'message-role';
+                        roleDiv.textContent = 'DM';
+                        
+                        const contentDiv = document.createElement('div');
+                        contentDiv.className = 'message-content';
+                        contentDiv.innerHTML = '<span class="typing">|</span>';
+                        
+                        botMessageDiv.appendChild(roleDiv);
+                        botMessageDiv.appendChild(contentDiv);
+                        
+                        chatHistory.appendChild(botMessageDiv);
+                        scrollToBottom();
+                        
+                        // Request DM response to player leaving with specific action type
+                        fetch('/stream', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message_id: Date.now(),
+                                player_number: 1,  // Default to player 1 for system events
+                                action_type: 'left'
+                            })
+                        })
+                        .then(response => {
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            
+                            function processStream() {
+                                return reader.read().then(({ done, value }) => {
+                                    if (done) {
+                                        // Remove cursor when done
+                                        const finalText = contentDiv.textContent.replace('|', '');
+                                        contentDiv.textContent = finalText;
+                                        resetUI();
+                                        return;
+                                    }
+                                    
+                                    const chunk = decoder.decode(value);
+                                    const lines = chunk.split('\n\n');
+                                    
+                                    for (const line of lines) {
+                                        if (line.startsWith('data: ')) {
+                                            try {
+                                                const eventData = JSON.parse(line.substring(6));
+                                                
+                                                if (eventData.error) {
+                                                    contentDiv.textContent = eventData.full;
+                                                    resetUI();
+                                                    return;
+                                                }
+                                                
+                                                // Update the content with new text
+                                                contentDiv.innerHTML = eventData.full + '<span class="typing">|</span>';
+                                                scrollToBottom();
+                                            } catch (e) {
+                                                console.error('Error parsing SSE data:', e);
+                                            }
+                                        }
+                                    }
+                                    
+                                    return processStream();
+                                });
+                            }
+                            
+                            processStream();
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error removing player:', error);
+                });
+            }
+            
+            // Remove a player - modified to recycle player numbers
+            function removePlayer(playerNum) {
+                if (playerNum === 1) {
+                    alert("Cannot remove Player 1.");
+                    return;
+                }
+                
+                if (isGenerating) {
+                    alert("Please wait until the current message is processed.");
+                    return;
+                }
+                
+                if (confirm(`Remove Player ${playerNum}?`)) {
+                    // Remove the player row
+                    const playerRow = document.getElementById(`player${playerNum}-row`);
+                    if (playerRow) {
+                        playerRow.remove();
                     }
                     
-                    isMultiplayerActive = true;
+                    // Update tracking
+                    currentPlayers--;
+                    delete playerNames[playerNum];
+                    
+                    // Add this number to available numbers for recycling
+                    availablePlayerNumbers.push(playerNum);
+                    
+                    // Tell the server about the player leaving
+                    notifyServerAboutPlayerRemoval(playerNum);
                 }
             }
+            
+            // Submit a player message
+            function submitPlayerMessage(textarea, playerNum) {
+                if (isGenerating) {
+                    return; // Don't allow sending while already generating
+                }
+                
+                // Set generating state
+                isGenerating = true;
+                
+                // Get UI elements
+                const sendButton = document.getElementById(`player${playerNum}-send`);
+                const spinner = document.getElementById(`player${playerNum}-spinner`);
+                
+                // Show loading state
+                sendButton.disabled = true;
+                sendButton.classList.add('loading');
+                spinner.style.display = 'inline-block';
+                
+                // Get the message text
+                const userMessage = textarea.value.trim();
+                
+                // Add user message to chat history
+                addPlayerMessage(playerNum, userMessage);
+                
+                // Clear the textarea
+                textarea.value = '';
+                textarea.style.height = 'auto';
+                
+                // Create a placeholder for the bot response with cursor
+                const botMessageDiv = document.createElement('div');
+                botMessageDiv.className = 'message bot-message';
+                
+                const roleDiv = document.createElement('div');
+                roleDiv.className = 'message-role';
+                roleDiv.textContent = 'DM';
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                contentDiv.innerHTML = '<span class="typing">|</span>'; // Blinking cursor
+                
+                botMessageDiv.appendChild(roleDiv);
+                botMessageDiv.appendChild(contentDiv);
+                
+                // Add the placeholder message
+                chatHistory.appendChild(botMessageDiv);
+                scrollToBottom();
+                
+                // Send the message to the server
+                const formData = new FormData();
+                formData.append('user_query', userMessage);
+                formData.append('player_number', playerNum);
+                
+                fetch('/', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.streaming) {
+                        // Process streaming response
+                        fetch('/stream', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ 
+                                message_id: data.message_id,
+                                player_number: playerNum
+                            })
+                        })
+                        .then(response => {
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            
+                            // Process the stream
+                            function processStream() {
+                                return reader.read().then(({ done, value }) => {
+                                    if (done) {
+                                        // Remove cursor when done
+                                        const finalText = contentDiv.textContent.replace('|', '');
+                                        contentDiv.textContent = finalText;
+                                        resetUI();
+                                        
+                                        // Check for player name in the response
+                                        checkForPlayerName(finalText, playerNum);
+                                        return;
+                                    }
+                                    
+                                    const chunk = decoder.decode(value);
+                                    const lines = chunk.split('\n\n');
+                                    
+                                    for (const line of lines) {
+                                        if (line.startsWith('data: ')) {
+                                            try {
+                                                const eventData = JSON.parse(line.substring(6));
+                                                
+                                                if (eventData.error) {
+                                                    contentDiv.textContent = eventData.full;
+                                                    resetUI();
+                                                    return;
+                                                }
+                                                
+                                                // Update the content with new text
+                                                contentDiv.innerHTML = eventData.full + '<span class="typing">|</span>';
+                                                scrollToBottom();
+                                            } catch (e) {
+                                                console.error('Error parsing SSE data:', e);
+                                            }
+                                        }
+                                    }
+                                    
+                                    return processStream();
+                                });
+                            }
+                            
+                            return processStream();
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    contentDiv.textContent = 'Sorry, an error occurred. Please try again.';
+                    resetUI();
+                });
+                
+                // Focus the textarea again
+                textarea.focus();
+            }
+            
+            // Reset UI state after sending message
+            function resetUI() {
+                // Reset all buttons and spinners
+                document.querySelectorAll('.send-button').forEach(button => {
+                    button.disabled = false;
+                    button.classList.remove('loading');
+                });
+                
+                document.querySelectorAll('.spinner').forEach(spinner => {
+                    spinner.style.display = 'none';
+                });
+                
+                isGenerating = false;
+            }
+            
+            // Check for player name in DM response
+            function checkForPlayerName(response, playerNum) {
+                // Check for "Player X is now named Y" pattern
+                const namePattern1 = new RegExp(`Player ${playerNum} is now named ([\\w]+)`, 'i');
+                const match1 = response.match(namePattern1);
+                
+                if (match1 && match1[1]) {
+                    updatePlayerName(playerNum, match1[1]);
+                    return;
+                }
+                
+                // Check for "So your name is X" pattern (for Player 1)
+                if (playerNum === 1) {
+                    const namePattern2 = /So your name is ([A-Za-z]+)/i;
+                    const match2 = response.match(namePattern2);
+                    
+                    if (match2 && match2[1]) {
+                        updatePlayerName(playerNum, match2[1]);
+                        return;
+                    }
+                }
+                
+                // Check for "Welcome X" or "Hello X" patterns
+                const namePattern3 = /Welcome,? ([A-Za-z]+)|Hello,? ([A-Za-z]+)/i;
+                const match3 = response.match(namePattern3);
+                
+                if (match3 && (match3[1] || match3[2])) {
+                    const name = match3[1] || match3[2];
+                    updatePlayerName(playerNum, name);
+                }
+            }
+            
+            // Update player name in UI
+            function updatePlayerName(playerNum, name) {
+                const playerLabel = document.getElementById(`player${playerNum}-label`);
+                if (playerLabel && !playerNames[playerNum]) {
+                    playerLabel.textContent = `${name}:`;
+                    playerNames[playerNum] = name;
+                }
+            }
+            
+            // Add player message to chat
+            function addPlayerMessage(playerNum, content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message user-message';
+                
+                const roleDiv = document.createElement('div');
+                roleDiv.className = 'message-role';
+                
+                // Use player name if available, otherwise use Player X
+                const playerName = playerNames[playerNum] || `Player ${playerNum}`;
+                roleDiv.textContent = playerName;
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                contentDiv.textContent = content;
+                
+                messageDiv.appendChild(roleDiv);
+                messageDiv.appendChild(contentDiv);
+                
+                chatHistory.appendChild(messageDiv);
+                scrollToBottom();
+                
+                // Check message for name introduction
+                const nameMatch = content.match(/my name is ([A-Za-z]+)/i) || 
+                                 content.match(/I am ([A-Za-z]+)/i) ||
+                                 content.match(/call me ([A-Za-z]+)/i) ||
+                                 content.match(/^([A-Za-z]+)$/i);
+                
+                if (nameMatch && nameMatch[1] && !playerNames[playerNum]) {
+                    updatePlayerName(playerNum, nameMatch[1]);
+                }
+            }
+            
+            // Add system message to chat - enhanced to support special formatting
+            function addSystemMessage(content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message system-message';
+                
+                // Check if this is a special "new player" message and add special styling
+                if (content.includes('NEW PLAYER')) {
+                    messageDiv.style.backgroundColor = '#4a235a'; // Deeper purple background
+                    messageDiv.style.borderLeft = '4px solid #ff79c6'; // Pink left border
+                }
+                
+                const roleDiv = document.createElement('div');
+                roleDiv.className = 'message-role';
+                roleDiv.textContent = 'System';
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                contentDiv.textContent = content;
+                
+                messageDiv.appendChild(roleDiv);
+                messageDiv.appendChild(contentDiv);
+                
+                chatHistory.appendChild(messageDiv);
+                scrollToBottom();
+            }
+            
+            // Copy text to clipboard
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(function() {
+                    console.log('Text copied to clipboard');
+                }).catch(function(err) {
+                    console.error('Could not copy text: ', err);
+                });
+            }
+            
+            // Auto-scroll to bottom of chat history
+            function scrollToBottom() {
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
+            
+            // Connect Player 1 send button
+            player1SendButton.addEventListener('click', function() {
+                if (player1Input.value.trim() !== '') {
+                    submitPlayerMessage(player1Input, 1);
+                }
+            });
         });
-    }
-
-    // Add function to start polling
-    function startUpdatePolling() {
-        // Clear any existing interval
-        if (updateCheckInterval) {
-            clearInterval(updateCheckInterval);
-        }
-        
-        // First do an immediate check
-        checkForUpdates();
-        
-        // Start a new interval to check for updates
-        updateCheckInterval = setInterval(() => {
-            checkForUpdates();
-        }, 2000); // Check more frequently (every 2 seconds)
-        
-        debugLog("Started update polling");
-    }
-
-    // Add cleanup for the interval when leaving the page
-    window.addEventListener('beforeunload', function() {
-        if (updateCheckInterval) {
-            clearInterval(updateCheckInterval);
-        }
-    });
-
-    // Initialize
-    try {
-        if (currentGameId) {
-            debugLog("Restoring session:", currentGameId);
-            initialize();
-        } else {
-            debugLog("No previous session, creating new game");
-            createNewGame();
-        }
-        
-        // Add a final check after small delay to ensure welcome message is displayed
-        setTimeout(ensureWelcomeMessage, 500);
-    } catch (error) {
-        debugLog("Error during initialization:", error);
-        // Add welcome message anyway as fallback
-        ensureWelcomeMessage();
-    }
-});
-</script>
+    </script>
 </body>
 </html>

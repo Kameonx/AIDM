@@ -356,6 +356,68 @@
         .session-id-display, .session-join, .separator, .clickable {
             display: none;
         }
+
+        /* Add style for the Remove Player button */
+        .remove-player-btn {
+            background-color: #ff5555;
+            color: white;
+        }
+        
+        /* Add style for selected player */
+        .player-input.selected {
+            border-left: 4px solid #ff79c6;
+            padding-left: 6px;
+            background-color: rgba(255, 121, 198, 0.1);
+        }
+        
+        /* Ensure buttons container can show both add and remove player buttons */
+        .buttons-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        
+        .player-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Enhanced scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #2c2e32;
+            border-radius: 8px;
+            margin: 5px 0;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(to bottom, #61afef, #8be9fd);
+            border-radius: 8px;
+            border: 2px solid #2c2e32;
+            box-shadow: inset 0 0 3px rgba(255, 255, 255, 0.1);
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(to bottom, #8be9fd, #bd93f9);
+        }
+        
+        ::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+        
+        /* Firefox scrollbar styling */
+        .chat-window {
+            scrollbar-width: thin;
+            scrollbar-color: #61afef #2c2e32;
+        }
+        
+        /* Better padding inside chat window to prevent text touching scrollbar */
+        .chat-window {
+            padding-right: 18px;
+        }
     </style>
 </head>
 <body>
@@ -400,9 +462,14 @@
             <div id="additional-players"></div>
             
             <div class="buttons-container">
-                <button id="add-player-btn" class="action-btn add-player-btn" title="Add another player">
-                    👤+ Add Player
-                </button>
+                <div class="player-buttons">
+                    <button id="add-player-btn" class="action-btn add-player-btn" title="Add another player">
+                        👤+ Add Player
+                    </button>
+                    <button id="remove-player-btn" class="action-btn remove-player-btn hidden" title="Remove selected player">
+                        👤- Remove Player
+                    </button>
+                </div>
                 <div class="spacer"></div>
                 <button id="copy-chat-btn" class="action-btn copy-btn" title="Copy entire chat">
                     📋 Copy
@@ -429,11 +496,13 @@ document.addEventListener('DOMContentLoaded', function() {
     let playerName = null;
     let seenMessages = new Set();
     
-    // Session data - just store game ID locally
-    let currentGameId = localStorage.getItem('currentGameId') || null;
+    // Session data - ensure we get from localStorage first
+    let currentGameId = localStorage.getItem('currentGameId');
+    debugLog("Initial gameId from localStorage:", currentGameId);
     
     // Player tracking - IMPORTANT: Use let instead of const to allow reassignment
     let playerNames = loadPlayerNames();
+    debugLog("Loaded player names from localStorage:", playerNames);
     
     // Track processed messages to avoid duplicates
     const processedMessageIds = new Set();
@@ -994,6 +1063,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Start completely fresh game
                 createNewGame();
+                
+                // Clear selected player state
+                selectedPlayerNum = null;
+                selectedPlayerElement = null;
+                removePlayerBtn.classList.add('hidden');
             } catch (err) {
                 debugLog("Error creating new game:", err);
                 addSystemMessage("Error: " + err.message);
@@ -1061,42 +1135,61 @@ document.addEventListener('DOMContentLoaded', function() {
         seenMessages.clear();
         isGenerating = false;
         
-        // Restore player names to UI
-        Object.entries(playerNames).forEach(([num, name]) => {
+        // Debug output all player names
+        debugLog("Player names to restore:", playerNames);
+        
+        // First pass - restore labels
+        Object.entries(playerNames).forEach(([numStr, name]) => {
             if (name) {
-                const labelElement = document.getElementById(`player${num}-label`);
+                const playerNum = parseInt(numStr);
+                debugLog(`Restoring player ${playerNum} name: ${name}`);
+                
+                const labelElement = document.getElementById(`player${playerNum}-label`);
                 if (labelElement) {
                     labelElement.textContent = `${name}:`;
                 }
             }
         });
         
-        // Show Player 2 container if they have a name
-        if (playerNames[2]) {
-            player2Container.classList.remove('hidden');
-            isMultiplayerActive = true;
-        } else {
-            player2Container.classList.add('hidden');
-        }
-        
-        // Clear additional players and recreate if needed
-        additionalPlayersContainer.innerHTML = '';
-        
-        // Recreate input fields for players 3+
-        for (let i = 3; i < 10; i++) {
-            if (playerNames[i]) {
-                const newPlayerContainer = createPlayerInput(i);
-                additionalPlayersContainer.appendChild(newPlayerContainer);
+        // Second pass - restore UI containers for all players
+        Object.entries(playerNames).forEach(([numStr, name]) => {
+            if (name) {
+                const playerNum = parseInt(numStr);
                 
-                // Update next player number if needed
-                if (i >= nextPlayerNumber) {
-                    nextPlayerNumber = i + 1;
+                // Restore player 2
+                if (playerNum === 2) {
+                    debugLog("Showing Player 2 container");
+                    player2Container.classList.remove('hidden');
+                    isMultiplayerActive = true;
+                } 
+                // Restore players 3 and higher
+                else if (playerNum >= 3) {
+                    debugLog(`Checking container for Player ${playerNum}`);
+                    const containerExists = document.getElementById(`player${playerNum}-container`);
+                    if (!containerExists) {
+                        debugLog(`Creating container for Player ${playerNum}`);
+                        const newPlayerContainer = createPlayerInput(playerNum);
+                        additionalPlayersContainer.appendChild(newPlayerContainer);
+                        isMultiplayerActive = true;
+                    } else {
+                        debugLog(`Container for Player ${playerNum} already exists`);
+                    }
                 }
-                
-                isMultiplayerActive = true;
             }
-        }
+        });
         
+        // Update next player number based on existing player names
+        let maxPlayerNumber = 2; // Start with 2 since Player 1 is default
+        Object.keys(playerNames).forEach(numStr => {
+            const playerNum = parseInt(numStr);
+            if (playerNum > maxPlayerNumber) {
+                maxPlayerNumber = playerNum;
+            }
+        });
+        nextPlayerNumber = maxPlayerNumber + 1;
+        debugLog("Next player number set to:", nextPlayerNumber);
+        
+        // Rest of the function remains unchanged
         if (!currentGameId) {
             debugLog("No game ID, creating new game");
             createNewGame();
@@ -1326,6 +1419,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const playerInputDiv = document.createElement('div');
         playerInputDiv.className = 'player-input';
         playerInputDiv.id = `player${playerNumber}-container`;
+        
+        // Add click handler to make this player selectable
+        playerInputDiv.addEventListener('click', function(e) {
+            // Don't trigger when clicking input or button
+            if (!e.target.matches('input') && !e.target.matches('button')) {
+                selectPlayer(playerInputDiv, playerNumber);
+            }
+        });
         
         const playerLabelDiv = document.createElement('div');
         playerLabelDiv.className = 'player-label';
@@ -1578,6 +1679,52 @@ document.addEventListener('DOMContentLoaded', function() {
         debugLog("Automatic polling is disabled");
     }
 
+    // Add this missing function that's referenced elsewhere
+    function ensureWelcomeMessage() {
+        debugLog("Ensuring welcome message exists");
+        
+        // Check if the chat window is empty
+        if (chatWindow.children.length === 0) {
+            addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+            debugLog("Added default welcome message");
+        }
+    }
+
+    // Add this safety check function to ensure all player inputs exist
+    function ensurePlayersExist() {
+        debugLog("Ensuring all player inputs exist");
+        let playerRestorationNeeded = false;
+        
+        Object.entries(playerNames).forEach(([numStr, name]) => {
+            if (!name) return; // Skip players without names
+            
+            const playerNum = parseInt(numStr);
+            if (playerNum === 1) return; // Player 1 always exists
+            
+            if (playerNum === 2) {
+                // Check if player 2 container is visible
+                if (player2Container.classList.contains('hidden')) {
+                    debugLog("Restoring missing Player 2 container");
+                    player2Container.classList.remove('hidden');
+                    isMultiplayerActive = true;
+                    playerRestorationNeeded = true;
+                }
+            } else if (playerNum >= 3) {
+                // Check if container exists for player 3+
+                const containerExists = document.getElementById(`player${playerNum}-container`);
+                if (!containerExists) {
+                    debugLog(`Restoring missing Player ${playerNum} container`);
+                    const newPlayerContainer = createPlayerInput(playerNum);
+                    additionalPlayersContainer.appendChild(newPlayerContainer);
+                    isMultiplayerActive = true;
+                    playerRestorationNeeded = true;
+                }
+            }
+        });
+        
+        return playerRestorationNeeded;
+    }
+    
     // Initialize
     try {
         if (currentGameId) {
@@ -1588,12 +1735,883 @@ document.addEventListener('DOMContentLoaded', function() {
             createNewGame();
         }
         
-        // Add a final check after small delay to ensure welcome message is displayed
-        setTimeout(ensureWelcomeMessage, 500);
+        // Add a final check after delay to ensure welcome message is displayed
+        // and all player inputs are restored
+        setTimeout(() => {
+            ensureWelcomeMessage();
+            ensurePlayersExist();
+        }, 500);
     } catch (error) {
         debugLog("Error during initialization:", error);
         // Add welcome message anyway as fallback
         ensureWelcomeMessage();
+    }
+    
+    // Enhance player state management with UI state tracking
+    function savePlayerState() {
+        const playerState = {
+            names: playerNames,
+            active: {},
+            nextPlayerNumber: nextPlayerNumber,
+            isMultiplayerActive: isMultiplayerActive
+        };
+        
+        // Save which players are active (have UI)
+        Object.keys(playerNames).forEach(numStr => {
+            const playerNum = parseInt(numStr);
+            
+            // Player 1 is always active
+            if (playerNum === 1) {
+                playerState.active[playerNum] = true;
+                return;
+            }
+            
+            // Check Player 2
+            if (playerNum === 2) {
+                playerState.active[playerNum] = !player2Container.classList.contains('hidden');
+            }
+            // Check Players 3+
+            else if (playerNum >= 3) {
+                const container = document.getElementById(`player${playerNum}-container`);
+                playerState.active[playerNum] = !!container;
+            }
+        });
+        
+        localStorage.setItem('playerState', JSON.stringify(playerState));
+        debugLog("Saved full player state:", playerState);
+    }
+    
+    function loadPlayerState() {
+        try {
+            const saved = localStorage.getItem('playerState');
+            if (saved) {
+                const state = JSON.parse(saved);
+                debugLog("Loaded player state:", state);
+                
+                // Load player names
+                playerNames = state.names || { 1: null, 2: null };
+                
+                // Load nextPlayerNumber
+                if (state.nextPlayerNumber && state.nextPlayerNumber > nextPlayerNumber) {
+                    nextPlayerNumber = state.nextPlayerNumber;
+                }
+                
+                // Load multiplayer status
+                isMultiplayerActive = state.isMultiplayerActive || false;
+                
+                return state;
+            }
+        } catch (e) {
+            debugLog("Error loading player state:", e);
+        }
+        
+        return { names: { 1: null, 2: null }, active: {}, nextPlayerNumber: 3, isMultiplayerActive: false };
+    }
+    
+    // Replace loadPlayerNames with loadPlayerState to load full state
+    function loadPlayerNames() {
+        const state = loadPlayerState();
+        return state.names || { 1: null, 2: null };
+    }
+    
+    // Update savePlayerNames to use savePlayerState
+    function savePlayerNames() {
+        savePlayerState();
+    }
+    
+    // Update updatePlayerLabel function to save full state
+    function updatePlayerLabel(playerNumber, name) {
+        debugLog(`Updating Player ${playerNumber} label to ${name}`);
+        
+        const labelElement = document.getElementById(`player${playerNumber}-label`);
+        if (labelElement) {
+            labelElement.textContent = `${name}:`;
+            playerNames[playerNumber] = name;
+            
+            // Save to localStorage whenever a name is updated
+            savePlayerState();
+        }
+    }
+    
+    // Fix showPlayer2 function to ensure DM response
+    function showPlayer2() {
+        if (player2Container.classList.contains('hidden')) {
+            player2Container.classList.remove('hidden');
+            isMultiplayerActive = true;
+            
+            // Save state right away to avoid losing on refresh
+            savePlayerState();
+            
+            // Only show the welcome message if we have a game
+            if (currentGameId) {
+                // Notify the DM about the new player
+                addSystemMessage("Player 2 has joined the game. Please enter your name.");
+                
+                // Create loading div for DM's response
+                const loadingDiv = createLoadingDivForDM('dm-welcome-player2', 'response-text-welcome-player2');
+                
+                // Notify DM
+                isGenerating = true;
+                fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        message: `A new player has joined the game. Please welcome Player 2 and ask for their name.`,
+                        game_id: currentGameId,
+                        player_number: 'system',
+                        is_system: true
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    debugLog("Player 2 welcome response:", data);
+                    if (data && data.message_id) {
+                        sendStreamRequest(data.message_id, loadingDiv);
+                    } else {
+                        throw new Error("Invalid response data");
+                    }
+                })
+                .catch(error => {
+                    debugLog('Error adding Player 2:', error);
+                    if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+                    addSystemMessage("Error adding Player 2: " + error.message);
+                    isGenerating = false;
+                });
+            }
+            
+            // Focus the player 2 input box
+            setTimeout(() => player2Input.focus(), 100);
+        }
+    }
+    
+    // Update addPlayer function to save state
+    function addPlayer(playerNum) {
+        // Don't allow adding more players while generating
+        if (isGenerating) {
+            return;
+        }
+        
+        // Don't allow adding Player 2 through this function - use showPlayer2() instead
+        if (playerNum === 2) {
+            if (player2Container.classList.contains('hidden')) {
+                showPlayer2();
+            }
+            return;
+        }
+        
+        // Create UI for the new player 3+
+        const newPlayerContainer = createPlayerInput(playerNum);
+        additionalPlayersContainer.appendChild(newPlayerContainer);
+        
+        // Reset this player's name
+        playerNames[playerNum] = null;
+        isMultiplayerActive = true;
+        
+        // Save state right away to avoid losing players on refresh
+        savePlayerState();
+        
+        // Only notify DM if we have a game
+        if (currentGameId) {
+            // Notify the DM about the new player
+            const joinMessage = `Player ${playerNum} has joined the game. Please enter your name.`;
+            addSystemMessage(joinMessage);
+            
+            // Create loading div for DM's response
+            const loadingDiv = createLoadingDivForDM(
+                `dm-welcome-player${playerNum}`, 
+                `response-text-welcome-player${playerNum}`
+            );
+            
+            // Notify DM
+            isGenerating = true;
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: `A new player has joined the game. Please welcome Player ${playerNum} and ask for their name.`,
+                    game_id: currentGameId,
+                    player_number: 'system',
+                    is_system: true
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                debugLog(`Player ${playerNum} welcome response:`, data);
+                if (data && data.message_id) {
+                    sendStreamRequest(data.message_id, loadingDiv);
+                    
+                    // Focus the new player's input field
+                    setTimeout(() => {
+                        const inputField = document.getElementById(`player${playerNum}-input`);
+                        if (inputField) inputField.focus();
+                    }, 100);
+                    
+                    // Update next player number
+                    if (playerNum >= nextPlayerNumber) {
+                        nextPlayerNumber = playerNum + 1;
+                        savePlayerState(); // Save again with updated player number
+                    }
+                } else {
+                    throw new Error("Invalid response data");
+                }
+            })
+            .catch(error => {
+                debugLog(`Error adding Player ${playerNum}:`, error);
+                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+                addSystemMessage(`Error adding Player ${playerNum}: ${error.message}`);
+                isGenerating = false;
+            });
+        }
+    }
+    
+    // Add beforeunload handler to ensure state is saved before page refresh
+    window.addEventListener('beforeunload', function() {
+        debugLog("Page is being unloaded, saving state...");
+        savePlayerState();
+    });
+    
+    // Enhanced restore players function with retry logic
+    function restorePlayerInputs() {
+        debugLog("Restoring player inputs");
+        const playerState = loadPlayerState();
+        
+        // First make sure the player objects are visible
+        if (playerState.active) {
+            // Restore Player 2 if active
+            if (playerState.active[2] === true) {
+                debugLog("Restoring Player 2 (active)");
+                player2Container.classList.remove('hidden');
+                isMultiplayerActive = true;
+            }
+            
+            // Restore Players 3+ if active
+            Object.entries(playerState.active).forEach(([numStr, isActive]) => {
+                const playerNum = parseInt(numStr);
+                if (playerNum >= 3 && isActive) {
+                    debugLog(`Restoring Player ${playerNum} (active)`);
+                    const containerExists = document.getElementById(`player${playerNum}-container`);
+                    if (!containerExists) {
+                        const newPlayerContainer = createPlayerInput(playerNum);
+                        additionalPlayersContainer.appendChild(newPlayerContainer);
+                        isMultiplayerActive = true;
+                    }
+                }
+            });
+        }
+        
+        // Then restore player names and labels
+        Object.entries(playerNames).forEach(([numStr, name]) => {
+            if (name) {
+                const playerNum = parseInt(numStr);
+                const labelElement = document.getElementById(`player${playerNum}-label`);
+                if (labelElement) {
+                    labelElement.textContent = `${name}:`;
+                }
+            }
+        });
+        
+        // Set next player number correctly
+        let maxPlayerNumber = 2;
+        Object.keys(playerNames).forEach(numStr => {
+            const playerNum = parseInt(numStr);
+            if (playerNum > maxPlayerNumber) {
+                maxPlayerNumber = playerNum;
+            }
+        });
+        nextPlayerNumber = Math.max(maxPlayerNumber + 1, playerState.nextPlayerNumber || 3);
+        debugLog("Next player number set to:", nextPlayerNumber);
+    }
+    
+    // Modified initialize function to use enhanced player restoration
+    function initialize() {
+        debugLog("Initializing game");
+        
+        seenMessages.clear();
+        isGenerating = false;
+        
+        // Load player state and restore players
+        loadPlayerState();
+        restorePlayerInputs();
+        
+        if (!currentGameId) {
+            debugLog("No game ID, creating new game");
+            createNewGame();
+            return;
+        }
+        
+        // Load chat history
+        // ...existing code...
+    }
+    
+    // Update new game function to clear player state
+    newGameBtn.addEventListener('click', function() {
+        // ...existing beginning of function code...
+        
+        if (confirm("Start a new game? This will clear your current adventure.")) {
+            try {
+                // Clear existing state
+                currentGameId = null;
+                localStorage.removeItem('currentGameId');
+                
+                // Reset UI and state
+                chatWindow.innerHTML = '';
+                isGenerating = false;
+                awaitingName = true;
+                playerName = null;
+                seenMessages = new Set();
+                
+                // FIXED: Completely remove all player state from localStorage
+                localStorage.removeItem('playerState');
+                localStorage.removeItem('playerNames'); // Remove legacy data too
+                
+                // ...rest of the function code...
+            } catch (err) {
+                debugLog("Error creating new game:", err);
+                addSystemMessage("Error: " + err.message);
+            }
+            // ...rest of the error handling...
+        }
+    });
+    
+    // Final init code with delayed checks
+    try {
+        if (currentGameId) {
+            debugLog("Restoring session:", currentGameId);
+            initialize();
+        } else {
+            debugLog("No previous session, creating new game");
+            createNewGame();
+        }
+        
+        // Add delayed player restoration in case of synchronization issues
+        setTimeout(() => {
+            debugLog("Running delayed player restoration check");
+            restorePlayerInputs();
+            ensureWelcomeMessage();
+        }, 1000);
+        
+    } catch (error) {
+        debugLog("Error during initialization:", error);
+        ensureWelcomeMessage();
+    }
+    
+    // Improve game ID handling to prevent chat history loss
+    function saveGameId(gameId) {
+        if (!gameId) {
+            debugLog("ERROR: Attempted to save empty game ID");
+            return false;
+        }
+        
+        try {
+            localStorage.setItem('currentGameId', gameId);
+            debugLog("Game ID saved to localStorage:", gameId);
+            
+            // Verify the save was successful
+            const savedId = localStorage.getItem('currentGameId');
+            if (savedId !== gameId) {
+                debugLog("ERROR: Game ID verification failed. Expected:", gameId, "Got:", savedId);
+                return false;
+            }
+            
+            return true;
+        } catch (e) {
+            debugLog("ERROR: Failed to save game ID to localStorage:", e);
+            return false;
+        }
+    }
+    
+    function loadGameId() {
+        try {
+            const gameId = localStorage.getItem('currentGameId');
+            debugLog("Loaded game ID from localStorage:", gameId);
+            return gameId;
+        } catch (e) {
+            debugLog("ERROR: Failed to load game ID from localStorage:", e);
+            return null;
+        }
+    }
+    
+    // Improved chat history loading with retries
+    function loadChatHistory(retryCount = 3) {
+        debugLog(`Loading chat history (attempt ${4-retryCount}/3)...`);
+        
+        if (!currentGameId) {
+            debugLog("Cannot load chat history - no game ID");
+            return Promise.reject(new Error("No game ID available"));
+        }
+        
+        return fetch('/load_history', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                game_id: currentGameId
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            debugLog(`Loaded history with ${data.history ? data.history.length : 0} messages`);
+            
+            if (!data.history || !Array.isArray(data.history)) {
+                throw new Error("Invalid history data");
+            }
+            
+            if (data.history.length === 0 && retryCount > 0) {
+                debugLog("Empty history received, retrying...");
+                // Retry after a short delay
+                return new Promise(resolve => {
+                    setTimeout(() => {
+                        loadChatHistory(retryCount - 1)
+                            .then(resolve)
+                            .catch(e => {
+                                debugLog("Retry failed:", e);
+                                resolve({ history: [] });
+                            });
+                    }, 300);
+                });
+            }
+            
+            return data;
+        });
+    }
+    
+    // Modify displayMessages to log more information and prevent accidental skipping
+    function displayMessages(messages) {
+        debugLog(`Displaying ${messages.length} messages from history`);
+        
+        // Safety check - if window is empty, always show messages
+        const hasExistingMessages = chatWindow.querySelectorAll('.message').length > 0;
+        debugLog(`Chat window has ${hasExistingMessages ? 'existing' : 'no'} messages`);
+        
+        // Only skip if we actually have messages AND there are existing messages
+        if (hasExistingMessages && messages.length > 0) {
+            debugLog("Chat window already has messages, not redisplaying");
+            return;
+        }
+        
+        // If we're here, we need to display messages
+        messages.forEach(msg => {
+            if (msg.role === 'assistant') {
+                // DM messages
+                addMessage('DM', msg.content);
+                
+                // Check for player names in DM response
+                checkForPlayerNames(msg.content);
+                const extractedName = extractNameFromDMResponse(msg.content);
+                if (extractedName) {
+                    // Try to match this with a pending player name
+                    if (!playerNames[1]) {
+                        updatePlayerLabel(1, extractedName);
+                    }
+                }
+            }
+            else if (msg.role === 'user') {
+                // Player messages - determine which player
+                let playerNum = 1;
+                if (msg.player && msg.player.startsWith('player')) {
+                    playerNum = parseInt(msg.player.substring(6));
+                }
+                
+                // Use the name if we have it
+                const sender = playerNames[playerNum] || `Player ${playerNum}`;
+                addMessage(sender, msg.content);
+                
+                // Extract name if present and not already set
+                const extractedName = extractName(msg.content);
+                if (extractedName && !playerNames[playerNum]) {
+                    updatePlayerLabel(playerNum, extractedName);
+                }
+            }
+            else if (msg.role === 'system') {
+                // System messages
+                addSystemMessage(msg.content);
+            }
+        });
+        
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    // Update the initialize function to use improved chat history loading
+    function initialize() {
+        debugLog("Initializing game");
+        
+        seenMessages.clear();
+        isGenerating = false;
+        
+        // Load player state and restore players
+        loadPlayerState();
+        restorePlayerInputs();
+        
+        if (!currentGameId) {
+            debugLog("No game ID, creating new game");
+            createNewGame();
+            return;
+        }
+        
+        // Load chat history with improved handling
+        loadChatHistory()
+            .then(data => {
+                // Process history data
+                displayMessages(data.history);
+                
+                // Ensure welcome message is displayed (add it if missing)
+                ensureWelcomeMessage();
+                
+                // Verify the game ID is saved properly
+                saveGameId(currentGameId);
+                
+                // Set the initial message count for update checking
+                lastMessageCount = data.history.length;
+                
+                // Focus input
+                userInput.focus();
+            })
+            .catch(error => {
+                debugLog('Error loading history:', error);
+                
+                // Check if we still have a chat window with content
+                if (chatWindow.children.length === 0) {
+                    debugLog("Chat window is empty, adding welcome message");
+                    addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+                } else {
+                    debugLog("Chat window has content, not adding welcome message");
+                }
+                
+                // Focus input
+                userInput.focus();
+            });
+    }
+    
+    // Update createNewGame to use improved game ID saving
+    function createNewGame() {
+        debugLog("Creating new game");
+        
+        // Reset UI state
+        chatWindow.innerHTML = '';
+        isGenerating = false;
+        
+        // Reset player name
+        playerNames[1] = null;
+        
+        // Create loading message
+        addMessage('DM', 'Creating a new adventure for you...', false);
+        
+        // Request new game from server
+        fetch('/new_game', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        })
+        .then(response => response.json())
+        .then(data => {
+            debugLog("New game created:", data);
+            
+            if (data.success && data.game_id) {
+                currentGameId = data.game_id;
+                
+                // Store in local storage with verification
+                if (saveGameId(currentGameId)) {
+                    debugLog("Game ID saved successfully");
+                } else {
+                    debugLog("WARNING: Failed to save game ID");
+                    // Try using sessionStorage as fallback
+                    try {
+                        sessionStorage.setItem('currentGameId', currentGameId);
+                    } catch (e) {
+                        // Ignore errors
+                    }
+                }
+                
+                // Clear loading message
+                chatWindow.innerHTML = '';
+                
+                // Add welcome message - make sure this is displayed
+                addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+                debugLog("Added welcome message for new game");
+                
+                // Reset message count
+                lastMessageCount = 1; // Start with 1 for the welcome message
+                
+                // Focus input field
+                userInput.focus();
+            } else {
+                throw new Error("Failed to create new game");
+            }
+        })
+        .catch(error => {
+            debugLog("Error creating new game:", error);
+            addSystemMessage("Error: " + error.message);
+            
+            // Add welcome message anyway so user can interact
+            ensureWelcomeMessage();
+        });
+    }
+    
+    // Update the load game ID at startup
+    currentGameId = loadGameId();
+    
+    // Initialize with delayed retries on startup
+    try {
+        if (currentGameId) {
+            debugLog("Restoring session:", currentGameId);
+            initialize();
+            
+            // Add a second attempt after a delay to ensure history loads
+            setTimeout(() => {
+                if (chatWindow.children.length === 0) {
+                    debugLog("Chat still empty after init, trying again");
+                    loadChatHistory()
+                        .then(data => {
+                            displayMessages(data.history);
+                            ensureWelcomeMessage();
+                        })
+                        .catch(() => ensureWelcomeMessage());
+                }
+            }, 1000);
+        } else {
+            debugLog("No previous session, creating new game");
+            createNewGame();
+        }
+        
+        // Add final checks
+        setTimeout(() => {
+            ensureWelcomeMessage();
+            ensurePlayersExist();
+            
+            // Extra verification that we have content
+            if (chatWindow.children.length === 0 && currentGameId) {
+                debugLog("WARNING: Chat still empty after all attempts");
+                addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
+            }
+        }, 2000);
+    } catch (error) {
+        debugLog("Error during initialization:", error);
+        ensureWelcomeMessage();
+    }
+    
+    // Add DOM elements for player removal
+    const removePlayerBtn = document.getElementById('remove-player-btn');
+    let selectedPlayerNum = null;
+    let selectedPlayerElement = null;
+    
+    // Function to handle player selection
+    function selectPlayer(playerElement, playerNum) {
+        // Deselect previously selected player if any
+        if (selectedPlayerElement) {
+            selectedPlayerElement.classList.remove('selected');
+        }
+        
+        // If clicking the same player, toggle selection off
+        if (selectedPlayerElement === playerElement) {
+            selectedPlayerElement = null;
+            selectedPlayerNum = null;
+            removePlayerBtn.classList.add('hidden');
+            return;
+        }
+        
+        // Select new player
+        selectedPlayerElement = playerElement;
+        selectedPlayerNum = playerNum;
+        selectedPlayerElement.classList.add('selected');
+        
+        // Only show remove button if not Player 1 (can't remove Player 1)
+        if (playerNum > 1) {
+            removePlayerBtn.classList.remove('hidden');
+        } else {
+            removePlayerBtn.classList.add('hidden');
+        }
+    }
+    
+    // Make Player 1 selectable
+    const player1Container = document.querySelector('.player-input');
+    player1Container.addEventListener('click', function(e) {
+        // Don't trigger when clicking input or button
+        if (!e.target.matches('input') && !e.target.matches('button')) {
+            selectPlayer(player1Container, 1);
+        }
+    });
+    
+    // Make Player 2 selectable
+    player2Container.addEventListener('click', function(e) {
+        // Don't trigger when clicking input or button
+        if (!e.target.matches('input') && !e.target.matches('button')) {
+            selectPlayer(player2Container, 2);
+        }
+    });
+    
+    // Function to remove a player
+    function removePlayer(playerNum) {
+        if (playerNum <= 1) {
+            debugLog("Cannot remove Player 1");
+            return; // Can't remove Player 1
+        }
+        
+        if (isGenerating) {
+            debugLog("Cannot remove player while generating a response");
+            return;
+        }
+        
+        debugLog(`Removing Player ${playerNum}`);
+        
+        // Get player name for notification
+        const playerName = playerNames[playerNum] || `Player ${playerNum}`;
+        
+        // Hide or remove the player container
+        if (playerNum === 2) {
+            // For Player 2, we just hide the container
+            player2Container.classList.add('hidden');
+            // Reset name
+            playerNames[2] = null;
+            const player2Label = document.getElementById('player2-label');
+            if (player2Label) {
+                player2Label.textContent = "Player 2:";
+            }
+        } else {
+            // For Player 3+, remove the container
+            const containerToRemove = document.getElementById(`player${playerNum}-container`);
+            if (containerToRemove) {
+                containerToRemove.remove();
+            }
+            // Remove from player names
+            delete playerNames[playerNum];
+        }
+        
+        // Check if there are still other players (besides 1)
+        let otherPlayersExist = false;
+        if (!player2Container.classList.contains('hidden')) {
+            otherPlayersExist = true;
+        } else {
+            // Check for players 3+
+            Object.keys(playerNames).forEach(num => {
+                if (parseInt(num) >= 3 && playerNames[num]) {
+                    otherPlayersExist = true;
+                }
+            });
+        }
+        
+        // Update multiplayer flag
+        isMultiplayerActive = otherPlayersExist;
+        
+        // Hide remove button
+        removePlayerBtn.classList.add('hidden');
+        selectedPlayerNum = null;
+        selectedPlayerElement = null;
+        
+        // Save the updated player state
+        savePlayerState();
+        
+        // Notify the DM about the player leaving
+        if (currentGameId) {
+            // Add system message
+            addSystemMessage(`${playerName} has left the game.`);
+            
+            // Create loading div for DM's response
+            const loadingDiv = createLoadingDivForDM(
+                `dm-goodbye-player${playerNum}`,
+                `response-text-goodbye-player${playerNum}`
+            );
+            
+            // Notify DM
+            isGenerating = true;
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: `${playerName} has left the adventure. Please acknowledge their departure.`,
+                    game_id: currentGameId,
+                    player_number: 'system',
+                    is_system: true
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                debugLog(`Player ${playerNum} departure response:`, data);
+                if (data && data.message_id) {
+                    sendStreamRequest(data.message_id, loadingDiv);
+                } else {
+                    throw new Error("Invalid response data");
+                }
+            })
+            .catch(error => {
+                debugLog(`Error handling Player ${playerNum} departure:`, error);
+                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+                addSystemMessage(`Error: ${error.message}`);
+                isGenerating = false;
+            });
+        }
+    }
+    
+    // Add click handler for Remove Player button
+    removePlayerBtn.addEventListener('click', function() {
+        if (selectedPlayerNum && selectedPlayerNum > 1) {
+            removePlayer(selectedPlayerNum);
+        }
+    });
+    
+    // Modify createPlayerInput function to make new players selectable
+    function createPlayerInput(playerNumber) {
+        debugLog(`Creating input for Player ${playerNumber}`);
+        const playerInputDiv = document.createElement('div');
+        playerInputDiv.className = 'player-input';
+        playerInputDiv.id = `player${playerNumber}-container`;
+        
+        // Add click handler to make this player selectable
+        playerInputDiv.addEventListener('click', function(e) {
+            // Don't trigger when clicking input or button
+            if (!e.target.matches('input') && !e.target.matches('button')) {
+                selectPlayer(playerInputDiv, playerNumber);
+            }
+        });
+        
+        // ...existing implementation...
+        const playerLabelDiv = document.createElement('div');
+        playerLabelDiv.className = 'player-label';
+        playerLabelDiv.id = `player${playerNumber}-label`;
+        playerLabelDiv.textContent = `Player ${playerNumber}:`;
+        
+        const playerInput = document.createElement('input');
+        playerInput.type = 'text';
+        playerInput.id = `player${playerNumber}-input`;
+        playerInput.placeholder = 'Type your message...';
+        playerInput.autocomplete = 'off';
+        playerInput.className = `player${playerNumber}-input`;
+        
+        // Add Enter key functionality
+        playerInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !isGenerating) {
+                sendMessage(playerInput, playerNumber);
+            }
+        });
+        
+        const sendButton = document.createElement('button');
+        sendButton.className = 'action-btn send-btn';
+        sendButton.id = `send-player${playerNumber}-btn`;
+        sendButton.textContent = '📤 Send';
+        sendButton.title = 'Send message';
+        
+        // Add click handler to the button
+        sendButton.addEventListener('click', function() {
+            sendMessage(playerInput, playerNumber);
+        });
+        
+        playerInputDiv.appendChild(playerLabelDiv);
+        playerInputDiv.appendChild(playerInput);
+        playerInputDiv.appendChild(sendButton);
+        
+        return playerInputDiv;
     }
 });
 </script>

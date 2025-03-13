@@ -51,21 +51,21 @@ def save_chat_history(user_id, chat_history, game_id=None):
 @app.route('/')
 def index():
     user_id = get_user_id()
-    # Check if a game id is stored in cookies
     game_id = request.cookies.get('game_id')
-    if game_id:
+    dm_welcome = "Hello adventurer! Let's begin your quest. What is your name?"
+    if not game_id:
+        # Generate a new game id if none is stored
+        import uuid, time
+        game_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
         chat_history = load_chat_history(user_id, game_id)
-    else:
-        chat_history = load_chat_history(user_id)
         if not chat_history:
-            dm_welcome = "Hello adventurer! Let's begin your quest. What is your name?"
-            chat_history.append({"role": "assistant", "content": dm_welcome})
-            save_chat_history(user_id, chat_history)
-    
+            chat_history = [{"role": "assistant", "content": dm_welcome}]
+            save_chat_history(user_id, chat_history, game_id)
+    else:
+        chat_history = load_chat_history(user_id, game_id)
     response = make_response(render_template('index.html', chat_history=chat_history))
     response.set_cookie('user_id', user_id, max_age=60*60*24*365)  # Expire in 1 year
-    if game_id:
-        response.set_cookie('game_id', game_id, max_age=60*60*24*365)
+    response.set_cookie('game_id', game_id, max_age=60*60*24*365)
     return response
 
 @app.route('/chat', methods=['POST'])
@@ -142,10 +142,35 @@ def stream_response():
         is_multiplayer = len(player_counts) > 1
         
         system_prompt = (
-            "Act as a friendly D&D 5e Dungeon Master. Keep responses brief and conversational. "
-            "Use emojis frequently to emphasize emotions and actions in your responses. "
-            "Appropriate emojis include: 🧙 for magic, ⚔️ for combat, 🐉 for monsters, "
+            "Act as a friendly D&D 5e Dungeon Master. Keep responses brief and conversational - "
+            "use just 2-3 sentences unless more detail is necessary for rules, combat or important descriptions. "
+            "Use emojis frequently to emphasize emotions and actions. "
+            
+            "PLAYER STATS: Keep a mental record of each player's character sheet including: "
+            "name, race, class, level, HP, AC, and ability scores (STR, DEX, CON, INT, WIS, CHA). "
+            "When players provide their stats, acknowledge them and refer to them in relevant situations. "
+            "If a player takes damage, track their HP and remind them of their current HP total. "
+            
+            "COMBAT RULES: When combat begins, say 'Roll for initiative!' and track the order. "
+            "Always mention enemy HP and AC during combat. Describe hits, misses and damage clearly. "
+            "Track damage to enemies and announce when they're bloodied (half HP) or defeated. "
+            "For each player's turn, remind them they get one action, one bonus action, movement, "
+            "and potentially one reaction (on other creatures' turns). Track which actions each player "
+            "has used in a round. Suggest tactical options based on their character's abilities and position. "
+            
+            "DICE ROLLS: Calculate most damage rolls automatically (e.g., 'Your greatsword hits for 2d6+3 damage... "
+            "that's 10 damage!'). Ask players to roll dice during important story moments, critical hits, "
+            "death saves, and decisive actions. Apply advantage (roll twice, take higher) or disadvantage "
+            "(roll twice, take lower) based on narrative circumstances and terrain. Ask for specific checks "
+            "based on player actions (e.g., 'Make a Dexterity (Acrobatics) check to leap across the chasm'). "
+            
+            "For standard rolls, ask the player to roll (e.g., 'Roll a d20 + your Strength modifier') but also "
+            "offer to roll for them (e.g., 'Or I can roll for you if you prefer.'). If the player asks you to roll, "
+            "generate a random result, apply appropriate modifiers, and describe the outcome. "
+            
+            "Use appropriate emojis including: 🧙 for magic, ⚔️ for combat, 🐉 for monsters, "
             "🏰 for locations, 💰 for treasure, 🍺 for taverns, 🔮 for mystical elements, "
+            "🎲 for dice rolls, 💥 for damage, 🛡️ for defense, ❤️ for healing, "
             "🌲 for nature, 🏆 for achievements, and ❓ for mysteries. "
             "Start most of your responses with a relevant emoji. "
         )
@@ -158,6 +183,7 @@ def stream_response():
                 "Include all players in the adventure and give each player opportunities to contribute. "
                 "When a player tells you their name, acknowledge with 'Player X is now named [NAME]'. "
                 "Treat each player as an independent character in the story. "
+                "Keep track of each character's stats, inventory and abilities separately. "
             )
         else:
             system_prompt += (

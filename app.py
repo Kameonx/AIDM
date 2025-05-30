@@ -15,7 +15,7 @@ if not os.path.exists(CHAT_DIR):
     os.makedirs(CHAT_DIR)
 
 # Venice AI Configuration
-VENICE_API_KEY = os.getenv("VENICE_API_KEY", "-Y3up9vlEXoVFf1ZsrXhB4rbPXd8V6ywgiSZziI3bR")
+VENICE_API_KEY = os.getenv("VENICE_API_KEY", "XIXcv0z57ZOeyPtPO7q37s_ktEvLRAz0E8jFaocVbv")
 MODEL_ID = "llama-3.3-70b"
 VENICE_URL = "https://api.venice.ai/api/v1/chat/completions"
 

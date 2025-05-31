@@ -5,6 +5,9 @@ import time
 import json
 import uuid
 import re  # Add this import at the top with the other imports
+from dotenv import load_dotenv  # Add this import
+
+load_dotenv()  # Load environment variables from .env
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Required for session
@@ -15,7 +18,7 @@ if not os.path.exists(CHAT_DIR):
     os.makedirs(CHAT_DIR)
 
 # Venice AI Configuration
-VENICE_API_KEY = os.getenv("VENICE_API_KEY", "XIXcv0z57ZOeyPtPO7q37s_ktEvLRAz0E8jFaocVbv")
+VENICE_API_KEY = os.getenv("VENICE_API_KEY")  # Only load from environment
 MODEL_ID = "llama-3.3-70b"
 VENICE_URL = "https://api.venice.ai/api/v1/chat/completions"
 
@@ -73,6 +76,8 @@ def chat():
     try:
         user_id = get_user_id()
         data = request.json
+        if data is None or 'message' not in data:
+            return jsonify({"response": "Invalid request: missing message data.", "error": True}), 400
         user_input = data['message']
         game_id = data.get('game_id')
         player_number = data.get('player_number', 1)  # Default to player 1

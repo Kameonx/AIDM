@@ -7,7 +7,7 @@ import uuid
 import re  # Add this import at the top with the other imports
 from dotenv import load_dotenv  # Add this import
 
-load_dotenv()  # Load environment variables from .env
+load_dotenv(override=True)  # Ensure .env is loaded and overrides any existing env vars
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Required for session
@@ -18,7 +18,10 @@ if not os.path.exists(CHAT_DIR):
     os.makedirs(CHAT_DIR)
 
 # Venice AI Configuration
-VENICE_API_KEY = os.getenv("VENICE_API_KEY")  # Only load from environment
+VENICE_API_KEY = os.getenv("VENICE_API_KEY")
+if not VENICE_API_KEY:
+    import sys
+    print("ERROR: VENICE_API_KEY not found in environment. Please check your .env file.", file=sys.stderr)
 MODEL_ID = "llama-3.3-70b"
 VENICE_URL = "https://api.venice.ai/api/v1/chat/completions"
 
@@ -287,9 +290,18 @@ def stream_response():
                 else:
                     # Fallback to non-streaming API
                     response_data = response.json()
-                    content = response_data['choices'][0]['message']['content']
-                    full_response = content
-                    yield f"data: {json.dumps({'content': content, 'full': full_response})}\n\n"
+                    # --- PATCH: Handle missing 'choices' key gracefully ---
+                    if 'choices' in response_data and len(response_data['choices']) > 0:
+                        content = response_data['choices'][0]['message']['content']
+                        full_response = content
+                        yield f"data: {json.dumps({'content': content, 'full': full_response})}\n\n"
+                    else:
+                        # Log the full response for debugging
+                        app.logger.error(f"Venice API error response: {response_data}")
+                        # Provide a user-friendly error message
+                        error_msg = "Sorry, I couldn't generate a response. Please try again."
+                        full_response = error_msg
+                        yield f"data: {json.dumps({'content': error_msg, 'full': error_msg, 'error': True})}\n\n"
                 
                 # Store the complete response in the user's chat history
                 if full_response:

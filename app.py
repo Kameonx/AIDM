@@ -289,17 +289,21 @@ def stream_response():
                                     continue
                 else:
                     # Fallback to non-streaming API
-                    response_data = response.json()
-                    # --- PATCH: Handle missing 'choices' key gracefully ---
+                    try:
+                        response_data = response.json()
+                    except Exception as e:
+                        app.logger.error(f"Venice API returned non-JSON response: {response.text}")
+                        error_msg = "The AI service is currently unavailable (bad gateway). Please try again later."
+                        yield f"data: {json.dumps({'content': error_msg, 'full': error_msg, 'error': True})}\n\n"
+                        return
+
                     if 'choices' in response_data and len(response_data['choices']) > 0:
                         content = response_data['choices'][0]['message']['content']
                         full_response = content
                         yield f"data: {json.dumps({'content': content, 'full': full_response})}\n\n"
                     else:
-                        # Log the full response for debugging
                         app.logger.error(f"Venice API error response: {response_data}")
-                        # Provide a user-friendly error message
-                        error_msg = "Sorry, I couldn't generate a response. Please try again."
+                        error_msg = response_data.get("error", "The AI service is currently unavailable (bad gateway). Please try again later.")
                         full_response = error_msg
                         yield f"data: {json.dumps({'content': error_msg, 'full': error_msg, 'error': True})}\n\n"
                 

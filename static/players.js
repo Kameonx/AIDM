@@ -42,9 +42,11 @@ const PlayerManager = (function() {
         }
 
         debugLog("PlayerManager initialized with players:", playerNames);
+        
+        // CRITICAL: Don't return a new object, just return the current state
         return {
             nextPlayerNumber,
-            playerNames
+            playerNames: playerNames // Return reference to the same object
         };
     }
 
@@ -85,6 +87,7 @@ const PlayerManager = (function() {
             
             // Only show remove button for players other than Player 1
             if (playerNum > 1) {
+                debugLog("Showing remove button for player", playerNum);
                 removePlayerBtn.classList.remove('hidden');
             } else {
                 removePlayerBtn.classList.add('hidden');
@@ -311,15 +314,25 @@ const PlayerManager = (function() {
     function updatePlayerLabel(playerNumber, name) {
         debugLog(`Updating Player ${playerNumber} label to ${name}`);
         
+        // Reject names that are too short
+        if (!name || name.length < 2) {
+            debugLog(`Rejecting invalid name: "${name}" for Player ${playerNumber} - too short`);
+            return false;
+        }
+        
         const labelElement = document.getElementById(`player${playerNumber}-label`);
         if (labelElement) {
             labelElement.textContent = `${name}:`;
             playerNames[playerNumber] = name;
-            savePlayerNames();
-            savePlayerState(); // Save state including updated playerNames
             
-            // Add system message about name change, but don't save to history again if called from addMessage
-            addSystemMessage(`Player ${playerNumber} is now named ${name}.`, false, true, true); // skipHistory = true
+            // Always save immediately when updating a name
+            savePlayerNames(playerNames);
+            savePlayerState();
+            
+            debugLog(`Successfully updated Player ${playerNumber} to ${name} and saved to storage`);
+            
+            // Add system message about name change
+            addSystemMessage(`Player ${playerNumber} is now named ${name}.`, false, true, true);
             return true;
         }
         return false;
@@ -333,29 +346,34 @@ const PlayerManager = (function() {
         // Clear existing dynamic player inputs first to avoid duplication
         additionalPlayersContainer.innerHTML = '';
         
-        Object.keys(playerNames).sort((a,b) => parseInt(a) - parseInt(b)).forEach(numStr => {
-            const num = parseInt(numStr);
-            const name = playerNames[num];
-            if (num === 1) { // Player 1
-                const p1Label = document.getElementById('player1-label');
-                if (p1Label) {
-                    p1Label.textContent = name ? `${name}:` : `Player 1:`;
-                }
+        // Sort player numbers to process them in order
+        Object.keys(playerNames)
+            .sort((a,b) => parseInt(a) - parseInt(b))
+            .forEach(numStr => {
+                const num = parseInt(numStr);
+                const name = playerNames[num];
                 
-                // Fix Player 1 click handler
-                if (player1Container) {
-                    player1Container.onclick = function() {
-                        selectPlayer(player1Container, 1);
-                    };
-                }
-            } else { // Additional players
-                // Check if element already exists (it shouldn't due to clearing container)
-                if (!document.getElementById(`player${num}-container`)) {
+                if (num === 1) { // Player 1
+                    const p1Label = document.getElementById('player1-label');
+                    if (p1Label && name) {
+                        p1Label.textContent = `${name}:`;
+                        debugLog(`Set Player 1 label to "${name}:"`);
+                    } else if (p1Label) {
+                        p1Label.textContent = 'Player 1:';
+                    }
+                    
+                    // Fix Player 1 click handler
+                    if (player1Container) {
+                        player1Container.onclick = function() {
+                            selectPlayer(player1Container, 1);
+                        };
+                    }
+                } else if (num > 1) { // Additional players
+                    debugLog(`Creating UI for existing player ${num}: ${name || 'unnamed'}`);
                     addPlayerUI(num, name, onSendMessage);
                 }
-            }
-        });
-        
+            });
+    
         // Update nextPlayerNumber based on loaded names
         const playerNumbers = Object.keys(playerNames).map(Number);
         if (playerNumbers.length > 0) {
@@ -364,6 +382,7 @@ const PlayerManager = (function() {
             nextPlayerNumber = 2;
         }
         
+        debugLog("Finished ensurePlayersExist. nextPlayerNumber =", nextPlayerNumber);
         return nextPlayerNumber;
     }
     
@@ -383,28 +402,24 @@ const PlayerManager = (function() {
             
             while ((match = exactNameRegex.exec(text)) !== null) {
                 const playerNum = parseInt(match[1]);
-                const pName = match[2];
+                let pName = match[2];
                 
-                // Critical fix: Check if the player has actually sent a message yet before naming them
-                let playerHasSentMessage = false;
+                // Simple validation for name
+                if (!pName || pName.length < 2) {
+                    debugLog(`Rejecting invalid name: "${pName}" for Player ${playerNum} - too short`);
+                    continue;
+                }
                 
-                // Search through chat history for messages from this player
-                const playerMessages = Array.from(chatWindow.querySelectorAll('.player-message'))
-                    .filter(msg => {
-                        const sender = msg.querySelector('.message-sender').textContent.replace(':', '').trim();
-                        // Check if this is a message from Player X (either named or unnamed)
-                        return sender === `Player ${playerNum}` || sender === pName;
-                    });
+                // CRITICAL: Only update player name if they have sent at least one message
+                // This ensures players name themselves, not the DM
+                const hasPlayerSentMessage = hasPlayerMessageInHistory(playerNum);
                 
-                playerHasSentMessage = playerMessages.length > 0;
-                
-                // Only update name if the player exists and has sent at least one message
-                if (playerNum && pName && playerHasSentMessage) {
-                    debugLog(`Player ${playerNum} has sent ${playerMessages.length} messages. OK to rename to ${pName}`);
+                if (hasPlayerSentMessage) {
+                    debugLog(`Player ${playerNum} has sent messages. Updating name to ${pName}`);
                     updatePlayerLabel(playerNum, pName);
-                    return true; // Stop after finding a valid match
+                    return true;
                 } else {
-                    debugLog(`Found name ${pName} for Player ${playerNum} but they haven't sent any messages yet. Not renaming.`);
+                    debugLog(`Player ${playerNum} hasn't sent any messages yet. Not updating name to ${pName}`);
                 }
             }
         }
@@ -439,7 +454,7 @@ const PlayerManager = (function() {
             const nameAfterWelcomeRegex = new RegExp(`(?:welcome|hello|greetings|hi),?\\s+(?:Player|player)\\s+${playerNum}[^.!?]*?\\b([A-Z]\\w+)\\b`, 'i');
             const nameMatch = text.match(nameAfterWelcomeRegex);
             
-            if (nameMatch && nameMatch[1] && isLikelyName(nameMatch[1])) {
+            if (nameMatch && nameMatch[1] && Utils.isLikelyName(nameMatch[1])) {
                 const possibleName = nameMatch[1];
                 debugLog(`Found potential name ${possibleName} for Player ${playerNum} from welcome message`);
                 
@@ -461,7 +476,7 @@ const PlayerManager = (function() {
             // Look for direct statement of name
             const nameStatementRegex = /(?:so your name is|you are called|you're|welcome|hello|hi) (\w+)[.!?]/i;
             match = text.match(nameStatementRegex);
-            if (match && match[1] && isLikelyName(match[1])) {
+            if (match && match[1] && Utils.isLikelyName(match[1])) {
                 const possibleName = match[1];
                 debugLog(`Single player mode: Found potential name ${possibleName}`);
                 updatePlayerLabel(playerNum, possibleName);
@@ -473,35 +488,33 @@ const PlayerManager = (function() {
     }
 
     /**
-     * Helper function to check if a string is likely a name
+     * Check if a player has sent any messages in the chat history
+     * @param {number} playerNum - The player number to check
+     * @returns {boolean} - Whether the player has sent any messages
      */
-    function isLikelyName(str) {
-        if (!str || typeof str !== 'string') return false;
+    function hasPlayerMessageInHistory(playerNum) {
+        const chatWindow = document.querySelector('#chat-window');
+        if (!chatWindow) return false;
         
-        // Common words that aren't names
-        const commonWords = [
-            "adventurer", "friend", "traveler", "player", "everyone", "there", "you", "all", "guys", 
-            "welcome", "hello", "hi", "hey", "greetings", "and", "the", "this", "that", "what", 
-            "your", "their", "our", "his", "her", "its", "new", "game", "continue", "tell", "let",
-            "know", "want", "need", "like", "now", "then", "here", "well", "good", "great", "first",
-            "name", "quest", "journey", "adventure"
-        ];
+        // Get all player messages
+        const playerMessages = Array.from(chatWindow.querySelectorAll('.player-message'));
         
-        // Clean up and normalize the string
-        const cleanStr = str.toLowerCase().trim().replace(/[.,!?:;'"()]/, '');
-        
-        // Reject if empty, too short, or a common word
-        if (cleanStr.length < 2 || commonWords.includes(cleanStr)) {
-            return false;
+        // Check if any messages come from this specific player
+        for (const msg of playerMessages) {
+            const sender = msg.querySelector('.message-sender')?.textContent.trim();
+            
+            if (sender) {
+                // Check both cases:
+                // 1. Generic "Player X:" (where X is the player number)
+                // 2. If player already has a name but sends more messages
+                if (sender.startsWith(`Player ${playerNum}:`) || 
+                    (playerNames[playerNum] && sender.startsWith(`${playerNames[playerNum]}:`))) {
+                    return true;
+                }
+            }
         }
         
-        // Check if it starts with a capital letter in the original
-        // This is important for names!
-        if (!/^[A-Z]/.test(str)) {
-            return false;
-        }
-        
-        return true;
+        return false;
     }
 
     // Expose public methods
@@ -517,7 +530,10 @@ const PlayerManager = (function() {
         getPlayerName: (num) => playerNames[num],
         getPlayerNames: () => playerNames,
         getNextPlayerNumber: () => nextPlayerNumber,
-        getSelectedPlayerNumber: () => selectedPlayerNum
+        getSelectedPlayerNumber: () => selectedPlayerNum,
+        // Add a way to access the internal playerNames object
+        get playerNames() { return playerNames; },
+        set playerNames(newNames) { playerNames = newNames; }
     };
 })();
 

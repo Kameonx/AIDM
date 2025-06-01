@@ -34,6 +34,26 @@ html {
     margin-left: 260px; /* Match the sidebar width */
 }
 
+/* Add more z-index to ensure sidebar stays on top */
+.side-menu {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 260px; 
+    height: 100%;
+    background: #1d1f21; 
+    transform: translateX(-260px);
+    transition: transform .3s ease; 
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.side-menu.open { 
+    transform: translateX(0);
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3); /* Add shadow for better visibility */
+}
+
 .chat-container {
     width: 100%;
     max-width: 1600px; /* Doubled from 800px to 1600px */
@@ -241,7 +261,8 @@ html {
 }
 
 .side-menu.open { 
-    transform: translateX(0); 
+    transform: translateX(0);
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3); /* Add shadow for better visibility */
 }
 
 .side-menu-header { 
@@ -498,4 +519,23 @@ html {
 /* Removing the formatting help class */
 .formatting-help {
     display: none;
+}
+
+/* Make the remove player button more prominent when active */
+#remove-player-btn:not(.hidden) { 
+    background-color: #ff5555; 
+    color: #f8f8f2; 
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 85, 85, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 5px rgba(255, 85, 85, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 85, 85, 0);
+    }
 }

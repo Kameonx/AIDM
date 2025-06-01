@@ -247,6 +247,12 @@ def stream_response():
             "Act as a friendly D&D 5e Dungeon Master. Keep responses brief and conversational - "
             "Don't generate the story until after character creation and ask the player if they have a story in mind. "
             "Remember key events in the story and refer to them when relevant. "
+            # Add this instruction to avoid the "land of Eridoria" pattern
+            "IMPORTANT: DO NOT use specific pre-defined locations or settings like 'land of Eridoria' until "
+            "the players have decided on a setting. Instead, just welcome players to the game with a general greeting. "
+            "Allow players to help shape the world through their backstories. "
+            "Only create location names after character creation is complete."
+            
             "Make sure the story is engaging and immersive, not just a series of actions. "
             "Think of a very powerful evil D&D enemy that the players will face at the end of the adventure, if applicable to their story. "
             "Have smaller enemies hint at the powerful enemy throughout the story. "
@@ -341,6 +347,9 @@ def stream_response():
                 "to have another hero join our quest. *What is your name, brave one?* Please introduce yourself to the party!' "
                 "NEVER just use a wave emoji alone. ALWAYS ask their name with a full sentence question."
                 "When a player tells you their name, acknowledge with 'Player X is now named [NAME]'. "
+                # Add instruction to avoid the specific land pattern
+                "AVOID mentioning specific lands or places until AFTER all players have introduced themselves "
+                "and character creation is complete. Just welcome them to the game, not to a specific place."
                 "Treat each player as an independent character in the story. "
                 "Keep track of each character's stats, inventory and abilities separately. "
                 "specifically address each player by their name when they take actions or make decisions. "
@@ -348,7 +357,10 @@ def stream_response():
             )
         else:
             system_prompt += (
+                # Modify the default acknowledgement to avoid specific land mentions
                 "When the player tells you their name, acknowledge with 'So your name is [NAME]' and add a welcoming emoji. "
+                "DO NOT follow this with 'welcome to the land of Eridoria' or any other pre-defined location name. "
+                "Instead say 'Welcome to our adventure!' or ask about their character details."
             )
         
         system_prompt += (
@@ -576,6 +588,28 @@ def set_player_name():
     except Exception as e:
         app.logger.error(f"Error in /set_player_name: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+# Add this function near the top with the other helper functions
+def is_valid_player_name(name):
+    """Check if a name is valid for a player"""
+    if not name or len(name) < 2:
+        return False
+    
+    # List of words that shouldn't be used as player names
+    invalid_names = [
+        "your", "you", "player", "adventurer", "friend", "traveler", 
+        "hero", "warrior", "wizard", "character", "party", "team",
+        "user", "person", "human", "my", "mine", "self", "their"
+    ]
+    
+    if name.lower() in invalid_names:
+        return False
+    
+    # Check if first letter is capitalized (proper name convention)
+    if not name[0].isupper():
+        return False
+        
+    return True
 
 if __name__ == '__main__':
     app.run(debug=True)

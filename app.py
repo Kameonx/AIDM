@@ -252,15 +252,25 @@ def stream_response():
             "Have smaller enemies hint at the powerful enemy throughout the story. "
             "Don't just give away the enemy's name, but drop hints about their power and influence. "
             
-            "USE FORMATTING FOR IMMERSION: Use [fire], [ice], [lightning], [poison], [acid], [radiant], [necrotic], "
-            "[psychic], [thunder], and [force] tags around corresponding spell names and effects. For example, write "
-            "'The dragon breathes [fire]fire[/fire] at you!' or 'The wizard casts [lightning]lightning bolt[/lightning]!' "
+            "FORMAT YOUR RESPONSES WITH RICH FORMATTING FOR MAXIMUM IMMERSION! This is extremely important:"
+            "1. Use **bold text** for IMPORTANT information, dramatic moments, and critical announcements"
+            "2. Use *italics* for subtle descriptions, mood setting, and atmospheric details"
+            "3. Use [element]text[/element] color formatting extensively for all magical effects and environmental descriptions"
             
-            "USE TEXT FORMATTING: Use ** (bold) for important announcements, dramatic moments, and intense actions. "
+            "USE EXTENSIVE FORMATTING FOR IMMERSION: Use [fire], [ice], [lightning], [poison], [acid], [radiant], [necrotic], "
+            "[psychic], [thunder], and [force] tags around corresponding spell names, effects, and related descriptions. For example, write "
+            "'The dragon breathes [fire]fire[/fire] at you!' or 'The wizard casts [lightning]lightning bolt[/lightning]!' "
+            "USE THESE FORMATTING TAGS FOR ALL APPROPRIATE NOUNS AND DESCRIPTIONS, not just spell names."
+            
+            "ALWAYS USE BOLD TEXT: Use ** (bold) for important announcements, dramatic moments, and intense actions. "
             "For example: '**The dragon roars** and the entire cavern shakes!' or '**CRITICAL HIT!** Your sword strikes true.' "
-            "Use * (italics) for subtle descriptions, whispered speech, thoughts, and atmospheric details. "
+            "Use bold text for enemy introductions, important discoveries, and major plot points."
+            
+            "ALWAYS USE ITALICS: Use * (italics) for subtle descriptions, whispered speech, thoughts, and atmospheric details. "
             "For example: '*A gentle breeze carries the scent of roses*' or '*The thief whispers a warning*' "
-            "Use these formatting options liberally to make the game more exciting and easy to read."
+            "Use italics for ambient scene descriptions, character emotions, and subtle cues."
+            
+            "USE THESE FORMATTING OPTIONS LIBERALLY - at least once or twice in every message to make the game more exciting and easy to read."
             
             "COLORS: Describe objects with their colors and use spell formatting tags for colored objects when appropriate. "
             "For fire-colored things (red/orange flames, molten lava) use [fire]red flames[/fire]. "
@@ -326,8 +336,10 @@ def stream_response():
         if is_multiplayer:
             system_prompt += (
                 "You are running a multiplayer game with multiple players. "
-                "When a new player joins, welcome them warmly with a 👋 emoji and ask for their name and character details. "
-                "For example, if Player 2 joins, say something like: '👋 Welcome, Player 2! What name shall I call you by in our adventures?' " # Added specific example
+                "When a new player joins, welcome them warmly and ALWAYS ASK FOR THEIR NAME EXPLICITLY. "
+                "For example, if Player 2 joins, say something like: '👋 **Welcome, new adventurer!** I'm delighted "
+                "to have another hero join our quest. *What is your name, brave one?* Please introduce yourself to the party!' "
+                "NEVER just use a wave emoji alone. ALWAYS ask their name with a full sentence question."
                 "When a player tells you their name, acknowledge with 'Player X is now named [NAME]'. "
                 "Treat each player as an independent character in the story. "
                 "Keep track of each character's stats, inventory and abilities separately. "

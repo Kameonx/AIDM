@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, redirect, url_for
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, redirect, url_for, send_from_directory
 import os
 import requests
 import time
@@ -9,7 +9,7 @@ from dotenv import load_dotenv  # Add this import
 
 load_dotenv(override=True)  # Ensure .env is loaded and overrides any existing env vars
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 app.secret_key = os.urandom(24)  # Required for session
 
 # Create a directory to store user chat histories
@@ -53,22 +53,59 @@ def save_chat_history(user_id, chat_history, game_id=None):
     with open(file_path, 'w') as file:
         json.dump(chat_history, file)
 
+# Add route to serve static files
+@app.route('/static/<path:path>')
+def send_static(path):
+    return send_from_directory('static', path)
+
+# Add helper function for loading game ID
+def load_or_create_game_id(user_id):
+    """Get existing game ID or create a new one"""
+    try:
+        # Check for existing games for this user
+        user_games = []
+        for filename in os.listdir(CHAT_DIR):
+            if f"chat_history_{user_id}_" in filename and not filename.endswith("_current.json"):
+                game_id = filename.replace(f"chat_history_{user_id}_", "").replace(".json", "")
+                user_games.append(game_id)
+        
+        # Use most recent game or create new one
+        if user_games:
+            # Sort by timestamp (assuming game_id starts with timestamp)
+            user_games.sort(reverse=True)
+            return user_games[0]
+        else:
+            # Create new game ID
+            import uuid, time
+            return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    except Exception as e:
+        app.logger.error(f"Error in load_or_create_game_id: {e}")
+        # Fallback to creating new game ID
+        import uuid, time
+        return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+
 # Route to serve the HTML page
 @app.route('/')
 def index():
     user_id = get_user_id()
     game_id = request.cookies.get('game_id')
-    dm_welcome = "Hello adventurer! Let's begin your quest. What is your name?"
+    
     if not game_id:
         # Generate a new game id if none is stored
-        import uuid, time
-        game_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+        game_id = load_or_create_game_id(user_id)
         chat_history = load_chat_history(user_id, game_id)
         if not chat_history:
-            chat_history = [{"role": "assistant", "content": dm_welcome}]
+            # Always include a welcome message
+            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
             save_chat_history(user_id, chat_history, game_id)
     else:
         chat_history = load_chat_history(user_id, game_id)
+        # Even if we have a chat history, make sure it has at least one message
+        if not chat_history:
+            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
+            save_chat_history(user_id, chat_history, game_id)
+    
+    # Pass the chat history to the template to display immediately on load
     response = make_response(render_template('index.html', chat_history=chat_history))
     response.set_cookie('user_id', user_id, max_age=60*60*24*365)  # Expire in 1 year
     response.set_cookie('game_id', game_id, max_age=60*60*24*365)
@@ -151,27 +188,51 @@ def stream_response():
         
         system_prompt = (
             "Act as a friendly D&D 5e Dungeon Master. Keep responses brief and conversational - "
+            "Don't generate the story until after character creation and ask the player if they have a story in mind. "
+            "Remember key events in the story and refer to them when relevant. "
+            "Make sure the story is engaging and immersive, not just a series of actions. "
+            "Think of a very powerful evil D&D enemy that the players will face at the end of the adventure, if applicable to their story. "
+            "Have smaller enemies hint at the powerful enemy throughout the story. "
+            "Don't just give away the enemy's name, but drop hints about their power and influence. "
             "use just 2-3 sentences unless more detail is necessary for rules, combat or important descriptions. "
             "Use emojis frequently to emphasize emotions and actions. "
+            "adjust difficulty based on their character's level, party size, and abilities. "
+            "limit responses to a readable length, ideally under 500 characters. "
+            "Make NPCs unique and memorable, with distinct personalities and quirks. "
+            "Have NPCs introduce themselves by initating dialogue, or by other unique methods, not just narrating their name and roles."
+            "For example, an NPC might say: 'Ah, greetings! I am Elara, the keeper of this ancient library. What knowledge do you seek?' "
+            "Also never use Elara as an NPC name, use unique names for each NPC. Generate NPC names that fit the setting and culture. "
             
             "PLAYER STATS: Keep a mental record of each player's character sheet including: "
             "name, race, class, level, HP, AC, and ability scores (STR, DEX, CON, INT, WIS, CHA). "
             "When players provide their stats, acknowledge them and refer to them in relevant situations. "
-            "If a player takes damage, track their HP and remind them of their current HP total. "
+            "If a player takes damage, track their HP and remind them of their current HP total. Include where they're injured for immersion. "
+            "If a player rolls a dice, consider their stat modifiers and apply them to the story. "
+            "If a player asks for their stats, provide them in a concise format: "
             
             "COMBAT RULES: When combat begins, say 'Roll for initiative!' and track the order. "
+            "Adhere to D&D 5e combat rules: "
+            "Each player gets one action, one bonus action, movement, and potentially one reaction. "
             "Always mention enemy HP and AC during combat. Describe hits, misses and damage clearly. "
+            "Consider enemy class, actions, bonus actions, movement, and reactions. "
             "Track damage to enemies and announce when they're bloodied (half HP) or defeated. "
             "For each player's turn, remind them they get one action, one bonus action, movement, "
             "and potentially one reaction (on other creatures' turns). Track which actions each player "
             "has used in a round. Suggest tactical options based on their character's abilities and position. "
+            "update battlefield conditions (e.g., difficult terrain, cover, distance to enemy) as needed. "
+            "determine if conditions meet advantage or disadvantage criteria to add to the immersion. "
+            "be descriptive and detailed about the player's ability and how/where it affects enemies. "
             
             "DICE ROLLS: Calculate most damage rolls automatically (e.g., 'Your greatsword hits for 2d6+3 damage... "
             "that's 10 damage!'). Ask players to roll dice during important story moments, critical hits, "
             "death saves, and decisive actions. Apply advantage (roll twice, take higher) or disadvantage "
             "(roll twice, take lower) based on narrative circumstances and terrain. Ask for specific checks "
             "based on player actions (e.g., 'Make a Dexterity (Acrobatics) check to leap across the chasm'). "
-            
+            "follow D&D 5e rules for ability checks, saving throws, and skill checks. "
+            "have players roll often, especially for combat, skill checks, and saving throws. "
+            "When a player rolls, describe the action and outcome based on the roll result. "
+            "apply the rule of cool and tell them if appropriate, they can roll with advantage or disadvantage. "
+
             "For standard rolls, ask the player to roll (e.g., 'Roll a d20 + your Strength modifier') but also "
             "offer to roll for them (e.g., 'Or I can roll for you if you prefer.'). If the player asks you to roll, "
             "generate a random result, apply appropriate modifiers, and describe the outcome. "
@@ -188,10 +249,12 @@ def stream_response():
             system_prompt += (
                 "You are running a multiplayer game with multiple players. "
                 "When a new player joins, welcome them warmly with a 👋 emoji and ask for their name and character details. "
-                "Include all players in the adventure and give each player opportunities to contribute. "
+                "For example, if Player 2 joins, say something like: '👋 Welcome, Player 2! What name shall I call you by in our adventures?' " # Added specific example
                 "When a player tells you their name, acknowledge with 'Player X is now named [NAME]'. "
                 "Treat each player as an independent character in the story. "
                 "Keep track of each character's stats, inventory and abilities separately. "
+                "specifically address each player by their name when they take actions or make decisions. "
+                "address specific players to make actions, if the story is focused on them. "
             )
         else:
             system_prompt += (

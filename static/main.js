@@ -5,13 +5,21 @@ document.addEventListener('DOMContentLoaded', function() {
         if (DEBUG) console.log(...args);
     }
     
-    debugLog("=== CLEAN INITIALIZATION STARTED ===");
+    debugLog("=== TOP-LEVEL DOMCONTENTLOADED STARTED ===");
     
     // Core variables
     let isGenerating = false;
-    let awaitingName = true;
-    let playerName = null;
     let seenMessages = new Set();
+    let dmName = "DM"; 
+    let isMultiplayerActive = false;
+    let lastSentMessage = "";
+    let selectedPlayerElement = null;
+    let selectedPlayerNum = null;
+    
+    // Add message history tracking for undo/redo
+    let messageHistory = [];
+    let historyIndex = -1;
+    const MAX_HISTORY_SIZE = 50;
     
     // Session data - ensure we get from localStorage first
     let currentGameId = localStorage.getItem('currentGameId');
@@ -35,20 +43,303 @@ document.addEventListener('DOMContentLoaded', function() {
     const userInput = document.getElementById('user-input');
     const newGameBtn = document.getElementById('new-game-btn');
     const sendBtn = document.getElementById('send-btn');
+    const diceBtn = document.getElementById('dice-player1-btn');
     const copyChatBtn = document.getElementById('copy-chat-btn');
     const addPlayerBtn = document.getElementById('add-player-btn');
-    // ADD the following line to define the container for additional players:
+    const removePlayerBtn = document.getElementById('remove-player-btn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
     const additionalPlayersContainer = document.getElementById('additional-players');
+    const menuToggleBtn = document.getElementById('menu-toggle');
+    const sideMenu = document.getElementById('side-menu');
+    const player1Container = document.getElementById('player1-container');
+
+    // Initialize nextPlayerNumber based on loaded player names
+    nextPlayerNumber = Object.keys(playerNames).length > 0 ? Math.max(...Object.keys(playerNames).map(Number)) + 1 : 2;
+
+
+    // --- START: Placeholder/Basic Implementations for Missing Functions ---
+    function extractName(message) {
+        // Basic implementation: look for "My name is X" or "I am X"
+        const namePatterns = [
+            /my name is (\w+)/i,
+            /i am (\w+)/i,
+            /call me (\w+)/i
+        ];
+        for (const pattern of namePatterns) {
+            const match = message.match(pattern);
+            if (match && match[1]) {
+                debugLog(`Extracted name: ${match[1]}`);
+                return match[1];
+            }
+        }
+        return null;
+    }
+
+    function savePlayerState() {
+        // Saves current player names and next player number to localStorage
+        const state = {
+            names: playerNames,
+            nextPlayerNumber: nextPlayerNumber,
+            isMultiplayerActive: isMultiplayerActive, // Now uses global variable
+            dmName: dmName // Now uses global variable
+        };
+        localStorage.setItem('playerState', JSON.stringify(state));
+        debugLog("Player state saved:", state);
+    }
     
-    // Add variables for update polling
-    let lastMessageCount = 0;
-    let updateCheckInterval = null;
-    let isCheckingForUpdates = false;
-    let lastSentMessage = "";
+    function initializeHistory() {
+        // Placeholder: Load history from localStorage or start fresh
+        const savedHistory = localStorage.getItem('chatHistory');
+        if (savedHistory) {
+            try {
+                messageHistory = JSON.parse(savedHistory);
+                historyIndex = messageHistory.length - 1;
+            } catch (e) {
+                debugLog("Error parsing chatHistory from localStorage:", e);
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Clear corrupted history
+            }
+        } else {
+            messageHistory = [];
+            historyIndex = -1;
+        }
+        
+        debugLog(`initializeHistory: Loaded ${messageHistory.length} states. Current index: ${historyIndex}`);
+        
+        // Initial save of current (empty or welcome) state if history is empty
+        if (messageHistory.length === 0 && chatWindow.children.length > 0) {
+            debugLog("initializeHistory: Chat window has children, but history is empty. Saving initial state.");
+            setTimeout(saveChatState, 100); // Allow DOM to settle
+        } else {
+            updateUndoRedoButtons();
+        }
+    }
+
+    function initialize() {
+        debugLog("Initializing application state...");
+        const loadedState = loadPlayerState(); // Ensure this also loads playerNames
+        
+        // Restore DM name if saved
+        if (loadedState && loadedState.dmName) {
+            dmName = loadedState.dmName;
+            document.querySelectorAll('.dm-message .message-sender').forEach(span => {
+                span.textContent = `${dmName}: `;
+            });
+        }
+
+        // Load chat history for the current game
+        fetch('/load_history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: currentGameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.history && data.history.length > 0) {
+                displayMessages(data.history);
+            } else {
+                ensureWelcomeMessage(); // Ensure welcome message if history is empty
+            }
+            initializeHistory(); // Initialize undo/redo history AFTER messages are loaded
+            updateUndoRedoButtons();
+        })
+        .catch(error => {
+            debugLog("Error loading chat history:", error);
+            ensureWelcomeMessage();
+            initializeHistory();
+            updateUndoRedoButtons();
+        });
+
+        ensurePlayersExist(); // Recreate player inputs based on playerNames
+        updateUndoRedoButtons();
+    }
+
+    function createNewGame() {
+        debugLog("Creating new game...");
+        fetch('/new_game', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.game_id) {
+                currentGameId = data.game_id;
+                localStorage.setItem('currentGameId', currentGameId);
+                chatWindow.innerHTML = ''; // Clear chat window
+                playerNames = { 1: null }; // Reset player names
+                nextPlayerNumber = 2;
+                dmName = "DM"; // Reset DM name
+                savePlayerNames();
+                savePlayerState(); // Save reset state
+                
+                // Clear and reset history for the new game
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Remove old history from storage
+
+                // Directly add the welcome message for a new game
+                // skipHistory = false so it becomes the first state in the new history
+                addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false); 
+                
+                // Remove additional player inputs
+                additionalPlayersContainer.innerHTML = '';
+                // Reset Player 1 label and input
+                const p1Label = document.getElementById('player1-label');
+                if (p1Label) p1Label.textContent = 'Player 1:';
+                if (userInput) userInput.value = '';
+
+                addSystemMessage("✨ New game started! Adventure awaits... ✨", false, false, true); // This will also save state
+                updateUndoRedoButtons(); // Explicitly update buttons after history reset
+            } else {
+                addSystemMessage("Error starting new game.", false, false, true);
+            }
+        })
+        .catch(error => {
+            debugLog("Error creating new game:", error);
+            addSystemMessage("Error connecting to server to start new game.", false, false, true);
+        });
+    }
+
+    function ensureWelcomeMessage() {
+        if (chatWindow.children.length === 0) {
+            addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, true);
+            return true; // Indicates welcome message was added
+        }
+        return false; // Indicates messages already existed
+    }
+
+    function ensurePlayersExist() {
+        debugLog("Ensuring players exist. Current names:", playerNames);
+        // Clear existing dynamic player inputs first to avoid duplication
+        additionalPlayersContainer.innerHTML = '';
+        
+        Object.keys(playerNames).sort((a,b) => parseInt(a) - parseInt(b)).forEach(numStr => {
+            const num = parseInt(numStr);
+            const name = playerNames[num];
+            if (num === 1) { // Player 1
+                const p1Label = document.getElementById('player1-label');
+                if (p1Label) {
+                    p1Label.textContent = name ? `${name}:` : `Player 1:`;
+                }
+            } else { // Additional players
+                // Check if element already exists (it shouldn't due to clearing container)
+                if (!document.getElementById(`player${num}-container`)) {
+                    addPlayerUI(num, name);
+                }
+            }
+        });
+        // Update nextPlayerNumber based on loaded names
+        const playerNumbers = Object.keys(playerNames).map(Number);
+        if (playerNumbers.length > 0) {
+            nextPlayerNumber = Math.max(...playerNumbers) + 1;
+        } else {
+            nextPlayerNumber = 2;
+        }
+    }
     
-    // Flag to control automatic polling
-    let enableAutomaticPolling = false;
-    
+    function addPlayerUI(playerNum, playerName = null) {
+        const playerContainer = document.createElement('div');
+        playerContainer.className = 'player-input';
+        playerContainer.id = `player${playerNum}-container`;
+        playerContainer.addEventListener('click', () => selectPlayer(playerContainer, playerNum));
+
+        const label = document.createElement('div');
+        label.className = 'player-label';
+        label.id = `player${playerNum}-label`;
+        label.textContent = playerName ? `${playerName}:` : `Player ${playerNum}:`;
+        playerContainer.appendChild(label);
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `player${playerNum}-input`;
+        input.placeholder = `Player ${playerNum}, type your message...`;
+        input.className = 'player-input-field';
+        input.autocomplete = 'off';
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !isGenerating) {
+                e.preventDefault();
+                sendMessage(input, playerNum);
+            }
+        });
+        playerContainer.appendChild(input);
+
+        const buttonsContainer = document.createElement('div');
+        buttonsContainer.className = 'player-buttons-container';
+
+        const sendPlayerBtn = document.createElement('button');
+        sendPlayerBtn.id = `send-player${playerNum}-btn`;
+        sendPlayerBtn.className = 'action-btn send-btn';
+        sendPlayerBtn.title = 'Send message';
+        sendPlayerBtn.innerHTML = '📤';
+        sendPlayerBtn.type = 'button';
+        sendPlayerBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            sendMessage(input, playerNum);
+        });
+        buttonsContainer.appendChild(sendPlayerBtn);
+
+        const dicePlayerBtn = document.createElement('button');
+        dicePlayerBtn.id = `dice-player${playerNum}-btn`;
+        dicePlayerBtn.className = 'action-btn dice-btn';
+        dicePlayerBtn.title = 'Roll a die';
+        dicePlayerBtn.innerHTML = '🎲';
+        dicePlayerBtn.type = 'button';
+        // Add dice roll functionality here if needed for other players
+        // dicePlayerBtn.addEventListener('click', () => rollDiceForPlayer(playerNum));
+        buttonsContainer.appendChild(dicePlayerBtn);
+        
+        playerContainer.appendChild(buttonsContainer);
+        additionalPlayersContainer.appendChild(playerContainer);
+        return input; // Return the input element
+    }
+
+    function addPlayer() {
+        debugLog("Adding new player UI for player number:", nextPlayerNumber);
+        const newPlayerInput = addPlayerUI(nextPlayerNumber);
+        playerNames[nextPlayerNumber] = null; // Add to playerNames map, initially unnamed
+        savePlayerNames();
+        savePlayerState(); // Save state including new nextPlayerNumber
+        
+        addSystemMessage(`Player ${nextPlayerNumber} has joined the game! What is your name, adventurer?`, false, false, true);
+        
+        // Notify DM about new player
+        if (currentGameId) {
+            const loadingId = `dm-player-join-${Date.now()}`;
+            const textId = `response-text-player-join-${Date.now()}`;
+            const loadingDiv = createLoadingDivForDM(loadingId, textId);
+            debugLog("Setting isGenerating = true (addPlayer)");
+            isGenerating = true;
+            
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: `Player ${nextPlayerNumber} has joined the game. Please welcome them.`,
+                    game_id: currentGameId,
+                    player_number: 'system', // System message
+                    is_system: true
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.message_id) {
+                    sendStreamRequest(data.message_id, loadingDiv); // isGenerating will be reset by sendStreamRequest
+                } else {
+                    debugLog("Setting isGenerating = false (addPlayer - no message_id)");
+                    isGenerating = false; 
+                }
+            })
+            .catch(error => {
+                debugLog(`Error notifying DM about Player ${nextPlayerNumber} joining:`, error);
+                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+                debugLog("Setting isGenerating = false (addPlayer - catch)");
+                isGenerating = false;
+            });
+        }
+        nextPlayerNumber++; // Increment for the next player
+        if (newPlayerInput) newPlayerInput.focus();
+    }
+    // --- END: Placeholder/Basic Implementations ---
+
     // Functions for saving/loading player names from localStorage
     function savePlayerNames() {
         localStorage.setItem('playerNames', JSON.stringify(playerNames));
@@ -59,15 +350,272 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const saved = localStorage.getItem('playerNames');
             if (saved) {
-                return JSON.parse(saved);
+                const loaded = JSON.parse(saved);
+                // Ensure it's an object, not null or undefined
+                return typeof loaded === 'object' && loaded !== null ? loaded : { 1: null };
             }
         } catch (e) {
             debugLog("Error loading player names:", e);
         }
-        return { 1: null };
+        return { 1: null }; // Default for Player 1
     }
     
-    // Update updatePlayerLabel to save to localStorage
+    // ADD MISSING FUNCTIONS
+    function displayMessages(messages) {
+        if (!Array.isArray(messages)) {
+            debugLog("Invalid messages array:", messages);
+            return;
+        }
+        chatWindow.innerHTML = ''; // Clear existing messages
+        messages.forEach(msg => {
+            if (msg.role === "assistant" || msg.type === "dm") {
+                addMessage(dmName, msg.content, false, true, true);
+            } else if (msg.role === "user" || msg.type === "player") {
+                // Extract player number or use sender name directly
+                let senderName = msg.sender;
+                if (!senderName && msg.player) {
+                    senderName = playerNames[msg.player.replace('player','')] || msg.player;
+                }
+                addMessage(senderName || `Player ${msg.player_number || 1}`, msg.content, false, true, true);
+            } else if (msg.role === "system" || msg.type === "system") {
+                addSystemMessage(msg.content, true, true);
+            }
+        });
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    function restoreChatState(index) {
+        if (index < 0 || index >= messageHistory.length) {
+            debugLog(`Invalid history index for restore: ${index}. History length: ${messageHistory.length}`);
+            return;
+        }
+        
+        const state = messageHistory[index];
+        debugLog(`Restoring chat state from history index ${index}. State contains ${state.length} messages.`);
+        
+        chatWindow.innerHTML = ''; // Clear chat window
+        
+        state.forEach(msg => {
+            if (msg.type === 'system') {
+                addSystemMessage(msg.content, true, true); // fromUpdate = true, skipHistory = true
+            } else if (msg.type === 'dm') {
+                addMessage(dmName, msg.content, false, true, true); // fromUpdate = true, skipHistory = true
+            } else { // player message
+                addMessage(msg.sender, msg.content, false, true, true); // fromUpdate = true, skipHistory = true
+            }
+        });
+        
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false) {
+        const role = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm') ? 'assistant' : 'user';
+        if (!fromUpdate && messageExists(role, text)) {
+            debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
+            return false;
+        }
+        
+        lastPlayerMessages[sender] = text;
+        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
+        
+        const msgDiv = document.createElement('div');
+        const isDMMessage = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm');
+        msgDiv.className = `message ${isDMMessage ? 'dm-message' : 'player-message'}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${sender}: `;
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        if (!skipHistory) {
+            setTimeout(saveChatState, 0);
+        }
+        return true;
+    }
+
+    function addSystemMessage(text, fromUpdate = false, skipHistory = false, isTemporary = false) {
+        if (!fromUpdate && messageExists('system', text)) {
+            debugLog("Skipping duplicate system message");
+            return;
+        }
+        
+        debugLog("Adding system message:", text);
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system-message' + (isTemporary ? ' temporary-message' : '');
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = "SYSTEM: ";
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        if (isTemporary) {
+            setTimeout(() => msgDiv.remove(), 8000);
+        }
+        
+        if (!skipHistory) {
+            setTimeout(saveChatState, 0);
+        }
+    }
+    
+    function loadPlayerState() {
+        try {
+            const saved = localStorage.getItem('playerState');
+            if (saved) {
+                const state = JSON.parse(saved);
+                if (state.names) playerNames = state.names; 
+                else playerNames = {1: null};
+                nextPlayerNumber = state.nextPlayerNumber || Math.max(...Object.keys(playerNames).map(Number)) + 1 || 2;
+                isMultiplayerActive = state.isMultiplayerActive || false;
+                if (state.dmName) dmName = state.dmName;
+                return state;
+            }
+        } catch (e) { 
+            debugLog("Error loading player state:", e); 
+        }
+        playerNames = {1: null};
+        nextPlayerNumber = 2;
+        return { names: { 1: null }, nextPlayerNumber: 2, isMultiplayerActive: false, dmName: "DM" };
+    }
+    
+    // Fixed sendMessage function with proper DM rename support
+    function sendMessage(inputElement, playerNumber) {
+        const userMessage = inputElement.value.trim();
+        debugLog(`Attempting to send message: "${userMessage}" from player ${playerNumber}. isGenerating: ${isGenerating}`);
+        
+        if (!userMessage) return;
+        
+        // DM rename flow (secret, only when DM asks)
+        if (window.awaitingDMRename) {
+            dmName = userMessage;
+            window.awaitingDMRename = false;
+            inputElement.value = '';
+            document.querySelectorAll('.dm-message .message-sender').forEach(span => {
+                span.textContent = `${dmName}: `;
+            });
+            addSystemMessage(`The Dungeon Master will now be called "${dmName}". 🎭`, false, false, true);
+            savePlayerState();
+            return;
+        }
+        
+        lastSentMessage = userMessage;
+        
+        if (isGenerating) {
+            debugLog("sendMessage blocked: isGenerating is true.");
+            return;
+        }
+        
+        // Validate game session
+        if (!currentGameId) {
+            addSystemMessage("No active game session. Creating a new one...");
+            const pendingMessage = userMessage;
+            const pendingPlayer = playerNumber;
+            inputElement.value = '';
+            
+            debugLog("Setting isGenerating = true (sendMessage - new game flow)");
+            isGenerating = true;
+            createNewGame();
+            
+            const checkGameReadyInterval = setInterval(() => {
+                if (currentGameId && !isGenerating) {
+                    clearInterval(checkGameReadyInterval);
+                    const targetInput = playerNumber === 1 ? userInput : document.getElementById(`player${playerNumber}-input`);
+                    if (targetInput) {
+                        targetInput.value = pendingMessage;
+                        debugLog("Setting isGenerating = false (sendMessage - before recursive call after new game)");
+                        isGenerating = false;
+                        sendMessage(targetInput, pendingPlayer);
+                    }
+                }
+            }, 300);
+            return;
+        }
+        
+        debugLog("Setting isGenerating = true (sendMessage - main flow)");
+        isGenerating = true;
+        
+        // Only update THIS player's name if not set
+        const extractedPlayerName = extractName(userMessage);
+        if (extractedPlayerName && (!playerNames[playerNumber] || playerNames[playerNumber] === `Player ${playerNumber}`)) {
+            updatePlayerLabel(playerNumber, extractedPlayerName);
+        }
+        
+        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
+        addMessage(sender, userMessage);
+        
+        inputElement.value = '';
+        
+        // Create loading indicator
+        const loadingId = `typing-indicator-${Date.now()}`;
+        const textId = `response-text-${Date.now()}`;
+        const loadingDiv = createLoadingDivForDM(loadingId, textId);
+        
+        // Prepare player context
+        const playerContext = {};
+        Object.entries(playerNames).forEach(([num, name]) => {
+            if (name) playerContext[num] = name;
+        });
+        
+        fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: userMessage,
+                game_id: currentGameId,
+                player_number: playerNumber,
+                player_names: playerContext
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.message_id) {
+                sendStreamRequest(data.message_id, loadingDiv);
+            } else {
+                throw new Error("Invalid response data from /chat");
+            }
+        })
+        .catch(error => {
+            debugLog("Error in sendMessage fetch /chat:", error);
+            if (loadingDiv && loadingDiv.parentNode) {
+                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                if (responseTextElem) {
+                    responseTextElem.textContent = "Error: " + error.message;
+                    loadingDiv.classList.add('error-message');
+                    const cursor = responseTextElem.querySelector('.cursor');
+                    if (cursor) cursor.remove();
+                } else {
+                    loadingDiv.remove();
+                    addSystemMessage("Error: " + error.message);
+                }
+            } else {
+                addSystemMessage("Error: Failed to send message. " + error.message);
+            }
+            debugLog("Setting isGenerating = false (sendMessage - catch)");
+            isGenerating = false;
+        });
+        
+        inputElement.focus();
+    }
+    
+    // Improved updatePlayerLabel function
     function updatePlayerLabel(playerNumber, name) {
         debugLog(`Updating Player ${playerNumber} label to ${name}`);
         
@@ -75,9 +623,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (labelElement) {
             labelElement.textContent = `${name}:`;
             playerNames[playerNumber] = name;
-            
-            // Save to localStorage whenever a name is updated
             savePlayerNames();
+            savePlayerState(); // Save state including updated playerNames
+            
+            // Add system message about name change, but don't save to history again if called from addMessage
+            addSystemMessage(`Player ${playerNumber} is now named ${name}.`, false, true, true); // skipHistory = true
         }
     }
 
@@ -88,8 +638,9 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingDiv.id = id;
         
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = 'DM: ';
-        nameSpan.style.fontWeight = 'bold';
+        nameSpan.className = 'message-sender'; // Added class for consistency
+        nameSpan.textContent = `${dmName}: `; // Use current DM name
+        // nameSpan.style.fontWeight = 'bold'; // fontWeight is handled by .message-sender class
         
         const responseText = document.createElement('span');
         responseText.id = textId || 'response-text';
@@ -109,97 +660,114 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function sendStreamRequest(messageId, loadingDiv) {
-        debugLog("Starting stream request for message ID:", messageId);
+        debugLog("Starting stream request for message ID:", messageId, ". Current isGenerating:", isGenerating);
         
-        // Create EventSource URL with all parameters - simplified
         const eventSourceUrl = new URL('/stream', window.location.href);
-        eventSourceUrl.searchParams.append('t', Date.now());
+        eventSourceUrl.searchParams.append('t', Date.now()); // Cache buster
         eventSourceUrl.searchParams.append('game_id', currentGameId || '');
         eventSourceUrl.searchParams.append('message_id', messageId || '');
         
         debugLog("Stream URL:", eventSourceUrl.toString());
         
-        // Create error recovery timeout
+        const eventSource = new EventSource(eventSourceUrl.toString());
+        
         let responseTimeout = setTimeout(() => {
-            debugLog("Response timeout - closing connection");
-            eventSource.close();
+            debugLog("Response timeout - closing connection for messageId:", messageId);
+            if (eventSource) eventSource.close(); 
             const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
-            if (responseTextElem) {
+            if (responseTextElem) { // Fixed syntax error here
                 responseTextElem.classList.remove('typing');
                 const oldCursor = responseTextElem.querySelector('.cursor');
                 if (oldCursor) oldCursor.remove();
                 
-                if (!responseTextElem.textContent) {
+                if (!responseTextElem.textContent.trim()) {
                     responseTextElem.textContent = "Response timeout. Please try again.";
                     loadingDiv.classList.add('error-message');
                 }
             }
-            
+            debugLog("Setting isGenerating = false (sendStreamRequest - timeout)");
             isGenerating = false;
-        }, 30000);
-        
-        // Create EventSource for streaming
-        const eventSource = new EventSource(eventSourceUrl.toString());
+        }, 30000); // 30 seconds timeout
         
         eventSource.onopen = function(e) {
-            debugLog("EventSource connection opened");
+            debugLog("EventSource connection opened for messageId:", messageId);
         };
         
-        // Handle incoming messages
+        let fullResponseText = ""; // Accumulate full response for checkForPlayerNames
+
         eventSource.onmessage = function(event) {
             try {
-                debugLog("Received message chunk:", event.data.substring(0, 50) + "...");
+                clearTimeout(responseTimeout);
+                responseTimeout = setTimeout(() => {
+                    debugLog("Response timeout during streaming for messageId:", messageId);
+                    eventSource.close();
+                    const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                    if (responseTextElem) {
+                        const oldCursor = responseTextElem.querySelector('.cursor');
+                        if (oldCursor) oldCursor.remove();
+                        responseTextElem.classList.remove('typing');
+                        
+                        if (!responseTextElem.textContent.trim()) {
+                            responseTextElem.textContent = "Response timeout. Please try again.";
+                            loadingDiv.classList.add('error-message');
+                        }
+                    }
+                    isGenerating = false;
+                }, 30000);
+
+                debugLog("Received message chunk for messageId:", messageId, "Data:", event.data.substring(0, 50) + "...");
                 const data = JSON.parse(event.data);
                 const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
                 
                 if (responseTextElem) {
-                    // Handle content
                     const formattedContent = data.content.replace(/\\n/g, '\n');
                     
                     if (data.error === true) {
                         loadingDiv.classList.add('error-message');
                     }
                     
-                    responseTextElem.classList.remove('typing');
-                    
-                    const oldCursor = responseTextElem.querySelector('.cursor');
-                    if (oldCursor) oldCursor.remove();
+                    if (responseTextElem.classList.contains('typing')) {
+                        responseTextElem.classList.remove('typing');
+                        const oldCursor = responseTextElem.querySelector('.cursor');
+                        if (oldCursor) oldCursor.remove();
+                    }
                     
                     responseTextElem.textContent += formattedContent;
+                    fullResponseText += formattedContent;
                     
                     const cursor = document.createElement('span');
                     cursor.className = 'cursor';
                     responseTextElem.appendChild(cursor);
                     
                     chatWindow.scrollTop = chatWindow.scrollHeight;
-                    
-                    if (data.full) {
-                        checkForPlayerNames(data.full);
-                    }
                 }
             } catch (e) {
                 debugLog("Error parsing event data:", e);
             }
         };
         
-        // Handle stream completion
-        eventSource.addEventListener('done', function() {
-            debugLog("Stream complete");
+        eventSource.addEventListener('done', function(event) {
+            debugLog("Stream complete for messageId:", messageId, "Event data:", event.data);
             clearTimeout(responseTimeout);
             
             const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
             if (responseTextElem) {
                 const oldCursor = responseTextElem.querySelector('.cursor');
                 if (oldCursor) oldCursor.remove();
+                
+                if (fullResponseText) {
+                    checkForPlayerNames(fullResponseText);
+                }
             }
             
             eventSource.close();
+            debugLog("Setting isGenerating = false (sendStreamRequest - done)");
             isGenerating = false;
+            saveChatState(); // Save chat state after DM response is fully received
         });
         
-        // Handle errors
         eventSource.onerror = function(e) {
-            debugLog("EventSource error:", e);
+            debugLog("EventSource error for messageId:", messageId, e);
             clearTimeout(responseTimeout);
             
             try {
@@ -209,1323 +777,392 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (oldCursor) oldCursor.remove();
                     responseTextElem.classList.remove('typing');
                     
-                    if (!responseTextElem.textContent) {
+                    if (!responseTextElem.textContent.trim()) {
                         loadingDiv.classList.add('error-message');
                         responseTextElem.textContent = "Connection error. Please try again.";
                     }
                 }
-                
                 eventSource.close();
             } catch (err) {
-                debugLog("Error handling EventSource error:", err);
+                debugLog("Error handling EventSource error for messageId:", messageId, err);
             } finally {
+                debugLog("Setting isGenerating = false (sendStreamRequest - onerror)");
                 isGenerating = false;
             }
         };
     }
     
-    // Improved message tracking to prevent duplicates
     function messageExists(role, content) {
-        // Create a simple hash for the message
         const msgHash = `${role}-${content.substring(0, 50)}`;
-        
-        // Check if we've seen this message before
         if (processedMessageIds.has(msgHash)) {
             return true;
         }
-        
-        // Add to our set of processed messages
         processedMessageIds.add(msgHash);
-        
-        // Keep the set from growing too large
         if (processedMessageIds.size > 100) {
-            // Convert to array, keep only the most recent 50
             const msgArray = Array.from(processedMessageIds);
             processedMessageIds.clear();
-            for (let i = msgArray.length - 50; i < msgArray.length; i++) {
-                if (i >= 0) processedMessageIds.add(msgArray[i]);
+            for (let i = Math.max(0, msgArray.length - 50); i < msgArray.length; i++) {
+                processedMessageIds.add(msgArray[i]);
             }
         }
-        
         return false;
     }
     
-    // Improved addMessage with duplicate detection
-    function addMessage(sender, text, isTypewriter = false, fromUpdate = false) {
-        // Skip if this appears to be the current user's message that we already displayed
-        if (fromUpdate && sender.toLowerCase() === (playerNames[1] || 'player 1').toLowerCase() && 
-            text === lastSentMessage) {
-            debugLog("Skipping duplicate recent message");
-            return false;
+    function updateUndoRedoButtons() {
+        if (undoBtn && redoBtn) {
+            undoBtn.disabled = historyIndex <= 0;
+            redoBtn.disabled = historyIndex >= messageHistory.length - 1;
+            undoBtn.style.opacity = undoBtn.disabled ? '0.5' : '1';
+            redoBtn.style.opacity = redoBtn.disabled ? '0.5' : '1';
         }
-        
-        // Check if this is a duplicate message
-        const role = sender.toLowerCase() === 'dm' ? 'assistant' : 'user';
-        if (messageExists(role, text)) {
-            debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
-            return false;
-        }
-        
-        // Track the last message from this sender
-        lastPlayerMessages[sender] = text;
-        
-        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
-        
-        // Create message element
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${sender.toLowerCase() === 'dm' ? 'dm-message' : 'player-message'}`;
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = `${sender.toUpperCase()}: `;
-        nameSpan.style.fontWeight = 'bold';
-        msgDiv.appendChild(nameSpan);
-        
-        // Add content span
-        const contentSpan = document.createElement('span');
-        contentSpan.className = 'message-content';
-        contentSpan.textContent = text;
-        msgDiv.appendChild(contentSpan);
-        
-        chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-        return true;
     }
     
-    // Modified addSystemMessage with duplicate detection
-    function addSystemMessage(text, fromUpdate = false) {
-        // Check for duplicates
-        if (messageExists('system', text)) {
-            debugLog("Skipping duplicate system message");
-            return;
+    function saveChatState() {
+        debugLog(`Attempting to save chat state. Current historyIndex: ${historyIndex}, History length: ${messageHistory.length}`);
+        const messages = Array.from(chatWindow.querySelectorAll('.message:not(.temporary-message)')) 
+            .map(msg => {
+                const senderEl = msg.querySelector('.message-sender');
+                const contentEl = msg.querySelector('.message-content');
+                
+                // Skip if essential elements are missing (e.g. loading indicators not fully formed)
+                if (!senderEl || !contentEl) return null;
+
+                const senderText = senderEl.textContent.replace(':', '').trim();
+                const contentText = contentEl.textContent.trim();
+                
+                // Skip empty messages or malformed ones
+                if (!contentText && !(msg.classList.contains('dm-message') && msg.querySelector('.typing'))) return null;
+
+
+                const isSystem = msg.classList.contains('system-message');
+                // Determine if DM by checking sender text against current dmName or if it's a DM loading message
+                const isDM = senderText === dmName || (msg.classList.contains('dm-message') && senderText === "DM");
+
+
+                return {
+                    sender: senderText,
+                    content: contentText,
+                    type: isSystem ? 'system' : (isDM ? 'dm' : 'player')
+                };
+            }).filter(msg => msg !== null); 
+
+        if (messages.length === 0 && chatWindow.children.length > 0 && !Array.from(chatWindow.children).every(child => child.classList.contains('temporary-message') || child.querySelector('.typing'))) {
+            debugLog("No valid messages to save, but chat window has non-transient children. This might be an issue. Current children:", chatWindow.innerHTML.substring(0,100));
+            // return; // Potentially skip saving if it seems like an invalid state
         }
         
-        debugLog("Adding system message:", text);
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'message system-message';
-        msgDiv.style.color = '#6272a4';
-        msgDiv.style.fontStyle = 'italic';
+        // If historyIndex is behind the end of messageHistory, it means we undid and then performed a new action.
+        // Truncate the "future" states that were undone.
+        if (historyIndex < messageHistory.length - 1) {
+            debugLog(`History divergence: historyIndex (${historyIndex}) < messageHistory.length - 1 (${messageHistory.length - 1}). Slicing history.`);
+            messageHistory = messageHistory.slice(0, historyIndex + 1);
+        }
         
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = "SYSTEM: ";
-        nameSpan.style.fontWeight = 'bold';
-        msgDiv.appendChild(nameSpan);
+        messageHistory.push(messages);
+        historyIndex = messageHistory.length - 1; // Point to the newly added state
         
-        const contentSpan = document.createElement('span');
-        contentSpan.className = 'message-content';
-        contentSpan.textContent = text;
-        msgDiv.appendChild(contentSpan);
+        if (messageHistory.length > MAX_HISTORY_SIZE) {
+            messageHistory.shift();
+            historyIndex--; // Adjust index because an element was removed from the beginning
+        }
         
-        chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
+        try {
+            localStorage.setItem('chatHistory', JSON.stringify(messageHistory)); 
+        } catch (e) {
+            debugLog("Error saving chatHistory to localStorage:", e);
+        }
+        updateUndoRedoButtons();
+        debugLog(`Chat state saved. New history size: ${messageHistory.length}, New Index: ${historyIndex}. Last saved state:`, messages.map(m => m.content.substring(0,20)).join(" | "));
     }
     
-    // Modified sendMessage function
-    function sendMessage(inputElement, playerNumber) {
-        const userMessage = inputElement.value.trim();
-        if (!userMessage) return;
-        
-        // Store this message to avoid duplicates when polling
-        lastSentMessage = userMessage;
-        
-        if (isGenerating) {
-            debugLog("Already generating, ignoring send");
+    function undoChat() {
+        debugLog(`Undo requested. historyIndex: ${historyIndex}, isGenerating: ${isGenerating}`);
+        if (historyIndex <= 0 || isGenerating) {
+            if(isGenerating) addSystemMessage("Please wait for the current action to complete before undoing.",false,true,true);
             return;
         }
+        historyIndex--;
+        debugLog(`Undo: historyIndex changed to ${historyIndex}`);
+        restoreChatState(historyIndex);
+        updateUndoRedoButtons();
         
-        // Validate game session
-        if (!currentGameId) {
-            debugLog("No game ID, creating new game");
-            addSystemMessage("No active game session. Creating a new one...");
-            createNewGame();
-            setTimeout(() => {
-                sendMessage(inputElement, playerNumber);
-            }, 1500);
-            return;
-        }
-        
-        debugLog(`Sending message for Player ${playerNumber}:`, userMessage.substring(0, 30));
-        
-        // Set generating state
-        isGenerating = true;
-        
-        // Extract name if first message or if player name not set
-        const extractedName = extractName(userMessage);
-        if (extractedName && !playerNames[playerNumber]) {
-            updatePlayerLabel(playerNumber, extractedName);
-            if (playerNumber === 1) {
-                playerName = extractedName;
-                awaitingName = false;
-            }
-        }
-        
-        // Get sender name
-        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
-        
-        // Add user message to chat
-        addMessage(sender, userMessage);
-        
-        // Clear input field
-        inputElement.value = '';
-        
-        // Create loading indicator
-        const loadingId = `typing-indicator-${Date.now()}`;
-        const textId = `response-text-${Date.now()}`;
-        const loadingDiv = createLoadingDivForDM(loadingId, textId);
-        
-        // Prepare player context
-        const playerContext = {};
-        Object.entries(playerNames).forEach(([num, name]) => {
-            if (name) playerContext[num] = name;
-        });
-        
-        // Send to server - simplified
-        fetch('/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                message: userMessage,
-                game_id: currentGameId,
-                player_number: playerNumber,
-                player_names: playerContext
+        if (currentGameId) {
+            const loadingId = `dm-undo-${Date.now()}`;
+            const textId = `response-text-undo-${Date.now()}`;
+            const loadingDiv = createLoadingDivForDM(loadingId, textId);
+            debugLog("Setting isGenerating = true (undoChat)");
+            isGenerating = true;
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: "A previous action was undone. Please update the story accordingly.",
+                    game_id: currentGameId,
+                    player_number: 'system',
+                    is_system: true
+                })
             })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            debugLog("Message sent successfully, response:", data);
-            if (data && data.message_id) {
-                sendStreamRequest(data.message_id, loadingDiv);
-            } else {
-                throw new Error("Invalid response data");
-            }
-        })
-        .catch(error => {
-            debugLog('Error sending message:', error);
-            
-            if (loadingDiv && loadingDiv.parentNode) {
-                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
-                if (responseTextElem) {
-                    responseTextElem.textContent = "Error: " + error.message;
-                    loadingDiv.classList.add('error-message');
-                } else {
-                    loadingDiv.remove();
-                    addSystemMessage("Error: " + error.message);
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.message_id) sendStreamRequest(data.message_id, loadingDiv); // isGenerating reset by sendStreamRequest
+                else {
+                    debugLog("Setting isGenerating = false (undoChat - no message_id)");
+                    isGenerating = false; 
                 }
-            } else {
-                addSystemMessage("Error: Failed to send message. " + error.message);
-            }
-            
-            isGenerating = false;
-        });
+            }).catch(() => {
+                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+                debugLog("Setting isGenerating = false (undoChat - catch)");
+                isGenerating = false;
+            });
+        }
+    }
+    
+    function redoChat() {
+        debugLog(`Redo requested. historyIndex: ${historyIndex}, messageHistory.length: ${messageHistory.length}, isGenerating: ${isGenerating}`);
+        if (historyIndex >= messageHistory.length - 1 || isGenerating) {
+            if(isGenerating) addSystemMessage("Please wait for the current action to complete before redoing.",false,true,true);
+            return;
+        }
+        historyIndex++;
+        debugLog(`Redo: historyIndex changed to ${historyIndex}`);
+        restoreChatState(historyIndex);
+        updateUndoRedoButtons();
         
-        // Focus input field
-        inputElement.focus();
+        if (currentGameId) {
+            const loadingId = `dm-redo-${Date.now()}`;
+            const textId = `response-text-redo-${Date.now()}`;
+            const loadingDiv = createLoadingDivForDM(loadingId, textId);
+            debugLog("Setting isGenerating = true (redoChat)");
+            isGenerating = true;
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: "A previously undone action was restored. Please update the story accordingly.",
+                    game_id: currentGameId,
+                    player_number: 'system',
+                    is_system: true
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.message_id) sendStreamRequest(data.message_id, loadingDiv); // isGenerating reset by sendStreamRequest
+                else {
+                    debugLog("Setting isGenerating = false (redoChat - no message_id)");
+                    isGenerating = false; 
+                }
+            }).catch(() => {
+                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
+                debugLog("Setting isGenerating = false (redoChat - catch)");
+                isGenerating = false;
+            });
+        }
     }
     
     function checkForPlayerNames(text) {
-        // Look for "Player X is named Y" patterns for all players
-        const nameRegex = /Player (\d+) is (?:now |)named ([A-Za-z]+)/gi;
+        const nameRegex = /Player (\d+) is (?:now |)named (\w+)/gi;
         let match;
-        
         while ((match = nameRegex.exec(text)) !== null) {
             const playerNum = parseInt(match[1]);
-            const playerName = match[2];
-            
-            if (playerNum && playerName) {
-                debugLog(`Found name for Player ${playerNum}: ${playerName}`);
-                updatePlayerLabel(playerNum, playerName);
-            }
-        }
-    }
-    
-    function extractName(input) {
-        const namePatterns = [
-            /my name is ([A-Za-z]+)/i,
-            /i am ([A-Za-z]+)/i,
-            /call me ([A-Za-z]+)/i,
-            /name's ([A-Za-z]+)/i,
-            /name is ([A-Za-z]+)/i,
-            /^([A-Za-z]+)$/i  // Just a name by itself
-        ];
-        
-        for (const pattern of namePatterns) {
-            const match = input.match(pattern);
-            if (match && match[1]) {
-                return match[1];
+            const pName = match[2];
+            if (playerNum && pName && playerNames[playerNum] !== pName) { // Only update if different
+                updatePlayerLabel(playerNum, pName);
             }
         }
         
-        return null;
+        const simpleName = extractNameFromDMResponse(text);
+        if (simpleName) {
+            const unnamedPlayer = Object.entries(playerNames).find(([num, name]) => !name || name === `Player ${num}`);
+            if (unnamedPlayer) {
+                updatePlayerLabel(parseInt(unnamedPlayer[0]), simpleName);
+            }
+        }
+        
+        if (/what (?:would|should) you like to call (me|the dungeon master|your dungeon master)/i.test(text)) {
+            window.awaitingDMRename = true;
+            addSystemMessage("The DM wants a new name! Type the new name for the DM and press Enter.", false, false, true);
+            debugLog("DM rename mode activated");
+        }
     }
     
     function extractNameFromDMResponse(response) {
         const namePatterns = [
-            /so your name is ([A-Za-z]+)/i,
-            /welcome, ([A-Za-z]+)/i,
-            /hello, ([A-Za-z]+)/i
+            /so your name is (\w+)/i,
+            /welcome, (\w+)/i,
+            /hello, (\w+)/i
         ];
-        
         for (const pattern of namePatterns) {
             const match = response.match(pattern);
-            if (match && match[1]) {
-                return match[1];
-            }
+            if (match && match[1]) return match[1];
         }
-        
         return null;
     }
     
-    // New game button
-    newGameBtn.addEventListener('click', function() {
-        debugLog("New game button clicked - starting new game without confirmation");
+    function removePlayer(playerNumber) {
+        if (playerNumber <= 1) return; // Can't remove Player 1
+        debugLog(`Removing Player ${playerNumber}`);
+        const oldName = playerNames[playerNumber] || `Player ${playerNumber}`;
         
-        try {
-            // Clear existing state
-            currentGameId = null;
-            localStorage.removeItem('currentGameId');
-            
-            // Reset UI and state
-            chatWindow.innerHTML = '';
-            isGenerating = false;
-            awaitingName = true;
-            playerName = null;
-            seenMessages = new Set();
-            
-            // Reset player names
-            playerNames = { 1: null };
-            localStorage.removeItem('playerState');
-            localStorage.removeItem('playerNames');
-            
-            // Reset UI elements
-            isMultiplayerActive = false;
-            
-            // Reset labels
-            const player1Label = document.getElementById('player1-label');
-            if (player1Label) {
-                player1Label.textContent = "Player 1:";
-            }
-            
-            // Clear all additional players
-            additionalPlayersContainer.innerHTML = '';
-            
-            // Reset next player number
-            nextPlayerNumber = 2;
-            
-            // Clear processed message tracking
-            processedMessageIds.clear();
-            
-            // Start completely fresh game
-            createNewGame();
-            
-            // Clear selected player state
+        // Deselect if the removed player was selected
+        if (selectedPlayerNum === playerNumber) {
+            if(selectedPlayerElement) selectedPlayerElement.classList.remove('selected');
             selectedPlayerNum = null;
             selectedPlayerElement = null;
             removePlayerBtn.classList.add('hidden');
-        } catch (err) {
-            debugLog("Error creating new game:", err);
-            addSystemMessage("Error: " + err.message);
         }
-    });
-    
-    // Improved displayMessages function to handle player names better
-    function displayMessages(messages) {
-        debugLog("Displaying messages from history:", messages.length);
-        
-        // Skip if we already have messages in the chat window
-        if (chatWindow.querySelectorAll('.message').length > 0) {
-            debugLog("Chat window already has messages, skipping redisplay");
-            return;
-        }
-        
-        messages.forEach(msg => {
-            if (msg.role === 'assistant') {
-                // DM messages
-                addMessage('DM', msg.content);
-                
-                // Check for player names in DM response
-                checkForPlayerNames(msg.content);
-                const extractedName = extractNameFromDMResponse(msg.content);
-                if (extractedName) {
-                    // Try to match this with a pending player name
-                    if (!playerNames[1]) {
-                        updatePlayerLabel(1, extractedName);
-                    }
-                }
-            }
-            else if (msg.role === 'user') {
-                // Player messages - determine which player
-                let playerNum = 1;
-                if (msg.player && msg.player.startsWith('player')) {
-                    playerNum = parseInt(msg.player.substring(6));
-                }
-                
-                // Use the name if we have it
-                const sender = playerNames[playerNum] || `Player ${playerNum}`;
-                addMessage(sender, msg.content);
-                
-                // Extract name if present and not already set
-                const extractedName = extractName(msg.content);
-                if (extractedName && !playerNames[playerNum]) {
-                    updatePlayerLabel(playerNum, extractedName);
-                }
-            }
-            else if (msg.role === 'system') {
-                // System messages
-                addSystemMessage(msg.content);
-            }
-        });
-        
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
 
-    // Enhanced initialize function to restore player names
-    function initialize() {
-        debugLog("Initializing game");
-        
-        seenMessages.clear();
-        isGenerating = false;
-        
-        // Debug output all player names
-        debugLog("Player names to restore:", playerNames);
-        
-        // First pass - restore labels
-        Object.entries(playerNames).forEach(([numStr, name]) => {
-            if (name) {
-                const playerNum = parseInt(numStr);
-                debugLog(`Restoring player ${playerNum} name: ${name}`);
-                
-                const labelElement = document.getElementById(`player${playerNum}-label`);
-                if (labelElement) {
-                    labelElement.textContent = `${name}:`;
-                }
-            }
-        });
-        
-        // Second pass - restore UI containers for all players
-        Object.entries(playerNames).forEach(([numStr, name]) => {
-            if (name) {
-                const playerNum = parseInt(numStr);
-                
-                // Restore player 2
-                if (playerNum === 2) {
-                    debugLog("Showing Player 2 container");
-                    isMultiplayerActive = true;
-                } 
-                // Restore players 3 and higher
-                else if (playerNum >= 3) {
-                    debugLog(`Checking container for Player ${playerNum}`);
-                    const containerExists = document.getElementById(`player${playerNum}-container`);
-                    if (!containerExists) {
-                        debugLog(`Creating container for Player ${playerNum}`);
-                        const newPlayerContainer = createPlayerInput(playerNum);
-                        additionalPlayersContainer.appendChild(newPlayerContainer);
-                        isMultiplayerActive = true;
-                    } else {
-                        debugLog(`Container for Player ${playerNum} already exists`);
-                    }
-                }
-            }
-        });
-        
-        // Update next player number based on existing player names
-        let maxPlayerNumber = 2; // Start with 2 since Player 1 is default
-        Object.keys(playerNames).forEach(numStr => {
-            const playerNum = parseInt(numStr);
-            if (playerNum > maxPlayerNumber) {
-                maxPlayerNumber = playerNum;
-            }
-        });
-        nextPlayerNumber = maxPlayerNumber + 1;
-        debugLog("Next player number set to:", nextPlayerNumber);
-        
-        // Rest of the function remains unchanged
-        if (!currentGameId) {
-            debugLog("No game ID, creating new game");
-            createNewGame();
-            return;
-        }
-        
-        // Load chat history
-        fetch('/load_history', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                game_id: currentGameId
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            debugLog("Loaded history:", data);
-            
-            if (!data.history || !Array.isArray(data.history)) {
-                throw new Error("Invalid history data");
-            }
-            
-            // Process history data
-            displayMessages(data.history);
-            
-            // Ensure welcome message is displayed
-            ensureWelcomeMessage();
-            
-            // Store session info
-            localStorage.setItem('currentGameId', currentGameId);
-            
-            // Set the initial message count for update checking
-            lastMessageCount = data.history.length;
-            
-            // Focus input
-            userInput.focus();
-        })
-        .catch(error => {
-            debugLog('Error loading history:', error);
-            
-            // Create default welcome message
-            chatWindow.innerHTML = '';
-            addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
-            
-            // Focus input
-            userInput.focus();
-        });
-    }
-
-    function createNewGame() {
-        debugLog("Creating new game");
-        
-        // Reset UI state
-        chatWindow.innerHTML = '';
-        isGenerating = false;
-        
-        // Reset player name
-        playerNames[1] = null;
-        
-        // Create loading message
-        addMessage('DM', 'Creating a new adventure for you...', false);
-        
-        // Request new game from server
-        fetch('/new_game', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({})
-        })
-        .then(response => response.json())
-        .then(data => {
-            debugLog("New game created:", data);
-            
-            if (data.success && data.game_id) {
-                currentGameId = data.game_id;
-                
-                // Store in local storage
-                localStorage.setItem('currentGameId', currentGameId);
-                
-                // Add welcome message
-                addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
-                debugLog("Added welcome message for new game");
-                
-                // Reset message count
-                lastMessageCount = 1; // Start with 1 for the welcome message
-                
-                // Focus input field
-                userInput.focus();
-            } else {
-                throw new Error("Failed to create new game");
-            }
-        })
-        .catch(error => {
-            debugLog("Error creating new game:", error);
-            addSystemMessage("Error: " + error.message);
-            
-            // Add welcome message anyway so user can interact
-            ensureWelcomeMessage();
-        });
-    }
-
-    // Set up event handlers
-    sendBtn.addEventListener('click', function() {
-        sendMessage(userInput, 1);
-    });
-    
-    userInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !isGenerating) {
-            sendMessage(userInput, 1);
-        }
-    });
-    
-    // Set up copy button functionality
-    copyChatBtn.addEventListener('click', function() {
-        const messages = Array.from(chatWindow.querySelectorAll('.message')).map(msg => {
-            const sender = msg.querySelector('span').textContent;
-            const content = msg.querySelector('.message-content').textContent;
-            return `${sender} ${content}`;
-        }).join('\n\n');
-        
-        navigator.clipboard.writeText(messages).then(() => {
-            alert('Chat copied to clipboard!');
-        }).catch(err => {
-            console.error('Failed to copy chat: ', err);
-            alert('Failed to copy chat');
-        });
-    });
-    
-    // Add these variables back
-    let isMultiplayerActive = false;
-
-    // Add function to create dynamic player input for players 3+
-    function createPlayerInput(playerNumber) {
-        debugLog(`Creating input for Player ${playerNumber}`);
-        const playerInputDiv = document.createElement('div');
-        playerInputDiv.className = 'player-input';
-        playerInputDiv.id = `player${playerNumber}-container`;
-        
-        // Add click handler to make this player selectable
-        playerInputDiv.addEventListener('click', function(e) {
-            // Don't trigger when clicking input or button
-            if (!e.target.matches('input') && !e.target.matches('button')) {
-                selectPlayer(playerInputDiv, playerNumber);
-            }
-        });
-        
-        const playerLabelDiv = document.createElement('div');
-        playerLabelDiv.className = 'player-label';
-        playerLabelDiv.id = `player${playerNumber}-label`;
-        playerLabelDiv.textContent = `Player ${playerNumber}:`;
-        
-        const playerInput = document.createElement('input');
-        playerInput.type = 'text';
-        playerInput.id = `player${playerNumber}-input`;
-        playerInput.placeholder = 'Type your message...';
-        playerInput.autocomplete = 'off';
-        playerInput.className = `player${playerNumber}-input`;
-        
-        // Add Enter key functionality
-        playerInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !isGenerating) {
-                sendMessage(playerInput, playerNumber);
-            }
-        });
-        
-        const sendButton = document.createElement('button');
-        sendButton.className = 'action-btn send-btn';
-        sendButton.id = `send-player${playerNumber}-btn`;
-        sendButton.textContent = '📤 Send';
-        sendButton.title = 'Send message';
-        
-        // Add click handler to the button
-        sendButton.addEventListener('click', function() {
-            sendMessage(playerInput, playerNumber);
-        });
-        
-        playerInputDiv.appendChild(playerLabelDiv);
-        playerInputDiv.appendChild(playerInput);
-        playerInputDiv.appendChild(sendButton);
-        
-        return playerInputDiv;
-    }
-
-    // Create function for adding players - handles all players consistently
-    function addPlayer(suggestedPlayerNum) {
-        debugLog(`Add player requested with suggested number: ${suggestedPlayerNum}`);
-        
-        // Don't allow adding more players while generating
-        if (isGenerating) {
-            debugLog("Cannot add player while generating response");
-            return;
-        }
-        
-        // Find the lowest available player number (first gap)
-        let playerNum = 2; // Start checking from Player 2
-        const existingPlayerNumbers = Object.keys(playerNames)
-            .map(num => parseInt(num))
-            .filter(num => num > 1); // Only consider players beyond Player 1
-        
-        // Sort player numbers numerically
-        existingPlayerNumbers.sort((a, b) => a - b);
-        
-        // Find the first gap in player numbers or use the next number after the highest
-        for (let i = 0; i <= existingPlayerNumbers.length; i++) {
-            if (i === existingPlayerNumbers.length || existingPlayerNumbers[i] > playerNum) {
-                // We found a gap or reached the end
-                debugLog(`Found available player number: ${playerNum}`);
-                break;
-            }
-            if (existingPlayerNumbers[i] === playerNum) {
-                // This number is taken, try next number
-                playerNum++;
-            }
-        }
-        
-        debugLog(`Using player number: ${playerNum} (instead of ${suggestedPlayerNum})`);
-        
-        // Check if this player already exists (redundant check but keeping for safety)
-        const existingContainer = document.getElementById(`player${playerNum}-container`);
-        if (existingContainer) {
-            debugLog(`Player ${playerNum} container already exists, this shouldn't happen`);
-            return;
-        }
-        
-        // Create UI for the new player
-        const newPlayerContainer = createPlayerInput(playerNum);
-        additionalPlayersContainer.appendChild(newPlayerContainer);
-        
-        // Initialize this player's name
-        playerNames[playerNum] = null;
-        isMultiplayerActive = true;
-        
-        // Save state right away to avoid losing players on refresh
+        delete playerNames[playerNumber];
+        savePlayerNames();
         savePlayerState();
         
-        // Only notify DM if we have a game
+        const playerContainer = document.getElementById(`player${playerNumber}-container`);
+        if (playerContainer) playerContainer.remove();
+        
+        if (selectedPlayerNum === playerNumber) {
+            selectedPlayerNum = null;
+            selectedPlayerElement = null;
+            removePlayerBtn.classList.add('hidden');
+        }
+        
+        addSystemMessage(`${oldName} (Player ${playerNumber}) has left the game.`, false, false, true);
+        
+        // Notify DM
         if (currentGameId) {
-            // Notify the DM about the new player
-            const joinMessage = `Player ${playerNum} has joined the game. Please enter your name.`;
-            addSystemMessage(joinMessage);
-            
-            // Create loading div for DM's response
-            const loadingDiv = createLoadingDivForDM(
-                `dm-welcome-player${playerNum}`, 
-                `response-text-welcome-player${playerNum}`
-            );
-            
-            // Notify DM - using the specific player number
+            const loadingId = `dm-player-left-${Date.now()}`;
+            const textId = `response-text-player-left-${Date.now()}`;
+            const loadingDiv = createLoadingDivForDM(loadingId, textId);
             isGenerating = true;
             fetch('/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    message: `A new player (Player ${playerNum}) has joined the game. Please welcome Player ${playerNum} specifically and ask for their name.`,
+                    message: `${oldName} (Player ${playerNumber}) has left the game. Please continue the story without them.`,
                     game_id: currentGameId,
                     player_number: 'system',
                     is_system: true
                 })
             })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                debugLog(`Player ${playerNum} welcome response:`, data);
-                if (data && data.message_id) {
-                    sendStreamRequest(data.message_id, loadingDiv);
-                    
-                    // Focus the new player's input field
-                    setTimeout(() => {
-                        const inputField = document.getElementById(`player${playerNum}-input`);
-                        if (inputField) inputField.focus();
-                    }, 100);
-                    
-                    // Update next player number - set it to one higher than the highest existing player number
-                    const maxPlayerNumber = Math.max(...Object.keys(playerNames).map(num => parseInt(num)));
-                    nextPlayerNumber = maxPlayerNumber + 1;
-                    debugLog("Updated nextPlayerNumber to:", nextPlayerNumber);
-                    savePlayerState(); // Save again with updated player number
-                } else {
-                    throw new Error("Invalid response data");
-                }
-            })
-            .catch(error => {
-                debugLog(`Error adding Player ${playerNum}:`, error);
+                if (data && data.message_id) sendStreamRequest(data.message_id, loadingDiv);
+                else isGenerating = false;
+            }).catch(error => {
+                debugLog(`Error notifying DM about player ${playerNumber} leaving:`, error);
                 if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                addSystemMessage(`Error adding Player ${playerNum}: ${error.message}`);
                 isGenerating = false;
             });
-        } else {
-            // Focus on the new input field even if we don't notify the DM
-            setTimeout(() => {
-                const inputField = document.getElementById(`player${playerNum}-input`);
-                if (inputField) inputField.focus();
-            }, 100);
-            
-            // Update next player number in a consistent way
-            const maxPlayerNumber = Math.max(...Object.keys(playerNames).map(num => parseInt(num)));
-            nextPlayerNumber = maxPlayerNumber + 1;
-            debugLog("Updated nextPlayerNumber to:", nextPlayerNumber);
         }
     }
 
-    // Update Add Player button to add the next player, with more debug info
-    addPlayerBtn.addEventListener('click', function() {
-        debugLog("Add Player button clicked. Finding first available player number...");
-        if (isGenerating) {
-            debugLog("Not adding player: AI is generating");
-            return;
-        }
-        // Pass the current nextPlayerNumber, but addPlayer will find the first available number
-        addPlayer(nextPlayerNumber);
-    });
-    
-    // Add a function to check for updates
-    function checkForUpdates() {
-        if (!currentGameId || isCheckingForUpdates || isGenerating) {
-            return; // Don't check if no game is active or already checking or AI is generating
-        }
-        
-        isCheckingForUpdates = true;
-        
-        fetch('/get_updates', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                game_id: currentGameId,
-                last_message_count: lastMessageCount
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Server returned ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success && data.has_updates) {
-                // Process new messages
-                let newMessages = data.updates;
-                let addedMessages = 0;
-                
-                // Append new messages to the chat window
-                newMessages.forEach(msg => {
-                    let wasAdded = false;
-                    
-                    if (msg.role === 'assistant') {
-                        wasAdded = addMessage('DM', msg.content, false, true);
-                        if (wasAdded) checkForPlayerNames(msg.content);
-                    }
-                    else if (msg.role === 'user') {
-                        let playerNum = 1;
-                        if (msg.player && msg.player.startsWith('player')) {
-                            playerNum = parseInt(msg.player.substring(6));
-                        }
-                        
-                        const sender = playerNames[playerNum] || `Player ${playerNum}`;
-                        wasAdded = addMessage(sender, msg.content, false, true);
-                    }
-                    else if (msg.role === 'system') {
-                        addSystemMessage(msg.content, true);
-                        wasAdded = true;
-                    }
-                    
-                    if (wasAdded) addedMessages++;
-                });
-                
-                // Update the message count
-                lastMessageCount = data.message_count;
-                
-                // Check if we need to show other players' inputs
-                if (addedMessages > 0) {
-                    checkForMissingPlayers(newMessages);
-                }
-            } else if (data.success) {
-                // Update our message count if server has a different count
-                if (data.message_count !== lastMessageCount) {
-                    lastMessageCount = data.message_count;
-                }
-            }
-        })
-        .catch(error => {
-            debugLog("Error checking for updates:", error);
-        })
-        .finally(() => {
-            isCheckingForUpdates = false;
-        });
-    }
-
-    // Add this function to check for missing player inputs
-    function checkForMissingPlayers(messages) {
-        // Find unique player numbers from messages
-        const playerNumbers = new Set();
-        
-        messages.forEach(msg => {
-            if (msg.player && msg.player.startsWith('player')) {
-                const playerNum = parseInt(msg.player.substring(6));
-                if (!isNaN(playerNum) && playerNum > 1) {  // Ignore player 1 (self)
-                    playerNumbers.add(playerNum);
-                }
-            }
-        });
-        
-        // For each player number, make sure their input is visible
-        playerNumbers.forEach(playerNum => {
-            // Check if player input exists
-            const containerExists = document.getElementById(`player${playerNum}-container`);
-            if (!containerExists) {
-                const newPlayerContainer = createPlayerInput(playerNum);
-                additionalPlayersContainer.appendChild(newPlayerContainer);
-                
-                // Update nextPlayerNumber if needed
-                if (playerNum >= nextPlayerNumber) {
-                    nextPlayerNumber = playerNum + 1;
-                }
-                
-                isMultiplayerActive = true;
-            }
-        });
-    }
-
-    // FIXED: Completely disable update polling
-    function startUpdatePolling() {
-        // Clear any existing interval
-        if (updateCheckInterval) {
-            clearInterval(updateCheckInterval);
-            updateCheckInterval = null;
-        }
-        
-        // REMOVED: Do NOT even check once - completely disable polling
-        debugLog("Automatic polling is disabled");
-    }
-
-    // Add this missing function that's referenced elsewhere
-    function ensureWelcomeMessage() {
-        debugLog("Ensuring welcome message exists");
-        
-        // Check if the chat window is empty
-        if (chatWindow.children.length === 0) {
-            addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
-            debugLog("Added default welcome message");
-        }
-    }
-
-    // Add this safety check function to ensure all player inputs exist
-    function ensurePlayersExist() {
-        debugLog("Ensuring all player inputs exist");
-        let playerRestorationNeeded = false;
-        
-        Object.entries(playerNames).forEach(([numStr, name]) => {
-            if (!name) return; // Skip players without names
-            
-            const playerNum = parseInt(numStr);
-            if (playerNum === 1) return; // Player 1 always exists
-            
-            // Check if container exists for players 2+
-            const containerExists = document.getElementById(`player${playerNum}-container`);
-            if (!containerExists) {
-                debugLog(`Restoring missing Player ${playerNum} container`);
-                const newPlayerContainer = createPlayerInput(playerNum);
-                additionalPlayersContainer.appendChild(newPlayerContainer);
-                isMultiplayerActive = true;
-                playerRestorationNeeded = true;
-            }
-        });
-        
-        return playerRestorationNeeded;
-    }
-    
-    // Initialize
-    try {
-        if (currentGameId) {
-            debugLog("Restoring session:", currentGameId);
-            initialize();
-        } else {
-            debugLog("No previous session, creating new game");
-            createNewGame();
-        }
-        
-        // Add a final check after delay to ensure welcome message is displayed
-        // and all player inputs are restored
-        setTimeout(() => {
-            ensureWelcomeMessage();
-            ensurePlayersExist();
-        }, 500);
-    } catch (error) {
-        debugLog("Error during initialization:", error);
-        // Add welcome message anyway as fallback
-        ensureWelcomeMessage();
-    }
-    
-    // Enhance player state management with UI state tracking
-    function savePlayerState() {
-        const playerState = {
-            names: playerNames,
-            active: {},
-            nextPlayerNumber: nextPlayerNumber,
-            isMultiplayerActive: isMultiplayerActive
-        };
-        
-        // Save which players are active (have UI)
-        Object.keys(playerNames).forEach(numStr => {
-            const playerNum = parseInt(numStr);
-            
-            // Player 1 is always active
-            if (playerNum === 1) {
-                playerState.active[playerNum] = true;
-                return;
-            }
-            
-            // Check Players 2+
-            if (playerNum >= 2) {
-                const container = document.getElementById(`player${playerNum}-container`);
-                playerState.active[playerNum] = !!container;
-            }
-        });
-        
-        localStorage.setItem('playerState', JSON.stringify(playerState));
-        debugLog("Saved full player state:", playerState);
-    }
-    
-    function loadPlayerState() {
-        try {
-            const saved = localStorage.getItem('playerState');
-            if (saved) {
-                const state = JSON.parse(saved);
-                debugLog("Loaded player state:", state);
-                
-                // Load player names
-                playerNames = state.names || { 1: null, 2: null };
-                
-                // Load nextPlayerNumber
-                if (state.nextPlayerNumber && state.nextPlayerNumber > nextPlayerNumber) {
-                    nextPlayerNumber = state.nextPlayerNumber;
-                }
-                
-                // Load multiplayer status
-                isMultiplayerActive = state.isMultiplayerActive || false;
-                
-                return state;
-            }
-        } catch (e) {
-            debugLog("Error loading player state:", e);
-        }
-        
-        return { names: { 1: null, 2: null }, active: {}, nextPlayerNumber: 3, isMultiplayerActive: false };
-    }
-    
-    // Update savePlayerNames to use savePlayerState
-    function savePlayerNames() {
-        savePlayerState();
-    }
-    
-    // Update updatePlayerLabel function to save full state
-    function updatePlayerLabel(playerNumber, name) {
-        debugLog(`Updating Player ${playerNumber} label to ${name}`);
-        
-        const labelElement = document.getElementById(`player${playerNumber}-label`);
-        if (labelElement) {
-            labelElement.textContent = `${name}:`;
-            playerNames[playerNumber] = name;
-            
-            // Save to localStorage whenever a name is updated
-            savePlayerState();
-        }
-    }
-    
-    // Add beforeunload handler to ensure state is saved before page refresh
-    window.addEventListener('beforeunload', function() {
-        debugLog("Page is being unloaded, saving state...");
-        savePlayerState();
-    });
-    
-    // Enhanced restore players function with retry logic
-    function restorePlayerInputs() {
-        debugLog("Restoring player inputs");
-        const playerState = loadPlayerState();
-        
-        // First make sure the player objects are visible
-        if (playerState.active) {
-            // Restore Players 2+ if active
-            Object.entries(playerState.active).forEach(([numStr, isActive]) => {
-                const playerNum = parseInt(numStr);
-                if (playerNum >= 2 && isActive) {
-                    debugLog(`Restoring Player ${playerNum} (active)`);
-                    const containerExists = document.getElementById(`player${playerNum}-container`);
-                    if (!containerExists) {
-                        const newPlayerContainer = createPlayerInput(playerNum);
-                        additionalPlayersContainer.appendChild(newPlayerContainer);
-                        isMultiplayerActive = true;
-                    }
-                }
-            });
-        }
-        
-        // Then restore player names and labels
-        Object.entries(playerNames).forEach(([numStr, name]) => {
-            if (name) {
-                const playerNum = parseInt(numStr);
-                const labelElement = document.getElementById(`player${playerNum}-label`);
-                if (labelElement) {
-                    labelElement.textContent = `${name}:`;
-                }
-            }
-        });
-        
-        // Set next player number correctly
-        let maxPlayerNumber = 1; // Start with 1 since Player 1 is default
-        Object.keys(playerNames).forEach(numStr => {
-            const playerNum = parseInt(numStr);
-            if (playerNum > maxPlayerNumber) {
-                maxPlayerNumber = playerNum;
-            }
-        });
-        nextPlayerNumber = Math.max(maxPlayerNumber + 1, playerState.nextPlayerNumber || 2);
-        debugLog("Next player number set to:", nextPlayerNumber);
-    }
-    
-    // Improve game ID handling to prevent chat history loss
-    function saveGameId(gameId) {
-        if (!gameId) {
-            debugLog("ERROR: Attempted to save empty game ID");
-            return false;
-        }
-        
-        try {
-            localStorage.setItem('currentGameId', gameId);
-            debugLog("Game ID saved to localStorage:", gameId);
-            
-            // Verify the save was successful
-            const savedId = localStorage.getItem('currentGameId');
-            if (savedId !== gameId) {
-                debugLog("ERROR: Game ID verification failed. Expected:", gameId, "Got:", savedId);
-                return false;
-            }
-            
-            return true;
-        } catch (e) {
-            debugLog("ERROR: Failed to save game ID to localStorage:", e);
-            return false;
-        }
-    }
-    
-    function loadGameId() {
-        try {
-            const gameId = localStorage.getItem('currentGameId');
-            debugLog("Loaded game ID from localStorage:", gameId);
-            return gameId;
-        } catch (e) {
-            debugLog("ERROR: Failed to load game ID from localStorage:", e);
-            return null;
-        }
-    }
-    
-    // Improved chat history loading with retries
-    function loadChatHistory(retryCount = 3) {
-        debugLog(`Loading chat history (attempt ${4-retryCount}/3)...`);
-        
-        if (!currentGameId) {
-            debugLog("Cannot load chat history - no game ID");
-            return Promise.reject(new Error("No game ID available"));
-        }
-        
-        return fetch('/load_history', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                game_id: currentGameId
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            debugLog(`Loaded history with ${data.history ? data.history.length : 0} messages`);
-            
-            if (!data.history || !Array.isArray(data.history)) {
-                throw new Error("Invalid history data");
-            }
-            
-            if (data.history.length === 0 && retryCount > 0) {
-                debugLog("Empty history received, retrying...");
-                // Retry after a short delay
-                return new Promise(resolve => {
-                    setTimeout(() => {
-                        loadChatHistory(retryCount - 1)
-                            .then(resolve)
-                            .catch(e => {
-                                debugLog("Retry failed:", e);
-                                resolve({ history: [] });
-                            });
-                    }, 300);
-                });
-            }
-            
-            return data;
-        });
-    }
-    
-    // Add DOM elements for player removal
-    const removePlayerBtn = document.getElementById('remove-player-btn');
-    let selectedPlayerNum = null;
-    let selectedPlayerElement = null;
-    
-    // Function to handle player selection
     function selectPlayer(playerElement, playerNum) {
-        // Deselect previously selected player if any
+        debugLog(`selectPlayer called for playerNum: ${playerNum}, element:`, playerElement);
         if (selectedPlayerElement) {
             selectedPlayerElement.classList.remove('selected');
+            debugLog("Deselected old:", selectedPlayerElement);
         }
-        
         // If clicking the same player, toggle selection off
         if (selectedPlayerElement === playerElement) {
             selectedPlayerElement = null;
             selectedPlayerNum = null;
-            removePlayerBtn.classList.add('hidden');
-            return;
-        }
-        
-        // Select new player
-        selectedPlayerElement = playerElement;
-        selectedPlayerNum = playerNum;
-        selectedPlayerElement.classList.add('selected');
-        
-        // Only show remove button if not Player 1 (can't remove Player 1)
-        if (playerNum > 1) {
-            removePlayerBtn.classList.remove('hidden');
+            removePlayerBtn.classList.add('hidden'); // Hide remove button when deselected
+            debugLog("Toggled off selection.");
         } else {
-            removePlayerBtn.classList.add('hidden');
+            // Select new player
+            selectedPlayerElement = playerElement;
+            selectedPlayerNum = playerNum;
+            selectedPlayerElement.classList.add('selected');
+            // Only show remove button if not Player 1 (can't remove Player 1)
+            removePlayerBtn.classList.toggle('hidden', playerNum <= 1);
+            debugLog("Selected new:", selectedPlayerElement, "Remove button hidden:", removePlayerBtn.classList.contains('hidden'));
         }
     }
-    
-    // Make Player 1 selectable
-    const player1Container = document.querySelector('.player-input');
-    player1Container.addEventListener('click', function(e) {
-        // Don't trigger when clicking input or button
-        if (!e.target.matches('input') && !e.target.matches('button')) {
-            selectPlayer(player1Container, 1);
-        }
-    });
-    
-    // Function to remove a player
-    function removePlayer(playerNum) {
-        if (playerNum <= 1) {
-            debugLog("Cannot remove Player 1");
-            return; // Can't remove Player 1
-        }
-        
-        if (isGenerating) {
-            debugLog("Cannot remove player while generating a response");
-            return;
-        }
-        
-        debugLog(`Removing Player ${playerNum}`);
-        
-        // Get player name for notification
-        const playerName = playerNames[playerNum] || `Player ${playerNum}`;
-        
-        // Remove the player container
-        const containerToRemove = document.getElementById(`player${playerNum}-container`);
-        if (containerToRemove) {
-            containerToRemove.remove();
-        }
-        
-        // Remove from player names
-        delete playerNames[playerNum];
-        
-        // Check if there are still other players (besides 1)
-        let otherPlayersExist = false;
-        Object.keys(playerNames).forEach(num => {
-            if (parseInt(num) >= 2 && playerNames[num]) {
-                otherPlayersExist = true;
+
+    // Event Listeners
+    if (userInput && sendBtn) {
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !isGenerating) {
+                e.preventDefault();
+                sendMessage(userInput, 1);
             }
         });
-        
-        // Update multiplayer flag
-        isMultiplayerActive = otherPlayersExist;
-        
-        // Hide remove button
-        removePlayerBtn.classList.add('hidden');
-        selectedPlayerNum = null;
-        selectedPlayerElement = null;
-        
-        // Save the updated player state
-        savePlayerState();
-        
-        // Notify the DM about the player leaving
-        if (currentGameId) {
-            // Add system message
-            addSystemMessage(`${playerName} has left the game.`);
-            
-            // Create loading div for DM's response
-            const loadingDiv = createLoadingDivForDM(
-                `dm-goodbye-player${playerNum}`,
-                `response-text-goodbye-player${playerNum}`
-            );
-            
-            // Notify DM
-            isGenerating = true;
-            fetch('/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    message: `${playerName} has left the adventure. Please acknowledge their departure.`,
-                    game_id: currentGameId,
-                    player_number: 'system',
-                    is_system: true
-                })
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                return response.json();
-            })
-            .then(data => {
-                debugLog(`Player ${playerNum} departure response:`, data);
-                if (data && data.message_id) {
-                    sendStreamRequest(data.message_id, loadingDiv);
-                } else {
-                    throw new Error("Invalid response data");
-                }
-            })
-            .catch(error => {
-                debugLog(`Error handling Player ${playerNum} departure:`, error);
-                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                addSystemMessage(`Error: ${error.message}`);
-                isGenerating = false;
-            });
-        }
+        sendBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (!isGenerating) sendMessage(userInput, 1);
+        });
     }
-    
-    // Add click handler for Remove Player button
-    removePlayerBtn.addEventListener('click', function() {
-        if (selectedPlayerNum && selectedPlayerNum > 1) {
-            removePlayer(selectedPlayerNum);
-        }
-    });
 
-    // Update the load game ID at startup
-    currentGameId = loadGameId();
-    
-    // Initialize with delayed retries on startup
-    try {
-        if (currentGameId) {
-            debugLog("Restoring session:", currentGameId);
-            initialize();
-            
-            // Add a second attempt after a delay to ensure history loads
-            setTimeout(() => {
-                if (chatWindow.children.length === 0) {
-                    debugLog("Chat still empty after init, trying again");
-                    loadChatHistory()
-                        .then(data => {
-                            displayMessages(data.history);
-                            ensureWelcomeMessage();
-                        })
-                        .catch(() => ensureWelcomeMessage());
-                }
-            }, 1000);
-        } else {
-            debugLog("No previous session, creating new game");
-            createNewGame();
-        }
-        
-        // Add final checks
-        setTimeout(() => {
-            ensureWelcomeMessage();
-            ensurePlayersExist();
-            
-            // Extra verification that we have content
-            if (chatWindow.children.length === 0 && currentGameId) {
-                debugLog("WARNING: Chat still empty after all attempts");
-                addMessage('DM', "Hello adventurer! Let's begin your quest. What is your name?", false);
-            }
-        }, 2000);
-    } catch (error) {
-        debugLog("Error during initialization:", error);
-        ensureWelcomeMessage();
+    // Add click listener for Player 1's container for selection
+    if (player1Container) {
+        player1Container.addEventListener('click', () => selectPlayer(player1Container, 1));
     }
+
+    if (newGameBtn) newGameBtn.addEventListener('click', createNewGame);
+    if (addPlayerBtn) addPlayerBtn.addEventListener('click', addPlayer);
+    if (removePlayerBtn) {
+        removePlayerBtn.addEventListener('click', function() {
+            if (selectedPlayerNum && selectedPlayerNum > 1) {
+                removePlayer(selectedPlayerNum);
+            }
+        });
+    }
+    if (undoBtn) undoBtn.addEventListener('click', undoChat);
+    if (redoBtn) redoBtn.addEventListener('click', redoChat);
+    
+    if (diceBtn) {
+        diceBtn.addEventListener('click', function() {
+            const p1Name = playerNames[1] || "Player 1";
+            const diceCommandInput = { value: "/roll 1d20" };
+            addMessage(p1Name, "rolls 1d20...");
+            sendMessage(diceCommandInput, 1);
+        });
+    }
+    
+    if (copyChatBtn) {
+        copyChatBtn.addEventListener('click', function() {
+            let chatText = "";
+            chatWindow.querySelectorAll('.message').forEach(msgDiv => {
+                const sender = msgDiv.querySelector('.message-sender').textContent;
+                const content = msgDiv.querySelector('.message-content').textContent;
+                chatText += `${sender} ${content}\n`;
+            });
+            navigator.clipboard.writeText(chatText.trim())
+                .then(() => addSystemMessage("Chat copied to clipboard!", false, true, true))
+                .catch(err => addSystemMessage("Failed to copy chat.", false, true, true));
+        });
+    }
+    
+    if (menuToggleBtn && sideMenu) {
+        menuToggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            sideMenu.classList.toggle('open');
+            const icon = menuToggleBtn.querySelector('i');
+            if (icon) {
+                if (sideMenu.classList.contains('open')) {
+                    icon.classList.remove('fa-bars');
+                    icon.classList.add('fa-times');
+                } else {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            }
+        });
+    }
+
+    // Initial setup - clean and clear flow
+    if (currentGameId) {
+        debugLog("Restoring session:", currentGameId);
+        initialize();
+    } else {
+        debugLog("No previous gameId. Setting up for a new game implicitly.");
+        messageHistory = [];
+        historyIndex = -1;
+        localStorage.removeItem('chatHistory');
+        chatWindow.innerHTML = '';
+        addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
+        updateUndoRedoButtons();
+    }
+    
+    window.sendMessage = sendMessage;
+
+    debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
 });

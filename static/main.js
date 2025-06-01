@@ -612,6 +612,358 @@ document.addEventListener('DOMContentLoaded', function() {
         return false; // Indicates messages already existed
     }
 
+    // --- START: Placeholder/Basic Implementations for Missing Functions ---
+    function extractName(message) {
+        if (!message || typeof message !== 'string') return null;
+        
+        // Look for common ways people introduce themselves
+        const namePatterns = [
+            /my name is (\w+)/i,
+            /i am (\w+)/i,
+            /call me (\w+)/i, 
+            /name's (\w+)/i,
+            /i'm (\w+)/i,
+            /^(\w+) is my name/i,
+            /^(\w+)$/i // Just a name with nothing else
+        ];
+        
+        for (const pattern of namePatterns) {
+            const match = message.match(pattern);
+            if (match && match[1]) {
+                const name = match[1];
+                // Only accept properly capitalized words as names
+                if (name.charAt(0) === name.charAt(0).toUpperCase() && name.length > 1) {
+                    debugLog(`Extracted name from user message: ${name}`);
+                    return name;
+                }
+            }
+        }
+        return null;
+    }
+
+    function savePlayerState() {
+        // Saves current player names and next player number to localStorage
+        const state = {
+            names: playerNames,
+            nextPlayerNumber: nextPlayerNumber,
+            isMultiplayerActive: isMultiplayerActive, // Now uses global variable
+            dmName: dmName // Now uses global variable
+        };
+        localStorage.setItem('playerState', JSON.stringify(state));
+        debugLog("Player state saved:", state);
+    }
+    
+    function initializeHistory() {
+        // Placeholder: Load history from localStorage or start fresh
+        const savedHistory = localStorage.getItem('chatHistory');
+        if (savedHistory) {
+            try {
+                messageHistory = JSON.parse(savedHistory);
+                historyIndex = messageHistory.length - 1;
+            } catch (e) {
+                debugLog("Error parsing chatHistory from localStorage:", e);
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Clear corrupted history
+            }
+        } else {
+            messageHistory = [];
+            historyIndex = -1;
+        }
+        
+        debugLog(`initializeHistory: Loaded ${messageHistory.length} states. Current index: ${historyIndex}`);
+        
+        // Initial save of current (empty or welcome) state if history is empty
+        if (messageHistory.length === 0 && chatWindow.children.length > 0) {
+            debugLog("initializeHistory: Chat window has children, but history is empty. Saving initial state.");
+            setTimeout(saveChatState, 100); // Allow DOM to settle
+        } else {
+            updateUndoRedoButtons();
+        }
+    }
+
+    function initialize() {
+        debugLog("Initializing application state...");
+        const loadedState = loadPlayerState(); // Ensure this also loads playerNames
+        
+        // Restore DM name if saved
+        if (loadedState && loadedState.dmName) {
+            dmName = loadedState.dmName;
+            document.querySelectorAll('.dm-message .message-sender').forEach(span => {
+                span.textContent = `${dmName}: `;
+            });
+        }
+
+        // Load chat history for the current game
+        fetch('/load_history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: currentGameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.history && data.history.length > 0) {
+                displayMessages(data.history);
+            } else {
+                ensureWelcomeMessage(); // Ensure welcome message if history is empty
+            }
+            initializeHistory(); // Initialize undo/redo history AFTER messages are loaded
+            updateUndoRedoButtons();
+        })
+        .catch(error => {
+            debugLog("Error loading chat history:", error);
+            ensureWelcomeMessage();
+            initializeHistory();
+            updateUndoRedoButtons();
+        });
+
+        // Update next player number
+        nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
+        updateUndoRedoButtons();
+    }
+
+    function createNewGame() {
+        debugLog("Creating new game...");
+        fetch('/new_game', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.game_id) {
+                currentGameId = data.game_id;
+                localStorage.setItem('currentGameId', currentGameId);
+                chatWindow.innerHTML = ''; // Clear chat window
+                playerNames = { 1: null }; // Reset player names
+                nextPlayerNumber = 2;
+                dmName = "DM"; // Reset DM name
+                savePlayerNames();
+                savePlayerState(); // Save reset state
+                
+                // Clear and reset history for the new game
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Remove old history from storage
+
+                // Directly add the welcome message for a new game
+                // skipHistory = false so it becomes the first state in the new history
+                addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false); 
+                
+                // Remove additional player inputs
+                additionalPlayersContainer.innerHTML = '';
+                // Reset Player 1 label and input
+                const p1Label = document.getElementById('player1-label');
+                if (p1Label) p1Label.textContent = 'Player 1:';
+                if (userInput) userInput.value = '';
+
+                // Reinitialize PlayerManager with new game data
+                PlayerManager.setup({
+                    playerNames: playerNames,
+                    nextPlayerNumber: nextPlayerNumber,
+                    additionalPlayersContainer: additionalPlayersContainer,
+                    removePlayerBtn: removePlayerBtn,
+                    currentGameId: currentGameId,
+                    debugLog: debugLog,
+                    addSystemMessage: addSystemMessage,
+                    createLoadingDivForDM: createLoadingDivForDM, 
+                    sendStreamRequest: sendStreamRequest,
+                    savePlayerNames: savePlayerNames,
+                    savePlayerState: savePlayerState
+                });
+
+                addSystemMessage("✨ New game started! Adventure awaits... ✨", false, false, true); // This will also save state
+                updateUndoRedoButtons(); // Explicitly update buttons after history reset
+            } else {
+                addSystemMessage("Error starting new game.", false, false, true);
+            }
+        })
+        .catch(error => {
+            debugLog("Error creating new game:", error);
+            addSystemMessage("Error connecting to server to start new game.", false, false, true);
+        });
+    }
+
+    function ensureWelcomeMessage() {
+        if (chatWindow.children.length === 0) {
+            addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, true);
+            return true; // Indicates welcome message was added
+        }
+        return false; // Indicates messages already existed
+    }
+
+    // --- START: Placeholder/Basic Implementations for Missing Functions ---
+    function extractName(message) {
+        if (!message || typeof message !== 'string') return null;
+        
+        // Look for common ways people introduce themselves
+        const namePatterns = [
+            /my name is (\w+)/i,
+            /i am (\w+)/i,
+            /call me (\w+)/i, 
+            /name's (\w+)/i,
+            /i'm (\w+)/i,
+            /^(\w+) is my name/i,
+            /^(\w+)$/i // Just a name with nothing else
+        ];
+        
+        for (const pattern of namePatterns) {
+            const match = message.match(pattern);
+            if (match && match[1]) {
+                const name = match[1];
+                // Only accept properly capitalized words as names
+                if (name.charAt(0) === name.charAt(0).toUpperCase() && name.length > 1) {
+                    debugLog(`Extracted name from user message: ${name}`);
+                    return name;
+                }
+            }
+        }
+        return null;
+    }
+
+    function savePlayerState() {
+        // Saves current player names and next player number to localStorage
+        const state = {
+            names: playerNames,
+            nextPlayerNumber: nextPlayerNumber,
+            isMultiplayerActive: isMultiplayerActive, // Now uses global variable
+            dmName: dmName // Now uses global variable
+        };
+        localStorage.setItem('playerState', JSON.stringify(state));
+        debugLog("Player state saved:", state);
+    }
+    
+    function initializeHistory() {
+        // Placeholder: Load history from localStorage or start fresh
+        const savedHistory = localStorage.getItem('chatHistory');
+        if (savedHistory) {
+            try {
+                messageHistory = JSON.parse(savedHistory);
+                historyIndex = messageHistory.length - 1;
+            } catch (e) {
+                debugLog("Error parsing chatHistory from localStorage:", e);
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Clear corrupted history
+            }
+        } else {
+            messageHistory = [];
+            historyIndex = -1;
+        }
+        
+        debugLog(`initializeHistory: Loaded ${messageHistory.length} states. Current index: ${historyIndex}`);
+        
+        // Initial save of current (empty or welcome) state if history is empty
+        if (messageHistory.length === 0 && chatWindow.children.length > 0) {
+            debugLog("initializeHistory: Chat window has children, but history is empty. Saving initial state.");
+            setTimeout(saveChatState, 100); // Allow DOM to settle
+        } else {
+            updateUndoRedoButtons();
+        }
+    }
+
+    function initialize() {
+        debugLog("Initializing application state...");
+        const loadedState = loadPlayerState(); // Ensure this also loads playerNames
+        
+        // Restore DM name if saved
+        if (loadedState && loadedState.dmName) {
+            dmName = loadedState.dmName;
+            document.querySelectorAll('.dm-message .message-sender').forEach(span => {
+                span.textContent = `${dmName}: `;
+            });
+        }
+
+        // Load chat history for the current game
+        fetch('/load_history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: currentGameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.history && data.history.length > 0) {
+                displayMessages(data.history);
+            } else {
+                ensureWelcomeMessage(); // Ensure welcome message if history is empty
+            }
+            initializeHistory(); // Initialize undo/redo history AFTER messages are loaded
+            updateUndoRedoButtons();
+        })
+        .catch(error => {
+            debugLog("Error loading chat history:", error);
+            ensureWelcomeMessage();
+            initializeHistory();
+            updateUndoRedoButtons();
+        });
+
+        // Update next player number
+        nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
+        updateUndoRedoButtons();
+    }
+
+    function createNewGame() {
+        debugLog("Creating new game...");
+        fetch('/new_game', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.game_id) {
+                currentGameId = data.game_id;
+                localStorage.setItem('currentGameId', currentGameId);
+                chatWindow.innerHTML = ''; // Clear chat window
+                playerNames = { 1: null }; // Reset player names
+                nextPlayerNumber = 2;
+                dmName = "DM"; // Reset DM name
+                savePlayerNames();
+                savePlayerState(); // Save reset state
+                
+                // Clear and reset history for the new game
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Remove old history from storage
+
+                // Directly add the welcome message for a new game
+                // skipHistory = false so it becomes the first state in the new history
+                addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false); 
+                
+                // Remove additional player inputs
+                additionalPlayersContainer.innerHTML = '';
+                // Reset Player 1 label and input
+                const p1Label = document.getElementById('player1-label');
+                if (p1Label) p1Label.textContent = 'Player 1:';
+                if (userInput) userInput.value = '';
+
+                // Reinitialize PlayerManager with new game data
+                PlayerManager.setup({
+                    playerNames: playerNames,
+                    nextPlayerNumber: nextPlayerNumber,
+                    additionalPlayersContainer: additionalPlayersContainer,
+                    removePlayerBtn: removePlayerBtn,
+                    currentGameId: currentGameId,
+                    debugLog: debugLog,
+                    addSystemMessage: addSystemMessage,
+                    createLoadingDivForDM: createLoadingDivForDM, 
+                    sendStreamRequest: sendStreamRequest,
+                    savePlayerNames: savePlayerNames,
+                    savePlayerState: savePlayerState
+                });
+
+                addSystemMessage("✨ New game started! Adventure awaits... ✨", false, false, true); // This will also save state
+                updateUndoRedoButtons(); // Explicitly update buttons after history reset
+            } else {
+                addSystemMessage("Error starting new game.", false, false, true);
+            }
+        })
+        .catch(error => {
+            debugLog("Error creating new game:", error);
+            addSystemMessage("Error connecting to server to start new game.", false, false, true);
+        });
+    }
+
+    function ensureWelcomeMessage() {
+        if (chatWindow.children.length === 0) {
+            addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, true);
+            return true; // Indicates welcome message was added
+        }
+        return false; // Indicates messages already existed
+    }
+
     // --- END: Placeholder/Basic Implementations ---
 
     // --- Chat message handling ---
@@ -816,6 +1168,414 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ADD MISSING FUNCTIONS
+    function displayMessages(messages) {
+        if (!Array.isArray(messages)) {
+            debugLog("Invalid messages array:", messages);
+            return;
+        }
+        chatWindow.innerHTML = ''; // Clear existing messages
+        messages.forEach(msg => {
+            if (msg.role === "assistant" || msg.type === "dm") {
+                // Process the content with formatting tags
+                addMessage(dmName, msg.content, false, true, true, true); // isHTML=true to preserve formatting
+            } else if (msg.role === "user" || msg.type === "player") {
+                // Extract player number or use sender name directly
+                let senderName = msg.sender;
+                if (!senderName && msg.player) {
+                    senderName = playerNames[msg.player.replace('player','')] || msg.player;
+                }
+                addMessage(senderName || `Player ${msg.player_number || 1}`, msg.content, false, true, true);
+            } else if (msg.role === "system" || msg.type === "system") {
+                addSystemMessage(msg.content, true, true);
+            }
+        });
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    function restoreChatState(index) {
+        if (index < 0 || index >= messageHistory.length) {
+            debugLog(`Invalid history index for restore: ${index}. History length: ${messageHistory.length}`);
+            return;
+        }
+        
+        const state = messageHistory[index];
+        debugLog(`Restoring chat state from history index ${index}. State contains ${state.length} messages.`);
+        
+        chatWindow.innerHTML = ''; // Clear chat window
+        
+        state.forEach(msg => {
+            if (msg.type === 'system') {
+                addSystemMessage(msg.content, true, true); // fromUpdate = true, skipHistory = true
+            } else if (msg.type === 'dm') {
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(dmName, content, false, true, true, true); // Added parameter to indicate HTML content
+            } else { // player message
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(msg.sender, content, false, true, true, true); // Added parameter to indicate HTML content
+            }
+        });
+        
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
+        const role = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm') ? 'assistant' : 'user';
+        if (!fromUpdate && messageExists(role, text)) {
+            debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
+            return false;
+        }
+        
+        lastPlayerMessages[sender] = text;
+        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
+        
+        const msgDiv = document.createElement('div');
+        const isDMMessage = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm');
+        msgDiv.className = `message ${isDMMessage ? 'dm-message' : 'player-message'}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${sender}: `;
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        
+        if (isHTML) {
+            // If content is already HTML, use it directly
+            contentSpan.innerHTML = text;
+        } else {
+            // Process formatted content with spell tags
+            const formattedText = processFormattedText(text);
+            contentSpan.innerHTML = formattedText; // Use innerHTML to render HTML tags
+        }
+        
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        if (!skipHistory) {
+            setTimeout(saveChatState, 0);
+        }
+        return true;
+    }
+
+    // Enhanced processFormattedText function that handles all formatting cases
+    function processFormattedText(text) {
+        if (!text) return '';
+        
+        // Check if the text already contains proper HTML formatting
+        if (/<span class="(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)">/.test(text)) {
+            return text; // Already formatted with HTML, return as is
+        }
+        
+        // Escape HTML first to prevent XSS
+        let processedText = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        
+        // Process spell tags [type]...[/type]
+        const spellTypes = ['fire', 'ice', 'lightning', 'poison', 'acid', 'radiant', 
+                            'necrotic', 'psychic', 'thunder', 'force'];
+        
+        for (const type of spellTypes) {
+            const regex = new RegExp(`\\[${type}\\](.*?)\\[\\/${type}\\]`, 'gi');
+            processedText = processedText.replace(regex, `<span class="${type}">$1</span>`);
+        }
+        
+        // Process emphasis tags from markdown format
+        processedText = processedText
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
+    
+        return processedText;
+    }
+
+    function addSystemMessage(text, fromUpdate = false, skipHistory = false, isTemporary = false) {
+        if (!fromUpdate && messageExists('system', text)) {
+            debugLog("Skipping duplicate system message");
+            return;
+        }
+        
+        debugLog("Adding system message:", text);
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system-message' + (isTemporary ? ' temporary-message' : '');
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = "SYSTEM: ";
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        if (isTemporary) {
+            setTimeout(() => msgDiv.remove(), 8000);
+        }
+        
+        if (!skipHistory) {
+            setTimeout(saveChatState, 0);
+        }
+    }
+    
+    // --- START: Placeholder/Basic Implementations ---
+
+    // Functions for saving/loading player names from localStorage
+    function savePlayerNames() {
+        localStorage.setItem('playerNames', JSON.stringify(playerNames));
+        debugLog("Player names saved:", playerNames);
+    }
+    
+    function loadPlayerNames() {
+        try {
+            const saved = localStorage.getItem('playerNames');
+            if (saved) {
+                const loaded = JSON.parse(saved);
+                // Ensure it's an object, not null or undefined
+                return typeof loaded === 'object' && loaded !== null ? loaded : { 1: null };
+            }
+        } catch (e) {
+            debugLog("Error loading player names:", e);
+        }
+        return { 1: null }; // Default for Player 1
+    }
+    
+    function loadPlayerState() {
+        try {
+            const saved = localStorage.getItem('playerState');
+            if (saved) {
+                const state = JSON.parse(saved);
+                if (state.names) playerNames = state.names; 
+                else playerNames = {1: null};
+                nextPlayerNumber = state.nextPlayerNumber || Math.max(...Object.keys(playerNames).map(Number)) + 1 || 2;
+                isMultiplayerActive = state.isMultiplayerActive || false;
+                if (state.dmName) dmName = state.dmName;
+                return state;
+            }
+        } catch (e) { 
+            debugLog("Error loading player state:", e); 
+        }
+        playerNames = {1: null};
+        nextPlayerNumber = 2;
+        return { names: { 1: null }, nextPlayerNumber: 2, isMultiplayerActive: false, dmName: "DM" };
+    }
+    
+    // ADD MISSING FUNCTIONS
+    function displayMessages(messages) {
+        if (!Array.isArray(messages)) {
+            debugLog("Invalid messages array:", messages);
+            return;
+        }
+        chatWindow.innerHTML = ''; // Clear existing messages
+        messages.forEach(msg => {
+            if (msg.role === "assistant" || msg.type === "dm") {
+                // Process the content with formatting tags
+                addMessage(dmName, msg.content, false, true, true, true); // isHTML=true to preserve formatting
+            } else if (msg.role === "user" || msg.type === "player") {
+                // Extract player number or use sender name directly
+                let senderName = msg.sender;
+                if (!senderName && msg.player) {
+                    senderName = playerNames[msg.player.replace('player','')] || msg.player;
+                }
+                addMessage(senderName || `Player ${msg.player_number || 1}`, msg.content, false, true, true);
+            } else if (msg.role === "system" || msg.type === "system") {
+                addSystemMessage(msg.content, true, true);
+            }
+        });
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    
+    function restoreChatState(index) {
+        if (index < 0 || index >= messageHistory.length) {
+            debugLog(`Invalid history index for restore: ${index}. History length: ${messageHistory.length}`);
+            return;
+        }
+        
+        const state = messageHistory[index];
+        debugLog(`Restoring chat state from history index ${index}. State contains ${state.length} messages.`);
+        
+        chatWindow.innerHTML = ''; // Clear chat window
+        
+        state.forEach(msg => {
+            if (msg.type === 'system') {
+                addSystemMessage(msg.content, true, true); // fromUpdate = true, skipHistory = true
+            } else if (msg.type === 'dm') {
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(dmName, content, false, true, true, true); // Added parameter to indicate HTML content
+            } else { // player message
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(msg.sender, content, false, true, true, true); // Added parameter to indicate HTML content
+            }
+        });
+        
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
+        const role = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm') ? 'assistant' : 'user';
+        if (!fromUpdate && messageExists(role, text)) {
+            debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
+            return false;
+        }
+        
+        lastPlayerMessages[sender] = text;
+        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
+        
+        const msgDiv = document.createElement('div');
+        const isDMMessage = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm');
+        msgDiv.className = `message ${isDMMessage ? 'dm-message' : 'player-message'}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${sender}: `;
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        
+        if (isHTML) {
+            // If content is already HTML, use it directly
+            contentSpan.innerHTML = text;
+        } else {
+            // Process formatted content with spell tags
+            const formattedText = processFormattedText(text);
+            contentSpan.innerHTML = formattedText; // Use innerHTML to render HTML tags
+        }
+        
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        if (!skipHistory) {
+            setTimeout(saveChatState, 0);
+        }
+        return true;
+    }
+
+    // Enhanced processFormattedText function that handles all formatting cases
+    function processFormattedText(text) {
+        if (!text) return '';
+        
+        // Check if the text already contains proper HTML formatting
+        if (/<span class="(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)">/.test(text)) {
+            return text; // Already formatted with HTML, return as is
+        }
+        
+        // Escape HTML first to prevent XSS
+        let processedText = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        
+        // Process spell tags [type]...[/type]
+        const spellTypes = ['fire', 'ice', 'lightning', 'poison', 'acid', 'radiant', 
+                            'necrotic', 'psychic', 'thunder', 'force'];
+        
+        for (const type of spellTypes) {
+            const regex = new RegExp(`\\[${type}\\](.*?)\\[\\/${type}\\]`, 'gi');
+            processedText = processedText.replace(regex, `<span class="${type}">$1</span>`);
+        }
+        
+        // Process emphasis tags from markdown format
+        processedText = processedText
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
+    
+        return processedText;
+    }
+
+    function addSystemMessage(text, fromUpdate = false, skipHistory = false, isTemporary = false) {
+        if (!fromUpdate && messageExists('system', text)) {
+            debugLog("Skipping duplicate system message");
+            return;
+        }
+        
+        debugLog("Adding system message:", text);
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system-message' + (isTemporary ? ' temporary-message' : '');
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = "SYSTEM: ";
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        if (isTemporary) {
+            setTimeout(() => msgDiv.remove(), 8000);
+        }
+        
+        if (!skipHistory) {
+            setTimeout(saveChatState, 0);
+        }
+    }
+    
+    // --- START: Placeholder/Basic Implementations ---
+
+    // Functions for saving/loading player names from localStorage
+    function savePlayerNames() {
+        localStorage.setItem('playerNames', JSON.stringify(playerNames));
+        debugLog("Player names saved:", playerNames);
+    }
+    
+    function loadPlayerNames() {
+        try {
+            const saved = localStorage.getItem('playerNames');
+            if (saved) {
+                const loaded = JSON.parse(saved);
+                // Ensure it's an object, not null or undefined
+                return typeof loaded === 'object' && loaded !== null ? loaded : { 1: null };
+            }
+        } catch (e) {
+            debugLog("Error loading player names:", e);
+        }
+        return { 1: null }; // Default for Player 1
+    }
+    
+    function loadPlayerState() {
+        try {
+            const saved = localStorage.getItem('playerState');
+            if (saved) {
+                const state = JSON.parse(saved);
+                if (state.names) playerNames = state.names; 
+                else playerNames = {1: null};
+                nextPlayerNumber = state.nextPlayerNumber || Math.max(...Object.keys(playerNames).map(Number)) + 1 || 2;
+                isMultiplayerActive = state.isMultiplayerActive || false;
+                if (state.dmName) dmName = state.dmName;
+                return state;
+            }
+        } catch (e) { 
+            debugLog("Error loading player state:", e); 
+        }
+        playerNames = {1: null};
+        nextPlayerNumber = 2;
+        return { names: { 1: null }, nextPlayerNumber: 2, isMultiplayerActive: false, dmName: "DM" };
+    }
+    
+    // --- END: Placeholder/Basic Implementations ---
+
+    // Add tracking for last undone message
+    let lastUndoneMessage = null;
+    let lastUndonePlayerNumber = 1;
+    
+    // --- Chat message handling ---
     function displayMessages(messages) {
         if (!Array.isArray(messages)) {
             debugLog("Invalid messages array:", messages);
@@ -1280,8 +2040,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function updateUndoRedoButtons() {
         if (undoBtn && redoBtn) {
+            // Undo is available if we have history to go back to
             undoBtn.disabled = historyIndex <= 0;
-            redoBtn.disabled = historyIndex >= messageHistory.length - 1;
+            
+            // Redo is available if we have an undone message to resend
+            redoBtn.disabled = !lastUndoneMessage;
+            
+            // Update styles
             undoBtn.style.opacity = undoBtn.disabled ? '0.5' : '1';
             redoBtn.style.opacity = redoBtn.disabled ? '0.5' : '1';
         }
@@ -1353,6 +2118,41 @@ document.addEventListener('DOMContentLoaded', function() {
             if(isGenerating) addSystemMessage("Please wait for the current action to complete before undoing.",false,true,true);
             return;
         }
+        
+        // Store the last message from the current state before undoing
+        // This will be used for the redo operation
+        const currentState = messageHistory[historyIndex];
+        if (currentState && currentState.length > 0) {
+            // Find the last player message in the current state
+            // We need to iterate backwards to find the most recent player message
+            for (let i = currentState.length - 1; i >= 0; i--) {
+                if (currentState[i].type === 'player') {
+                    // Found a player message, save it
+                    lastUndoneMessage = currentState[i].content;
+                    
+                    // Try to determine which player sent this message
+                    const sender = currentState[i].sender;
+                    // Look for player number in the name, e.g., "Player 2"
+                    const playerMatch = sender.match(/Player (\d+)/i);
+                    if (playerMatch && playerMatch[1]) {
+                        lastUndonePlayerNumber = parseInt(playerMatch[1]);
+                    } else {
+                        // If no player number found, check our player names
+                        for (const [num, name] of Object.entries(playerNames)) {
+                            if (name === sender) {
+                                lastUndonePlayerNumber = parseInt(num);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    debugLog(`Stored last player message for redo: "${lastUndoneMessage}" from player ${lastUndonePlayerNumber}`);
+                    break;
+                }
+            }
+        }
+        
+        // Continue with regular undo operation
         historyIndex--;
         debugLog(`Undo: historyIndex changed to ${historyIndex}`);
         restoreChatState(historyIndex);
@@ -1390,182 +2190,77 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function redoChat() {
-        debugLog(`Redo requested. historyIndex: ${historyIndex}, messageHistory.length: ${messageHistory.length}, isGenerating: ${isGenerating}`);
-        if (historyIndex >= messageHistory.length - 1 || isGenerating) {
-            if(isGenerating) addSystemMessage("Please wait for the current action to complete before redoing.",false,true,true);
+        debugLog(`Redo requested. lastUndoneMessage: ${lastUndoneMessage}, isGenerating: ${isGenerating}`);
+        
+        // Block if we're already generating or if there's no undone message to resend
+        if (isGenerating || !lastUndoneMessage) {
+            if (isGenerating) {
+                addSystemMessage("Please wait for the current action to complete before redoing.", false, true, true);
+            } else if (!lastUndoneMessage) {
+                addSystemMessage("Nothing to redo.", false, true, true);
+            }
             return;
         }
-        historyIndex++;
-        debugLog(`Redo: historyIndex changed to ${historyIndex}`);
-        restoreChatState(historyIndex);
-        updateUndoRedoButtons();
         
-        if (currentGameId) {
-            const loadingId = `dm-redo-${Date.now()}`;
-            const textId = `response-text-redo-${Date.now()}`;
-            const loadingDiv = createLoadingDivForDM(loadingId, textId);
-            debugLog("Setting isGenerating = true (redoChat)");
-            isGenerating = true;
-            fetch('/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    message: "A previously undone action was restored. Please update the story accordingly.",
-                    game_id: currentGameId,
-                    player_number: 'system',
-                    is_system: true
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.message_id) sendStreamRequest(data.message_id, loadingDiv); // isGenerating reset by sendStreamRequest
-                else {
-                    debugLog("Setting isGenerating = false (redoChat - no message_id)");
-                    isGenerating = false; 
-                }
-            }).catch(() => {
-                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                debugLog("Setting isGenerating = false (redoChat - catch)");
-                isGenerating = false;
-            });
-        }
+        // Create a temporary input element to hold the last undone message
+        const tempInput = { value: lastUndoneMessage };
+        
+        // Send the last undone message directly
+        debugLog(`Redoing by resending message: "${lastUndoneMessage}" from player ${lastUndonePlayerNumber}`);
+        
+        // Add a system message to explain what's happening
+        addSystemMessage(`Redoing your previous action...`, false, false, true);
+        
+        // Send the message
+        sendMessage(tempInput, lastUndonePlayerNumber);
+        
+        // Clear the lastUndoneMessage since we've used it
+        lastUndoneMessage = null;
+        
+        // Update the undo/redo buttons
+        updateUndoRedoButtons();
     }
     
-    function checkForPlayerNames(text) {
-        debugLog("Checking for player names in: " + text.substring(0, 50) + "...");
-        
-        // First look for exact pattern: "Player X is now named Y"
-        // This only executes when the player has provided their name first!
-        if (/Player \d+ is now named/.test(text)) {
-            const exactNameRegex = /Player (\d+) is (?:now |)named (\w+)/gi;
-            let match;
-            
-            debugLog("Found 'Player X is now named' pattern, checking for specific matches...");
-            
-            while ((match = exactNameRegex.exec(text)) !== null) {
-                const playerNum = parseInt(match[1]);
-                const pName = match[2];
-                
-                // Critical fix: Check if the player has actually sent a message yet before naming them
-                let playerHasSentMessage = false;
-                
-                // Search through chat history for messages from this player
-                const playerMessages = Array.from(chatWindow.querySelectorAll('.player-message'))
-                    .filter(msg => {
-                        const sender = msg.querySelector('.message-sender').textContent.replace(':', '').trim();
-                        // Check if this is a message from Player X (either named or unnamed)
-                        return sender === `Player ${playerNum}` || sender === pName;
-                    });
-                
-                playerHasSentMessage = playerMessages.length > 0;
-                
-                // Only update name if the player exists and has sent at least one message
-                if (playerNum && pName && playerHasSentMessage) {
-                    debugLog(`Player ${playerNum} has sent ${playerMessages.length} messages. OK to rename to ${pName}`);
-                    updatePlayerLabel(playerNum, pName);
-                    return; // Stop after finding a valid match
-                } else {
-                    debugLog(`Found name ${pName} for Player ${playerNum} but they haven't sent any messages yet. Not renaming.`);
-                }
-            }
-        }
-        
-        // Check for DM rename request
-        if (/what (?:would|should) you like to call (me|the dungeon master|your dungeon master)/i.test(text)) {
-            window.awaitingDMRename = true;
-            addSystemMessage("The DM wants a new name! Type the new name for the DM and press Enter.", false, false, true);
-            debugLog("DM rename mode activated");
-            return;
-        }
+    // --- START: Placeholder/Basic Implementations ---
 
-        // Look for directly addressed players - try to find "Player X" followed by a name
-        const directAddressRegex = /(?:Player|player) (\d+).*?(?:is|called|name is) (\w+)/i;
-        match = text.match(directAddressRegex);
-        if (match && match[1] && match[2]) {
-            const playerNum = parseInt(match[1]);
-            const possibleName = match[2];
-            debugLog(`Found direct address: Player ${playerNum} is called ${possibleName}`);
-            updatePlayerLabel(playerNum, possibleName);
-            return;
-        }
-
-        // Handle welcome messages to specific players
-        const welcomeRegex = /(?:welcome|hello|greetings|hi),?\s+(?:Player|player)\s+(\d+)/i;
-        match = text.match(welcomeRegex);
-        if (match && match[1]) {
-            const playerNum = parseInt(match[1]);
-            debugLog(`Found welcome to Player ${playerNum}`);
-            
-            // Now look for a name after this welcome message
-            const nameAfterWelcomeRegex = new RegExp(`(?:welcome|hello|greetings|hi),?\\s+(?:Player|player)\\s+${playerNum}[^.!?]*?\\b([A-Z]\\w+)\\b`, 'i');
-            const nameMatch = text.match(nameAfterWelcomeRegex);
-            
-            if (nameMatch && nameMatch[1] && isLikelyName(nameMatch[1])) {
-                const possibleName = nameMatch[1];
-                debugLog(`Found potential name ${possibleName} for Player ${playerNum} from welcome message`);
-                
-                // Only update if player doesn't have a name yet
-                if (!playerNames[playerNum] || playerNames[playerNum] === `Player ${playerNum}`) {
-                    updatePlayerLabel(playerNum, possibleName);
-                    debugLog(`Auto-assigned name ${possibleName} to Player ${playerNum} from welcome message`);
-                    return;
-                }
-            }
-        }
-        
-        // If no other rules matched, try the most basic approach for single-player scenarios
-        // This only applies when we have exactly ONE unnamed player
-        const unnamedPlayers = Object.entries(playerNames).filter(([num, name]) => !name || name === `Player ${num}`);
-        if (unnamedPlayers.length === 1) {
-            const playerNum = parseInt(unnamedPlayers[0][0]);
-            
-            // Look for direct statement of name
-            const nameStatementRegex = /(?:so your name is|you are called|you're|welcome|hello|hi) (\w+)[.!?]/i;
-            match = text.match(nameStatementRegex);
-            if (match && match[1] && isLikelyName(match[1])) {
-                const possibleName = match[1];
-                debugLog(`Single player mode: Found potential name ${possibleName}`);
-                updatePlayerLabel(playerNum, possibleName);
-                return;
-            }
-        }
+    // Functions for saving/loading player names from localStorage
+    function savePlayerNames() {
+        localStorage.setItem('playerNames', JSON.stringify(playerNames));
+        debugLog("Player names saved:", playerNames);
     }
-
-    // More robust helper function to check if a string is likely a name
-    function isLikelyName(str) {
-        if (!str || typeof str !== 'string') return false;
-        
-        // Common words that aren't names
-        const commonWords = [
-            "adventurer", "friend", "traveler", "player", "everyone", "there", "you", "all", "guys", 
-            "welcome", "hello", "hi", "hey", "greetings", "and", "the", "this", "that", "what", 
-            "your", "their", "our", "his", "her", "its", "new", "game", "continue", "tell", "let",
-            "know", "want", "need", "like", "now", "then", "here", "well", "good", "great", "first",
-            "name", "quest", "journey", "adventure"
-        ];
-        
-        // Clean up and normalize the string
-        const cleanStr = str.toLowerCase().trim().replace(/[.,!?:;'"()]/, '');
-        
-        // Reject if empty, too short, or a common word
-        if (cleanStr.length < 2 || commonWords.includes(cleanStr)) {
-            return false;
+    
+    function loadPlayerNames() {
+        try {
+            const saved = localStorage.getItem('playerNames');
+            if (saved) {
+                const loaded = JSON.parse(saved);
+                // Ensure it's an object, not null or undefined
+                return typeof loaded === 'object' && loaded !== null ? loaded : { 1: null };
+            }
+        } catch (e) {
+            debugLog("Error loading player names:", e);
         }
-        
-        // Check if it starts with a capital letter in the original
-        // This is important for names!
-        if (!/^[A-Z]/.test(str)) {
-            return false;
-        }
-        
-        return true;
+        return { 1: null }; // Default for Player 1
     }
-
-    function extractNameFromDMResponse(response) {
-        // Since we're handling the player number-specific names in checkForPlayerNames,
-        // this function is no longer needed for automatic name extraction.
-        // We'll leave it in place for compatibility, but it won't be used for auto-naming
-        return null;
+    
+    function loadPlayerState() {
+        try {
+            const saved = localStorage.getItem('playerState');
+            if (saved) {
+                const state = JSON.parse(saved);
+                if (state.names) playerNames = state.names; 
+                else playerNames = {1: null};
+                nextPlayerNumber = state.nextPlayerNumber || Math.max(...Object.keys(playerNames).map(Number)) + 1 || 2;
+                isMultiplayerActive = state.isMultiplayerActive || false;
+                if (state.dmName) dmName = state.dmName;
+                return state;
+            }
+        } catch (e) { 
+            debugLog("Error loading player state:", e); 
+        }
+        playerNames = {1: null};
+        nextPlayerNumber = 2;
+        return { names: { 1: null }, nextPlayerNumber: 2, isMultiplayerActive: false, dmName: "DM" };
     }
     
     // --- END: Placeholder/Basic Implementations ---

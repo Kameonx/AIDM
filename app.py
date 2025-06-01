@@ -58,7 +58,11 @@ def format_message_content(content):
     if not content:
         return content
     
-    # Don't re-format if content already has formatting tags
+    # Don't re-format if content already has HTML formatting tags
+    if re.search(r'<span class="(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)">', content):
+        return content
+    
+    # Don't re-format if content already has formatting tags (square brackets)
     if re.search(r'\[(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)\]', content):
         return content
     
@@ -354,6 +358,12 @@ def stream_response():
                 "Keep track of each character's stats, inventory and abilities separately. "
                 "specifically address each player by their name when they take actions or make decisions. "
                 "address specific players to make actions, if the story is focused on them. "
+                
+                "CRITICAL: When you receive a system message that a player has LEFT THE GAME, "
+                "immediately stop addressing that player and ONLY interact with the remaining active players. "
+                "The system will tell you exactly which players are still active - ONLY address those players. "
+                "Do NOT ask the departed player any questions or wait for their response. "
+                "Briefly acknowledge their departure in the story and continue with remaining players only."
             )
         else:
             system_prompt += (
@@ -474,7 +484,7 @@ def stream_response():
                 
                 # Store the complete response in the user's chat history
                 if full_response:
-                    # Apply formatting before saving to history
+                    # Apply formatting before saving to history AND ensure it's processed properly
                     formatted_content = format_message_content(full_response)
                     chat_history.append({"role": "assistant", "content": formatted_content})
                     save_chat_history(user_id, chat_history, game_id)

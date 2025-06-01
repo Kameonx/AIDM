@@ -425,7 +425,9 @@ document.addEventListener('DOMContentLoaded', function() {
         chatWindow.innerHTML = '';
         messages.forEach(msg => {
             if (msg.role === "assistant" || msg.type === "dm") {
-                addMessage(dmName, msg.content, false, true, true, true);
+                // Process the content through formatting before adding to ensure HTML tags are rendered
+                const processedContent = Utils.processFormattedText(msg.content);
+                addMessage(dmName, processedContent, false, true, true, true);
             } else if (msg.role === "user" || msg.type === "player") {
                 // Always use playerNames mapping for sender label
                 let senderName = msg.sender;
@@ -441,7 +443,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         senderName = msg.player;
                     }
                 }
-                addMessage(senderName || `Player ${msg.player_number || 1}`, msg.content, false, true, true);
+                // Process player messages through formatting as well
+                const processedContent = Utils.processFormattedText(msg.content);
+                addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
             } else if (msg.role === "system" || msg.type === "system") {
                 addSystemMessage(msg.content, true, true);
             }

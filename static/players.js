@@ -279,9 +279,15 @@ const PlayerManager = (function() {
         }
         
         // Add system message about player leaving
-        addSystemMessage(`${oldName} (Player ${playerNumber}) has left the game.`, false, false, true);
+        addSystemMessage(`${oldName} has left the game.`, false, false, true);
         
-        // Notify DM
+        // Get list of remaining players for context
+        const remainingPlayers = Object.entries(playerNames)
+            .filter(([num, name]) => name && name !== null)
+            .map(([num, name]) => `${name} (Player ${num})`)
+            .join(', ') || 'Only Player 1 remains';
+        
+        // Notify DM with much more explicit context about the removal
         if (currentGameId) {
             const loadingId = `dm-player-left-${Date.now()}`;
             const textId = `response-text-player-left-${Date.now()}`;
@@ -293,7 +299,15 @@ const PlayerManager = (function() {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    message: `${oldName} (Player ${playerNumber}) has left the game. Please continue the story without them.`,
+                    message: `[CRITICAL SYSTEM UPDATE] ${oldName} (Player ${playerNumber}) has LEFT THE GAME PERMANENTLY.
+                    
+                    🚨 IMPORTANT: ${oldName} is NO LONGER part of this adventure. Do NOT address them anymore.
+                    
+                    CURRENT ACTIVE PLAYERS: ${remainingPlayers}
+                    
+                    Please briefly acknowledge ${oldName}'s departure in the story (maybe they "vanished in a flash of light" or "decided to part ways") and then ONLY continue the adventure with the remaining active players listed above.
+                    
+                    Do NOT wait for or expect any response from ${oldName}. They are completely gone from this game.`,
                     game_id: currentGameId,
                     player_number: 'system',
                     is_system: true
@@ -464,7 +478,7 @@ const PlayerManager = (function() {
             
             if (nameMatch && nameMatch[1] && Utils.isLikelyName(nameMatch[1])) {
                 const possibleName = nameMatch[1];
-                debugLog(`Found potential name ${possibleName} for Player ${playerNum} from welcome message`);
+                debugLog(`Found possible name ${possibleName} for Player ${playerNum} from welcome message`);
                 
                 // Only update if player doesn't have a name yet
                 if (!playerNames[playerNum] || playerNames[playerNum] === `Player ${playerNum}`) {
@@ -486,7 +500,7 @@ const PlayerManager = (function() {
             match = text.match(nameStatementRegex);
             if (match && match[1] && Utils.isLikelyName(match[1])) {
                 const possibleName = match[1];
-                debugLog(`Single player mode: Found potential name ${possibleName}`);
+                debugLog(`Single player mode: Found possible name ${possibleName}`);
                 updatePlayerLabel(playerNum, possibleName);
                 return true;
             }

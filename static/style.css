@@ -343,9 +343,11 @@ html {
 .side-menu-footer {
     padding: 10px;
     text-align: center;
-    font-size: .8em;
+    font-size: .75em; /* Reduced from .8em to .75em for better fit */
     color: #6272a4;
     border-top: 1px solid #44475a;
+    white-space: nowrap; /* Prevent text wrapping */
+    overflow: hidden; /* Hide overflow if text is still too long */
 }
 
 /* Utility classes */
@@ -406,68 +408,80 @@ html {
     font-size: 18px; /* Increased from default (likely around 13-14px) */
 }
 
-/* Spell effect styling */
-.message-content .fire {
-    color: #ff5722;
-    font-weight: bold;
+/* Spell effect styling - Remove the .message-content prefix to make selectors work */
+span.fire {
+    color: #ff5722 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #ff5722;
 }
 
-.message-content .ice {
-    color: #00bcd4;
-    font-weight: bold;
+span.ice {
+    color: #00bcd4 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #00bcd4;
 }
 
-.message-content .lightning {
-    color: #ffc107;
-    font-weight: bold;
+span.lightning {
+    color: #ffc107 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #ffc107;
 }
 
-.message-content .poison {
-    color: #8bc34a;
-    font-weight: bold;
+span.poison {
+    color: #8bc34a !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #8bc34a;
 }
 
-.message-content .acid {
-    color: #4caf50;
-    font-weight: bold;
+span.acid {
+    color: #4caf50 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #4caf50;
 }
 
-.message-content .radiant {
-    background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    font-weight: bold;
+span.radiant {
+    background: linear-gradient(45deg, #ffd700, #ffff00, #ffa500) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    color: transparent !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 10px #ffd700;
 }
 
-.message-content .necrotic {
-    color: #9c27b0;
-    font-weight: bold;
+span.necrotic {
+    color: #9c27b0 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #9c27b0;
 }
 
-.message-content .psychic {
-    color: #e91e63;
-    font-weight: bold;
+span.psychic {
+    color: #e91e63 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #e91e63;
 }
 
-.message-content .thunder {
-    color: #3f51b5;
-    font-weight: bold;
+span.thunder {
+    color: #3f51b5 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #3f51b5;
 }
 
-.message-content .force {
-    color: #03a9f4;
-    font-weight: bold;
+span.force {
+    color: #03a9f4 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 5px #03a9f4;
 }
 
-/* Emphasis styling */
-.message-content em {
-    font-style: italic;
+/* Emphasis styling - Make these more specific and add !important */
+.message-content em, .message em {
+    font-style: italic !important;
     opacity: 0.9;
+    color: #bd93f9 !important;
 }
 
-.message-content strong {
-    font-weight: bold;
+.message-content strong, .message strong {
+    font-weight: bold !important;
+    color: #ff79c6 !important;
 }
 
 /* Message fade animation */

@@ -189,14 +189,9 @@ const PlayerManager = (function() {
         
         addSystemMessage(`Player ${joiningPlayerNumber} has joined the game! What is your name, adventurer?`, false, false, true);
         
-        // Notify DM about new player
+        // Notify DM about new player - but don't show this message in chat
         if (currentGameId) {
-            const loadingId = `dm-player-join-${Date.now()}`;
-            const textId = `response-text-player-join-${Date.now()}`;
-            const loadingDiv = createLoadingDivForDM(loadingId, textId);
-            debugLog("Setting isGenerating = true (addPlayer)");
-            let isGenerating = true; // local variable
-            
+            // Send invisible system message to DM
             fetch('/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -219,23 +214,20 @@ const PlayerManager = (function() {
                     After they tell you their name, respond with "Player ${joiningPlayerNumber} is now named [their actual name]".`,
                     game_id: currentGameId,
                     player_number: 'system',
-                    is_system: true
+                    is_system: true,
+                    invisible_to_players: true // Add this flag to mark as invisible
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data && data.message_id) {
-                    sendStreamRequest(data.message_id, loadingDiv); // isGenerating will be reset by sendStreamRequest
-                } else {
-                    debugLog("Setting isGenerating = false (addPlayer - no message_id)");
-                    window.dispatchEvent(new CustomEvent('player-generation-complete'));
+                    // Don't create loading div for invisible messages
+                    // Just let the DM respond normally without showing system message
+                    debugLog("Invisible system message sent to DM for player join");
                 }
             })
             .catch(error => {
                 debugLog(`Error notifying DM about Player ${joiningPlayerNumber} joining:`, error);
-                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                debugLog("Setting isGenerating = false (addPlayer - catch)");
-                window.dispatchEvent(new CustomEvent('player-generation-complete'));
             });
         }
         
@@ -287,14 +279,8 @@ const PlayerManager = (function() {
             .map(([num, name]) => `${name} (Player ${num})`)
             .join(', ') || 'Only Player 1 remains';
         
-        // Notify DM with much more explicit context about the removal
+        // Notify DM with invisible system message
         if (currentGameId) {
-            const loadingId = `dm-player-left-${Date.now()}`;
-            const textId = `response-text-player-left-${Date.now()}`;
-            const loadingDiv = createLoadingDivForDM(loadingId, textId);
-            let isGenerating = true; // local variable
-            window.dispatchEvent(new CustomEvent('player-generation-started'));
-            
             fetch('/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -310,20 +296,17 @@ const PlayerManager = (function() {
                     Do NOT wait for or expect any response from ${oldName}. They are completely gone from this game.`,
                     game_id: currentGameId,
                     player_number: 'system',
-                    is_system: true
+                    is_system: true,
+                    invisible_to_players: true // Add this flag to mark as invisible
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data && data.message_id) {
-                    sendStreamRequest(data.message_id, loadingDiv);
-                } else {
-                    window.dispatchEvent(new CustomEvent('player-generation-complete'));
+                    debugLog("Invisible system message sent to DM for player departure");
                 }
             }).catch(error => {
                 debugLog(`Error notifying DM about player ${playerNumber} leaving:`, error);
-                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                window.dispatchEvent(new CustomEvent('player-generation-complete'));
             });
         }
         

@@ -183,16 +183,23 @@ def chat():
         game_id = data.get('game_id')
         player_number = data.get('player_number', 1)  # Default to player 1
         is_system = data.get('is_system', False)
+        invisible_to_players = data.get('invisible_to_players', False)  # New flag
         
         # Load chat history
         chat_history = load_chat_history(user_id, game_id)
         
         # Add user message to history with player number
-        chat_history.append({
+        message_entry = {
             "role": "user" if not is_system else "system",
             "content": user_input,
             "player": f"player{player_number}" if not is_system else "system"
-        })
+        }
+        
+        # Mark invisible messages so they don't show in chat
+        if invisible_to_players:
+            message_entry["invisible"] = True
+        
+        chat_history.append(message_entry)
         
         # Save chat history
         save_chat_history(user_id, chat_history, game_id)
@@ -201,7 +208,8 @@ def chat():
         return jsonify({
             "message_id": len(chat_history),
             "streaming": True,
-            "player_number": player_number
+            "player_number": player_number,
+            "invisible": invisible_to_players  # Let client know this is invisible
         })
         
     except Exception as e:

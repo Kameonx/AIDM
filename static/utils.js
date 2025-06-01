@@ -20,11 +20,16 @@ const Utils = (function() {
             return text; // Already formatted with HTML, return as is
         }
         
-        // Escape HTML first to prevent XSS
+        // Escape HTML first to prevent XSS, but preserve intentional formatting
         let processedText = text
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+        
+        // Process emphasis tags FIRST (before spell tags to avoid conflicts)
+        processedText = processedText
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
         
         // Process spell tags [type]...[/type]
         const spellTypes = ['fire', 'ice', 'lightning', 'poison', 'acid', 'radiant', 
@@ -34,11 +39,6 @@ const Utils = (function() {
             const regex = new RegExp(`\\[${type}\\](.*?)\\[\\/${type}\\]`, 'gi');
             processedText = processedText.replace(regex, `<span class="${type}">$1</span>`);
         }
-        
-        // Process emphasis tags from markdown format
-        processedText = processedText
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
     
         return processedText;
     }

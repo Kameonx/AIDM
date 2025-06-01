@@ -424,6 +424,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         chatWindow.innerHTML = '';
         messages.forEach(msg => {
+            // Skip invisible messages - don't show them in chat
+            if (msg.invisible) {
+                return;
+            }
+            
             if (msg.role === "assistant" || msg.type === "dm") {
                 // Process the content through formatting before adding to ensure HTML tags are rendered
                 const processedContent = Utils.processFormattedText(msg.content);
@@ -447,7 +452,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const processedContent = Utils.processFormattedText(msg.content);
                 addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
             } else if (msg.role === "system" || msg.type === "system") {
-                addSystemMessage(msg.content, true, true);
+                // Only show system messages that aren't marked as invisible
+                if (!msg.invisible) {
+                    addSystemMessage(msg.content, true, true);
+                }
             }
         });
         chatWindow.scrollTop = chatWindow.scrollHeight;
@@ -507,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // If content is already HTML, use it directly
             contentSpan.innerHTML = text;
         } else {
-            // Process formatted content with spell tags
+            // Always process content through formatting - even if it appears to be plain text
             const formattedText = Utils.processFormattedText(text);
             contentSpan.innerHTML = formattedText; // Use innerHTML to render HTML tags
         }
@@ -808,18 +816,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (oldCursor) oldCursor.remove();
                     }
                     
-                    // Append text content
-                    const currentHTML = responseTextElem.innerHTML || '';
-                    const cursorHTML = '<span class="cursor"></span>';
-                    const cursorRemoved = currentHTML.replace(cursorHTML, '');
-                    
-                    // Process the new content chunk with formatting
-                    const processedContent = Utils.processFormattedText(formattedContent);
-                    
-                    // Update with formatted content and add cursor back
-                    responseTextElem.innerHTML = cursorRemoved + processedContent + cursorHTML;
-                    
+                    // Build the full accumulated text with proper formatting
                     fullResponseText += formattedContent;
+                    
+                    // Process the FULL accumulated text (not just the chunk) with formatting
+                    const processedFullContent = Utils.processFormattedText(fullResponseText);
+                    
+                    // Update with fully formatted content and add cursor back
+                    const cursorHTML = '<span class="cursor"></span>';
+                    responseTextElem.innerHTML = processedFullContent + cursorHTML;
                     
                     chatWindow.scrollTop = chatWindow.scrollHeight;
                 }
@@ -995,11 +1000,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateUndoRedoButtons();
         
         if (currentGameId) {
-            const loadingId = `dm-undo-${Date.now()}`;
-            const textId = `response-text-undo-${Date.now()}`;
-            const loadingDiv = createLoadingDivForDM(loadingId, textId);
-            debugLog("Setting isGenerating = true (undoChat)");
-            isGenerating = true;
+            // Send invisible system message to DM about undo
             fetch('/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -1007,20 +1008,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     message: "A previous action was undone. Please update the story accordingly.",
                     game_id: currentGameId,
                     player_number: 'system',
-                    is_system: true
+                    is_system: true,
+                    invisible_to_players: true // Make undo notifications invisible too
                 })
             })
             .then(response => response.json())
             .then(data => {
-                if (data && data.message_id) sendStreamRequest(data.message_id, loadingDiv); // isGenerating reset by sendStreamRequest
-                else {
-                    debugLog("Setting isGenerating = false (undoChat - no message_id)");
-                    isGenerating = false; 
+                if (data && data.message_id) {
+                    debugLog("Invisible undo notification sent to DM");
                 }
             }).catch(() => {
-                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                debugLog("Setting isGenerating = false (undoChat - catch)");
-                isGenerating = false;
+                debugLog("Error sending invisible undo notification");
             });
         }
     }

@@ -53,6 +53,63 @@ def save_chat_history(user_id, chat_history, game_id=None):
     with open(file_path, 'w') as file:
         json.dump(chat_history, file)
 
+def format_message_content(content):
+    """Format AI responses with markdown-like syntax for the frontend"""
+    if not content:
+        return content
+    
+    # Don't re-format if content already has formatting tags
+    if re.search(r'\[(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)\]', content):
+        return content
+    
+    # Add spell formatting to common spell terms
+    spell_types = {
+        "fire": ["fireball", "burning hands", "fire bolt", "flame strike", "wall of fire", "fire storm", "fiery", "flames", "inferno", "blaze", "red dragon", "ember"],
+        "ice": ["ice knife", "cone of cold", "frost bite", "ice storm", "wall of ice", "freezing sphere", "frostbite", "frozen", "icicle", "snow", "white dragon", "freeze"],
+        "lightning": ["lightning bolt", "chain lightning", "shocking grasp", "call lightning", "lightning arrow", "electric", "thunder", "shock", "electrocute", "blue dragon", "spark"],
+        "poison": ["poison spray", "cloudkill", "ray of sickness", "poison gas", "venom", "toxic", "poisonous", "green dragon", "toxin"],
+        "acid": ["acid splash", "acid arrow", "vitriolic sphere", "melf's acid arrow", "acidic", "dissolve", "corrode", "black dragon", "melt"],
+        "radiant": ["sacred flame", "guiding bolt", "sunbeam", "sunburst", "divine", "holy", "radiance", "radiant", "celestial", "solar", "angelic", "divine", "heavenly"],
+        "necrotic": ["chill touch", "blight", "circle of death", "finger of death", "harm", "necrotic", "undead", "decay", "rot", "wither", "shadow", "death"],
+        "psychic": ["mind sliver", "mind blast", "psychic scream", "mental", "telepathic", "psychic", "mind", "telepathy", "psionic"],
+        "thunder": ["thunderwave", "thunderclap", "shatter", "thunder step", "thunderous smite", "thunderous", "thunder", "sonic", "booming"],
+        "force": ["magic missile", "eldritch blast", "force cage", "wall of force", "bigby's hand", "arcane", "force", "magical energy"]
+    }
+    
+    # Apply formatting to each spell type keyword
+    for spell_type, keywords in spell_types.items():
+        for keyword in keywords:
+            # Use a case-insensitive regex with word boundaries
+            pattern = r'\b(' + re.escape(keyword) + r's?)\b'
+            # Wrap matching words with spell type tags
+            content = re.sub(pattern, f'[{spell_type}]\\1[/{spell_type}]', content, flags=re.IGNORECASE)
+    
+    # Add emphasis to subtle descriptions
+    subtle_phrases = [
+        r'(?i:whispers)\s', r'(?i:murmurs)\s', r'(?i:barely audible)', r'(?i:hushed tone)', 
+        r'(?i:quietly)', r'(?i:softly)', r'(?i:subtle)', r'(?i:faintly)'
+    ]
+    
+    for phrase in subtle_phrases:
+        # Find phrases containing these keywords
+        pattern = f'({phrase}[^.!?;:]*)'
+        content = re.sub(pattern, '*\\1*', content)
+    
+    # Add bold to dramatic moments, damage announcements
+    dramatic_phrases = [
+        r'(?i:critical hit\!*)', r'(?i:massive damage\!*)', r'(?i:deals \d+ damage)', 
+        r'(?i:takes \d+ damage)', r'(?i:BOOM\!*)', r'(?i:CRASH\!*)', r'(?i:SMASH\!*)',
+        r'(?i:SUCCESS\!+)', r'(?i:FAILURE\!+)', r'(?i:natural 20\!*)', r'(?i:natural 1\!*)',
+        r'(?i:Initiative order:)', r'(?i:You succeeded)', r'(?i:You failed)', r'(?i:Attack roll:)',
+        r'(?i:has been defeated\!)', r'(?i:victory\!)', r'(?i:level up\!)', r'(?i:treasure chest)',
+        r'(?i:You found)'
+    ]
+    
+    for phrase in dramatic_phrases:
+        content = re.sub(phrase, '**\\g<0>**', content)
+    
+    return content
+
 # Add route to serve static files
 @app.route('/static/<path:path>')
 def send_static(path):
@@ -194,6 +251,27 @@ def stream_response():
             "Think of a very powerful evil D&D enemy that the players will face at the end of the adventure, if applicable to their story. "
             "Have smaller enemies hint at the powerful enemy throughout the story. "
             "Don't just give away the enemy's name, but drop hints about their power and influence. "
+            
+            "USE FORMATTING FOR IMMERSION: Use [fire], [ice], [lightning], [poison], [acid], [radiant], [necrotic], "
+            "[psychic], [thunder], and [force] tags around corresponding spell names and effects. For example, write "
+            "'The dragon breathes [fire]fire[/fire] at you!' or 'The wizard casts [lightning]lightning bolt[/lightning]!' "
+            
+            "USE TEXT FORMATTING: Use ** (bold) for important announcements, dramatic moments, and intense actions. "
+            "For example: '**The dragon roars** and the entire cavern shakes!' or '**CRITICAL HIT!** Your sword strikes true.' "
+            "Use * (italics) for subtle descriptions, whispered speech, thoughts, and atmospheric details. "
+            "For example: '*A gentle breeze carries the scent of roses*' or '*The thief whispers a warning*' "
+            "Use these formatting options liberally to make the game more exciting and easy to read."
+            
+            "COLORS: Describe objects with their colors and use spell formatting tags for colored objects when appropriate. "
+            "For fire-colored things (red/orange flames, molten lava) use [fire]red flames[/fire]. "
+            "For ice-colored things (blue/white frost, winter scenes) use [ice]blue ice crystals[/ice]. "
+            "For lightning-colored things (blue/white electricity) use [lightning]crackling blue energy[/lightning]. "
+            "For poison-colored things (green toxins) use [poison]sickly green vapors[/poison]. "
+            "For acid-colored things (yellow-green) use [acid]bubbling green acid[/acid]. "
+            "For radiant-colored things (holy light, golden glow) use [radiant]golden divine light[/radiant]. "
+            "For necrotic-colored things (black/purple darkness) use [necrotic]dark shadowy energy[/necrotic]. "
+            "For psychic-colored things (pink/purple) use [psychic]shimmering purple energy[/psychic]. "
+            
             "use just 2-3 sentences unless more detail is necessary for rules, combat or important descriptions. "
             "Use emojis frequently to emphasize emotions and actions. "
             "adjust difficulty based on their character's level, party size, and abilities. "
@@ -372,7 +450,9 @@ def stream_response():
                 
                 # Store the complete response in the user's chat history
                 if full_response:
-                    chat_history.append({"role": "assistant", "content": full_response})
+                    # Apply formatting before saving to history
+                    formatted_content = format_message_content(full_response)
+                    chat_history.append({"role": "assistant", "content": formatted_content})
                     save_chat_history(user_id, chat_history, game_id)
                     
                 # When all done, send a done event

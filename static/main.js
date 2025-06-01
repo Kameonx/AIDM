@@ -369,7 +369,8 @@ document.addEventListener('DOMContentLoaded', function() {
         chatWindow.innerHTML = ''; // Clear existing messages
         messages.forEach(msg => {
             if (msg.role === "assistant" || msg.type === "dm") {
-                addMessage(dmName, msg.content, false, true, true);
+                // Process the content with formatting tags
+                addMessage(dmName, msg.content, false, true, true, true); // isHTML=true to preserve formatting
             } else if (msg.role === "user" || msg.type === "player") {
                 // Extract player number or use sender name directly
                 let senderName = msg.sender;
@@ -399,16 +400,20 @@ document.addEventListener('DOMContentLoaded', function() {
             if (msg.type === 'system') {
                 addSystemMessage(msg.content, true, true); // fromUpdate = true, skipHistory = true
             } else if (msg.type === 'dm') {
-                addMessage(dmName, msg.content, false, true, true); // fromUpdate = true, skipHistory = true
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(dmName, content, false, true, true, true); // Added parameter to indicate HTML content
             } else { // player message
-                addMessage(msg.sender, msg.content, false, true, true); // fromUpdate = true, skipHistory = true
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(msg.sender, content, false, true, true, true); // Added parameter to indicate HTML content
             }
         });
         
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
-    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false) {
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
         const role = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm') ? 'assistant' : 'user';
         if (!fromUpdate && messageExists(role, text)) {
             debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
@@ -429,7 +434,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const contentSpan = document.createElement('span');
         contentSpan.className = 'message-content';
-        contentSpan.textContent = text;
+        
+        if (isHTML) {
+            // If content is already HTML, use it directly
+            contentSpan.innerHTML = text;
+        } else {
+            // Process formatted content with spell tags
+            const formattedText = processFormattedText(text);
+            contentSpan.innerHTML = formattedText; // Use innerHTML to render HTML tags
+        }
+        
         msgDiv.appendChild(contentSpan);
         
         chatWindow.appendChild(msgDiv);
@@ -439,6 +453,38 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(saveChatState, 0);
         }
         return true;
+    }
+
+    // Enhanced processFormattedText function that handles all formatting cases
+    function processFormattedText(text) {
+        if (!text) return '';
+        
+        // Check if the text already contains proper HTML formatting
+        if (/<span class="(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)">/.test(text)) {
+            return text; // Already formatted with HTML, return as is
+        }
+        
+        // Escape HTML first to prevent XSS
+        let processedText = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        
+        // Process spell tags [type]...[/type]
+        const spellTypes = ['fire', 'ice', 'lightning', 'poison', 'acid', 'radiant', 
+                            'necrotic', 'psychic', 'thunder', 'force'];
+        
+        for (const type of spellTypes) {
+            const regex = new RegExp(`\\[${type}\\](.*?)\\[\\/${type}\\]`, 'gi');
+            processedText = processedText.replace(regex, `<span class="${type}">$1</span>`);
+        }
+        
+        // Process emphasis tags from markdown format
+        processedText = processedText
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
+    
+        return processedText;
     }
 
     function addSystemMessage(text, fromUpdate = false, skipHistory = false, isTemporary = false) {
@@ -638,9 +684,8 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingDiv.id = id;
         
         const nameSpan = document.createElement('span');
-        nameSpan.className = 'message-sender'; // Added class for consistency
-        nameSpan.textContent = `${dmName}: `; // Use current DM name
-        // nameSpan.style.fontWeight = 'bold'; // fontWeight is handled by .message-sender class
+        nameSpan.className = 'message-sender'; 
+        nameSpan.textContent = `${dmName}: `;
         
         const responseText = document.createElement('span');
         responseText.id = textId || 'response-text';
@@ -720,6 +765,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
                 
                 if (responseTextElem) {
+                    // Handle line breaks properly
                     const formattedContent = data.content.replace(/\\n/g, '\n');
                     
                     if (data.error === true) {
@@ -732,12 +778,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (oldCursor) oldCursor.remove();
                     }
                     
-                    responseTextElem.textContent += formattedContent;
-                    fullResponseText += formattedContent;
+                    // Append text content
+                    const currentHTML = responseTextElem.innerHTML || '';
+                    const cursorHTML = '<span class="cursor"></span>';
+                    const cursorRemoved = currentHTML.replace(cursorHTML, '');
                     
-                    const cursor = document.createElement('span');
-                    cursor.className = 'cursor';
-                    responseTextElem.appendChild(cursor);
+                    // Process the new content chunk with formatting
+                    const processedContent = processFormattedText(formattedContent);
+                    
+                    // Update with formatted content and add cursor back
+                    responseTextElem.innerHTML = cursorRemoved + processedContent + cursorHTML;
+                    
+                    fullResponseText += formattedContent;
                     
                     chatWindow.scrollTop = chatWindow.scrollHeight;
                 }
@@ -828,11 +880,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!senderEl || !contentEl) return null;
 
                 const senderText = senderEl.textContent.replace(':', '').trim();
+                // Use innerHTML to preserve HTML formatting instead of textContent
+                const contentHTML = contentEl.innerHTML.trim();
                 const contentText = contentEl.textContent.trim();
                 
                 // Skip empty messages or malformed ones
                 if (!contentText && !(msg.classList.contains('dm-message') && msg.querySelector('.typing'))) return null;
-
 
                 const isSystem = msg.classList.contains('system-message');
                 // Determine if DM by checking sender text against current dmName or if it's a DM loading message
@@ -842,6 +895,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return {
                     sender: senderText,
                     content: contentText,
+                    contentHTML: contentHTML,
                     type: isSystem ? 'system' : (isDM ? 'dm' : 'player')
                 };
             }).filter(msg => msg !== null); 
@@ -1179,7 +1233,7 @@ document.addEventListener('DOMContentLoaded', function() {
         addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
         updateUndoRedoButtons();
     }
-    
+
     window.sendMessage = sendMessage;
 
     debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");

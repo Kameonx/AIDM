@@ -267,10 +267,56 @@ html {
     cursor: pointer;
     border-radius: 4px;
     font-family: Consolas, monospace;
+    transition: all 0.2s ease;
+}
+
+/* Add color to sidebar buttons */
+#new-game-btn { background-color: #50fa7b; color: #282a36; }
+#copy-chat-btn { background-color: #8be9fd; color: #282a36; }
+#add-player-btn { background-color: #bd93f9; color: #282a36; }
+#remove-player-btn { background-color: #ff5555; color: #f8f8f2; }
+#undoBtn { background-color: #ff79c6; color: #282a36; }
+#redoBtn { background-color: #ffb86c; color: #282a36; }
+
+.side-menu-btn:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.side-menu-btn:active {
+    transform: translateY(1px);
 }
 
 .side-menu-btn i { 
     margin-right: 8px; 
+}
+
+/* Improve donation section styling - removing the container */
+.side-menu-donation {
+    margin: 15px 10px;
+    padding: 12px;
+    font-style: italic;
+    color: #999999;
+    line-height: 1.4;
+    overflow: hidden; /* Remove scrollbar */
+    max-height: none; /* Allow content to expand */
+    /* Removed background-color and border */
+}
+
+.side-menu-donation p {
+    margin: 0 0 10px 0;
+    font-size: 0.75em;
+}
+
+.side-menu-donation a {
+    color: #bd93f9;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.side-menu-donation a:hover {
+    text-decoration: underline;
 }
 
 .side-menu-footer {
@@ -339,16 +385,84 @@ html {
     font-size: 18px; /* Increased from default (likely around 13-14px) */
 }
 
-/* Also increase the DM and player name labels for consistency */
-.message-sender {
+/* Spell effect styling */
+.message-content .fire {
+    color: #ff5722;
     font-weight: bold;
-    margin-right: 5px;
-    font-size: 18px;
 }
 
-/* Make system messages slightly smaller for contrast */
-.system-message .message-content {
-    font-size: 16px;
+.message-content .ice {
+    color: #00bcd4;
+    font-weight: bold;
+}
+
+.message-content .lightning {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.message-content .poison {
+    color: #8bc34a;
+    font-weight: bold;
+}
+
+.message-content .acid {
+    color: #4caf50;
+    font-weight: bold;
+}
+
+.message-content .radiant {
+    background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: bold;
+}
+
+.message-content .necrotic {
+    color: #9c27b0;
+    font-weight: bold;
+}
+
+.message-content .psychic {
+    color: #e91e63;
+    font-weight: bold;
+}
+
+.message-content .thunder {
+    color: #3f51b5;
+    font-weight: bold;
+}
+
+.message-content .force {
+    color: #03a9f4;
+    font-weight: bold;
+}
+
+/* Emphasis styling */
+.message-content em {
+    font-style: italic;
+    opacity: 0.9;
+}
+
+.message-content strong {
+    font-weight: bold;
+}
+
+/* Message fade animation */
+.system-message.temporary-message {
+    opacity: .7; 
+    animation: fadeOut 8s forwards;
+}
+
+@keyframes fadeOut { 
+    to { 
+        opacity: 0; 
+        /* Remove height, margin, and padding changes to prevent abrupt collapse */
+        /* height: 0; */
+        /* margin: 0; */
+        /* padding: 0; */
+    } 
 }
 
 /* Media queries for responsive design */
@@ -381,18 +495,7 @@ html {
     }
 }
 
-/* Message fade animation */
-.system-message.temporary-message {
-    opacity: .7; 
-    animation: fadeOut 8s forwards;
-}
-
-@keyframes fadeOut { 
-    to { 
-        opacity: 0; 
-        /* Remove height, margin, and padding changes to prevent abrupt collapse */
-        /* height: 0; */
-        /* margin: 0; */
-        /* padding: 0; */
-    } 
+/* Removing the formatting help class */
+.formatting-help {
+    display: none;
 }

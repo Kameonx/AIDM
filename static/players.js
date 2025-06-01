@@ -90,9 +90,17 @@ const PlayerManager = (function() {
                 debugLog("Showing remove button for player", playerNum);
                 removePlayerBtn.classList.remove('hidden');
             } else {
+                debugLog("Hiding remove button for Player 1");
                 removePlayerBtn.classList.add('hidden');
             }
         }
+        
+        // Update global selection variables in main.js
+        if (window.updatePlayerSelection) {
+            window.updatePlayerSelection(selectedPlayerElement, selectedPlayerNum);
+        }
+        
+        debugLog(`Selection complete. selectedPlayerNum: ${selectedPlayerNum}, selectedPlayerElement:`, selectedPlayerElement);
     }
     
     /**

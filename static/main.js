@@ -138,77 +138,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // Fix the removePlayerBtn click handler
     if (removePlayerBtn) {
         removePlayerBtn.addEventListener('click', function() {
-            debugLog("Remove player button clicked, currentSelection=", selectedPlayerNum);
+            debugLog("Remove player button clicked");
+            debugLog("Current selectedPlayerNum:", selectedPlayerNum);
+            debugLog("Current selectedPlayerElement:", selectedPlayerElement);
+            debugLog("PlayerNames:", playerNames);
             
             if (selectedPlayerNum && selectedPlayerNum > 1) {
-                // Use the local removePlayer function
-                removePlayer(selectedPlayerNum);
+                debugLog(`Attempting to remove Player ${selectedPlayerNum}`);
+                // Use PlayerManager.removePlayer instead of local function
+                PlayerManager.removePlayer(selectedPlayerNum);
+                
+                // Reset local selection state after removal
+                selectedPlayerElement = null;
+                selectedPlayerNum = null;
+                removePlayerBtn.classList.add('hidden');
+                debugLog("Reset selection state after removal");
             } else {
-                debugLog("No player selected or attempting to remove Player 1");
+                debugLog("Invalid removal attempt - selectedPlayerNum:", selectedPlayerNum);
                 addSystemMessage("Please select a player other than Player 1 to remove", false, false, true);
             }
         });
-    }
-
-    function removePlayer(playerNumber) {
-        if (!playerNumber || playerNumber <= 1) {
-            debugLog("Cannot remove Player 1");
-            return; // Can't remove Player 1
-        }
-        
-        debugLog(`Removing Player ${playerNumber}`);
-        const oldName = playerNames[playerNumber] || `Player ${playerNumber}`;
-        
-        // Deselect if the removed player was selected
-        if (selectedPlayerNum === playerNumber) {
-            if (selectedPlayerElement) {
-                selectedPlayerElement.classList.remove('selected');
-            }
-            selectedPlayerNum = null;
-            selectedPlayerElement = null;
-            removePlayerBtn.classList.add('hidden');
-        }
-
-        // Remove player from data structures
-        delete playerNames[playerNumber];
-        savePlayerNames();
-        savePlayerState();
-        
-        // Remove player UI
-        const playerContainer = document.getElementById(`player${playerNumber}-container`);
-        if (playerContainer) {
-            playerContainer.remove();
-        }
-        
-        // Add system message about player leaving
-        addSystemMessage(`${oldName} (Player ${playerNumber}) has left the game.`, false, false, true);
-        
-        // Notify DM
-        if (currentGameId) {
-            const loadingId = `dm-player-left-${Date.now()}`;
-            const textId = `response-text-player-left-${Date.now()}`;
-            const loadingDiv = createLoadingDivForDM(loadingId, textId);
-            isGenerating = true;
-            fetch('/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    message: `${oldName} (Player ${playerNumber}) has left the game. Please continue the story without them.`,
-                    game_id: currentGameId,
-                    player_number: 'system',
-                    is_system: true
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.message_id) sendStreamRequest(data.message_id, loadingDiv);
-                else isGenerating = false;
-            }).catch(error => {
-                debugLog(`Error notifying DM about player ${playerNumber} leaving:`, error);
-                if (loadingDiv && loadingDiv.parentNode) loadingDiv.remove();
-                isGenerating = false;
-            });
-        }
     }
 
     // --- Functions for initializing and saving state ---
@@ -1138,13 +1087,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Fix the removePlayerBtn click handler
     if (removePlayerBtn) {
         removePlayerBtn.addEventListener('click', function() {
-            debugLog("Remove player button clicked, currentSelection=", selectedPlayerNum);
+            debugLog("Remove player button clicked");
+            debugLog("Current selectedPlayerNum:", selectedPlayerNum);
+            debugLog("Current selectedPlayerElement:", selectedPlayerElement);
+            debugLog("PlayerNames:", playerNames);
             
             if (selectedPlayerNum && selectedPlayerNum > 1) {
-                // Use the local removePlayer function
-                removePlayer(selectedPlayerNum);
+                debugLog(`Attempting to remove Player ${selectedPlayerNum}`);
+                // Use PlayerManager.removePlayer instead of local function
+                PlayerManager.removePlayer(selectedPlayerNum);
+                
+                // Reset local selection state after removal
+                selectedPlayerElement = null;
+                selectedPlayerNum = null;
+                removePlayerBtn.classList.add('hidden');
+                debugLog("Reset selection state after removal");
             } else {
-                debugLog("No player selected or attempting to remove Player 1");
+                debugLog("Invalid removal attempt - selectedPlayerNum:", selectedPlayerNum);
                 addSystemMessage("Please select a player other than Player 1 to remove", false, false, true);
             }
         });
@@ -1194,23 +1153,35 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Only close menu when clicking outside of it AND not when selecting a player
+        // Modified document click handler to better handle player selection
         document.addEventListener('click', function(e) {
-            // Skip closing the sidebar if the click was for player selection
+            // Don't close sidebar if clicking on player input elements
             if (e.target.closest('.player-input')) {
+                debugLog("Click on player input detected, not closing sidebar");
                 return;
             }
             
-            // Skip closing the sidebar if the click was for a sidebar button
+            // Don't close sidebar if clicking on sidebar buttons
             if (e.target.closest('.side-menu-btn')) {
+                debugLog("Click on sidebar button detected, not closing sidebar");
                 return;
             }
             
-            // Otherwise, close the sidebar when clicking outside
-            if (sideMenu.classList.contains('open') && 
-                !sideMenu.contains(e.target) && 
-                e.target !== menuToggleBtn &&
-                !menuToggleBtn.contains(e.target)) {
+            // Don't close sidebar if clicking inside the sidebar itself
+            if (sideMenu.contains(e.target)) {
+                debugLog("Click inside sidebar detected, not closing sidebar");
+                return;
+            }
+            
+            // Don't close sidebar if clicking on the menu toggle button
+            if (e.target === menuToggleBtn || menuToggleBtn.contains(e.target)) {
+                debugLog("Click on menu toggle detected, not closing sidebar");
+                return;
+            }
+            
+            // Close the sidebar for all other clicks
+            if (sideMenu.classList.contains('open')) {
+                debugLog("Closing sidebar due to outside click");
                 sideMenu.classList.remove('open');
                 menuToggleBtn.classList.remove('menu-open');
                 const icon = menuToggleBtn.querySelector('i');
@@ -1249,6 +1220,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Add a function to sync player selection between PlayerManager and main.js
+    window.updatePlayerSelection = function(element, num) {
+        debugLog("Updating player selection in main.js:", num, element);
+        selectedPlayerElement = element;
+        selectedPlayerNum = num;
+    };
 
     // Initial setup - clean and clear flow
     if (currentGameId) {

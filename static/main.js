@@ -1135,12 +1135,30 @@ document.addEventListener('DOMContentLoaded', function() {
         menuToggleBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             sideMenu.classList.toggle('open');
+            // Add/remove menu-open class to the toggle button itself
+            menuToggleBtn.classList.toggle('menu-open', sideMenu.classList.contains('open'));
             const icon = menuToggleBtn.querySelector('i');
             if (icon) {
                 if (sideMenu.classList.contains('open')) {
                     icon.classList.remove('fa-bars');
                     icon.classList.add('fa-times');
                 } else {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            }
+        });
+        
+        // Close menu when clicking outside of it
+        document.addEventListener('click', function(e) {
+            if (sideMenu.classList.contains('open') && 
+                !sideMenu.contains(e.target) && 
+                e.target !== menuToggleBtn &&
+                !menuToggleBtn.contains(e.target)) {
+                sideMenu.classList.remove('open');
+                menuToggleBtn.classList.remove('menu-open');
+                const icon = menuToggleBtn.querySelector('i');
+                if (icon) {
                     icon.classList.remove('fa-times');
                     icon.classList.add('fa-bars');
                 }

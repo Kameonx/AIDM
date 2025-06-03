@@ -327,7 +327,9 @@ html {
 
 .side-menu-donation p {
     margin: 0 0 10px 0;
-    font-size: 0.75em;
+    font-size: 0.7em; /* Reduced from 0.75em to 0.7em for better mobile fit */
+    word-wrap: break-word; /* Add word wrapping for long words */
+    hyphens: auto; /* Enable automatic hyphenation */
 }
 
 .side-menu-donation a {
@@ -507,6 +509,50 @@ span.force {
         margin-left: 0;
     }
     
+    /* Make sidebar narrower on mobile */
+    .side-menu {
+        width: 240px; /* Reduced from 260px */
+        transform: translateX(-240px);
+    }
+    
+    /* Adjust menu toggle position for narrower sidebar */
+    .menu-toggle.menu-open {
+        left: 255px; /* Adjusted for new sidebar width */
+    }
+    
+    /* Make donation text even smaller on mobile */
+    .side-menu-donation {
+        margin: 10px 8px; /* Reduced margins */
+        padding: 8px; /* Reduced padding */
+    }
+    
+    .side-menu-donation p {
+        font-size: 0.65em; /* Even smaller text on mobile */
+        line-height: 1.3; /* Tighter line height */
+        margin: 0 0 8px 0; /* Reduced bottom margin */
+    }
+    
+    /* Make sidebar header smaller on mobile */
+    .side-menu-header {
+        padding: 15px 10px; /* Reduced padding */
+    }
+    
+    .side-menu-header h1 {
+        font-size: 1.1em; /* Smaller header text */
+        margin: 0;
+    }
+    
+    /* Adjust sidebar content padding */
+    .side-menu-content {
+        padding: 15px 10px; /* Reduced padding */
+    }
+    
+    /* Make buttons smaller on mobile */
+    .side-menu-btn {
+        padding: 8px; /* Reduced from 10px */
+        font-size: 0.9em; /* Smaller button text */
+    }
+    
     /* Other mobile responsive styles */
     .chat-container {
         padding: 10px;
@@ -530,26 +576,28 @@ span.force {
     }
 }
 
-/* Removing the formatting help class */
-.formatting-help {
-    display: none;
-}
-
-/* Make the remove player button more prominent when active */
-#remove-player-btn:not(.hidden) { 
-    background-color: #ff5555; 
-    color: #f8f8f2; 
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(255, 85, 85, 0.7);
+/* Additional mobile breakpoint for very small screens */
+@media (max-width: 480px) {
+    .side-menu {
+        width: 220px; /* Even narrower for very small screens */
+        transform: translateX(-220px);
     }
-    70% {
-        box-shadow: 0 0 0 5px rgba(255, 85, 85, 0);
+    
+    .menu-toggle.menu-open {
+        left: 235px;
     }
-    100% {
-        box-shadow: 0 0 0 0 rgba(255, 85, 85, 0);
+    
+    .side-menu-donation p {
+        font-size: 0.6em; /* Very small text for tiny screens */
+        line-height: 1.2;
+    }
+    
+    .side-menu-header h1 {
+        font-size: 1em;
+    }
+    
+    .side-menu-btn {
+        padding: 6px;
+        font-size: 0.85em;
     }
 }

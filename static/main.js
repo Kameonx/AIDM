@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // AI Models functionality - Fix model persistence
     let availableModels = [];
     // Load selected model from localStorage first, then fall back to default
-    let selectedModel = localStorage.getItem('selectedModel') || 'llama-3.3-70b';
+    let selectedModel = localStorage.getItem('selectedModel') || 'llama-3.1-70b-instruct';
 
     function loadAvailableModels() {
         fetch('/get_models')

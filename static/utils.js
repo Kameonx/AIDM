@@ -26,6 +26,9 @@ const Utils = (function() {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
         
+        // Handle reasoning text from AI models FIRST (before other processing)
+        processedText = processReasoningText(processedText);
+        
         // Process emphasis tags FIRST (before spell tags to avoid conflicts)
         processedText = processedText
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
@@ -41,6 +44,61 @@ const Utils = (function() {
         }
     
         return processedText;
+    }
+
+    /**
+     * Process reasoning text from AI models
+     * Converts <think>...</think> tags into collapsible reasoning sections
+     */
+    function processReasoningText(text) {
+        // Check for reasoning tags from different models
+        const reasoningPatterns = [
+            { start: '&lt;think&gt;', end: '&lt;/think&gt;', name: 'Reasoning' },
+            { start: '&lt;thinking&gt;', end: '&lt;/thinking&gt;', name: 'Thinking' },
+            { start: '&lt;analysis&gt;', end: '&lt;/analysis&gt;', name: 'Analysis' }
+        ];
+        
+        let hasReasoning = false;
+        let cleanedText = text;
+        let reasoningContent = '';
+        
+        for (const pattern of reasoningPatterns) {
+            const regex = new RegExp(`${pattern.start}([\\s\\S]*?)${pattern.end}`, 'gi');
+            
+            // Check if we have complete reasoning tags
+            const completeMatch = cleanedText.match(regex);
+            if (completeMatch) {
+                hasReasoning = true;
+                // Extract the reasoning content for later use
+                const reasoningMatch = regex.exec(text);
+                if (reasoningMatch && reasoningMatch[1]) {
+                    reasoningContent = reasoningMatch[1].trim();
+                }
+                
+                // Remove the complete reasoning tags and content from the main text
+                cleanedText = cleanedText.replace(regex, '');
+            } else {
+                // Also check for incomplete reasoning tags (still being generated)
+                const incompleteStartRegex = new RegExp(`${pattern.start}([\\s\\S]*)$`, 'i');
+                const incompleteMatch = cleanedText.match(incompleteStartRegex);
+                if (incompleteMatch) {
+                    // Found incomplete reasoning - remove everything from the start tag onwards
+                    cleanedText = cleanedText.replace(incompleteStartRegex, '');
+                    hasReasoning = true;
+                    // Don't set reasoningContent for incomplete reasoning
+                }
+            }
+        }
+        
+        // Only add the reasoning toggle if we have complete reasoning content
+        if (hasReasoning && reasoningContent) {
+            const reasoningId = 'reasoning-' + Math.random().toString(36).substr(2, 9);
+            
+            // Tighten the HTML structure - remove all unnecessary whitespace and line breaks
+            cleanedText = `<span class="reasoning-toggle-inline" onclick="toggleReasoning('${reasoningId}')" title="Click to view AI reasoning"><span class="reasoning-caret">▶</span></span><div class="reasoning-content-inline" id="${reasoningId}" style="display: none;"><div class="reasoning-text-inline">${reasoningContent}</div></div>${cleanedText}`;
+        }
+        
+        return cleanedText;
     }
 
     /**

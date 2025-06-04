@@ -54,6 +54,132 @@ document.addEventListener('DOMContentLoaded', function() {
     const menuToggleBtn = document.getElementById('menu-toggle');
     const sideMenu = document.getElementById('side-menu');
     const player1Container = document.getElementById('player1-container');
+    const aiModelsBtn = document.getElementById('ai-models-btn');
+    const aiModelsModal = document.getElementById('ai-models-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modelList = document.getElementById('model-list');
+    const currentModelName = document.getElementById('current-model-name');
+
+    // AI Models functionality - Fix model persistence
+    let availableModels = [];
+    // Load selected model from localStorage first, then fall back to default
+    let selectedModel = localStorage.getItem('selectedModel') || 'llama-3.3-70b';
+
+    function loadAvailableModels() {
+        fetch('/get_models')
+        .then(response => response.json())
+        .then(data => {
+            if (data.models) {
+                availableModels = data.models;
+                populateModelList();
+                updateCurrentModelDisplay();
+                
+                // IMPORTANT: Set the model on the server after loading models
+                // This ensures the server knows which model to use on page refresh
+                setServerModel(selectedModel);
+            }
+        })
+        .catch(error => {
+            debugLog("Error loading models:", error);
+            addSystemMessage("Error loading AI models.", false, false, true);
+        });
+    }
+
+    function setServerModel(modelId) {
+        // Set the model on the server without showing UI feedback
+        fetch('/set_model', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({model_id: modelId})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                debugLog("Server model set to:", modelId);
+            } else {
+                debugLog("Error setting server model:", data.error);
+            }
+        })
+        .catch(error => {
+            debugLog("Error setting server model:", error);
+        });
+    }
+
+    function populateModelList() {
+        modelList.innerHTML = '';
+        
+        availableModels.forEach(model => {
+            const modelItem = document.createElement('div');
+            modelItem.className = 'model-item';
+            if (model.id === selectedModel) {
+                modelItem.classList.add('selected');
+            }
+            
+            const traits = model.traits.map(trait => {
+                const traitNames = {
+                    'default': 'Default',
+                    'most_intelligent': 'Most Intelligent',
+                    'most_uncensored': 'Uncensored',
+                    'fastest': 'Fastest',
+                    'default_reasoning': 'Reasoning',
+                    'default_code': 'Code Expert',
+                    'default_vision': 'Vision',
+                    'function_calling_default': 'Function Calling'
+                };
+                return traitNames[trait] || trait;
+            });
+            
+            modelItem.innerHTML = `
+                <div class="model-name">${model.name}</div>
+                <div class="model-description">${model.description}</div>
+                ${traits.length > 0 ? `<div class="model-traits">${traits.map(trait => `<span class="trait-tag">${trait}</span>`).join('')}</div>` : ''}
+            `;
+            
+            modelItem.addEventListener('click', () => selectModel(model.id));
+            modelList.appendChild(modelItem);
+        });
+    }
+
+    function selectModel(modelId) {
+        selectedModel = modelId;
+        localStorage.setItem('selectedModel', modelId);
+        
+        // Update server
+        fetch('/set_model', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({model_id: modelId})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                debugLog("Model changed to:", modelId);
+                updateCurrentModelDisplay();
+                populateModelList(); // Refresh to show new selection
+                
+                // Add system message about model change
+                const modelName = availableModels.find(m => m.id === modelId)?.name || modelId;
+                addSystemMessage(`🤖 AI Model changed to: ${modelName}`, false, false, true);
+                
+                // Close modal
+                aiModelsModal.classList.add('hidden');
+            } else {
+                addSystemMessage("Error changing AI model: " + (data.error || "Unknown error"), false, false, true);
+                debugLog("Server error changing model:", data);
+            }
+        })
+        .catch(error => {
+            debugLog("Error setting model:", error);
+            addSystemMessage("Error changing AI model: " + error.message, false, false, true);
+        });
+    }
+
+    function updateCurrentModelDisplay() {
+        const model = availableModels.find(m => m.id === selectedModel);
+        if (model && currentModelName) {
+            currentModelName.textContent = model.name;
+        }
+    }
 
     // Initialize the PlayerManager module
     const playerResult = PlayerManager.setup({
@@ -430,7 +556,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (msg.role === "assistant" || msg.type === "dm") {
-                // Process the content through formatting before adding to ensure HTML tags are rendered
+                // ALWAYS process the content through formatting to ensure proper display
                 const processedContent = Utils.processFormattedText(msg.content);
                 addMessage(dmName, processedContent, false, true, true, true);
             } else if (msg.role === "user" || msg.type === "player") {
@@ -744,14 +870,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function sendStreamRequest(messageId, loadingDiv) {
         debugLog("Starting stream request for message ID:", messageId, ". Current isGenerating:", isGenerating);
-        
+
         const eventSourceUrl = new URL('/stream', window.location.href);
-        eventSourceUrl.searchParams.append('t', Date.now()); // Cache buster
+        eventSourceUrl.searchParams.append('t', Date.now());
         eventSourceUrl.searchParams.append('game_id', currentGameId || '');
         eventSourceUrl.searchParams.append('message_id', messageId || '');
-        
+        // Always send the selected model as a query param
+        eventSourceUrl.searchParams.append('model_id', selectedModel);
+
         debugLog("Stream URL:", eventSourceUrl.toString());
-        
+
         const eventSource = new EventSource(eventSourceUrl.toString());
         
         let responseTimeout = setTimeout(() => {
@@ -819,12 +947,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Build the full accumulated text with proper formatting
                     fullResponseText += formattedContent;
                     
+                    // Check if we're currently generating reasoning content
+                    const isGeneratingReasoning = fullResponseText.includes('<think>') || 
+                                                  fullResponseText.includes('<thinking>') || 
+                                                  fullResponseText.includes('<analysis>');
+                    
+                    // Check if reasoning is complete (has closing tags)
+                    const hasCompleteReasoning = (fullResponseText.includes('<think>') && fullResponseText.includes('</think>')) ||
+                                                 (fullResponseText.includes('<thinking>') && fullResponseText.includes('</thinking>')) ||
+                                                 (fullResponseText.includes('<analysis>') && fullResponseText.includes('</analysis>'));
+                    
                     // Process the FULL accumulated text (not just the chunk) with formatting
                     const processedFullContent = Utils.processFormattedText(fullResponseText);
                     
-                    // Update with fully formatted content and add cursor back
-                    const cursorHTML = '<span class="cursor"></span>';
-                    responseTextElem.innerHTML = processedFullContent + cursorHTML;
+                    // If we're generating reasoning but it's not complete, show "Thinking..." with caret
+                    if (isGeneratingReasoning && !hasCompleteReasoning && !processedFullContent.trim()) {
+                        const cursorHTML = '<span class="cursor"></span>';
+                        responseTextElem.innerHTML = '<em style="color: #6272a4; font-style: italic;">🤔 Thinking...</em>' + cursorHTML;
+                    } else {
+                        // Update with fully formatted content and add cursor back
+                        const cursorHTML = '<span class="cursor"></span>';
+                        responseTextElem.innerHTML = processedFullContent + cursorHTML;
+                    }
                     
                     chatWindow.scrollTop = chatWindow.scrollHeight;
                 }
@@ -1086,154 +1230,94 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Fix the removePlayerBtn click handler
-    if (removePlayerBtn) {
-        removePlayerBtn.addEventListener('click', function() {
-            debugLog("Remove player button clicked");
-            debugLog("Current selectedPlayerNum:", selectedPlayerNum);
-            debugLog("Current selectedPlayerElement:", selectedPlayerElement);
-            debugLog("PlayerNames:", playerNames);
-            
-            if (selectedPlayerNum && selectedPlayerNum > 1) {
-                debugLog(`Attempting to remove Player ${selectedPlayerNum}`);
-                // Use PlayerManager.removePlayer instead of local function
-                PlayerManager.removePlayer(selectedPlayerNum);
-                
-                // Reset local selection state after removal
-                selectedPlayerElement = null;
-                selectedPlayerNum = null;
-                removePlayerBtn.classList.add('hidden');
-                debugLog("Reset selection state after removal");
-            } else {
-                debugLog("Invalid removal attempt - selectedPlayerNum:", selectedPlayerNum);
-                addSystemMessage("Please select a player other than Player 1 to remove", false, false, true);
+    // AI Models event listeners
+    if (aiModelsBtn) {
+        aiModelsBtn.addEventListener('click', function() {
+            aiModelsModal.classList.remove('hidden');
+        });
+    }
+    
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', function() {
+            aiModelsModal.classList.add('hidden');
+        });
+    }
+    
+    if (aiModelsModal) {
+        aiModelsModal.addEventListener('click', function(e) {
+            if (e.target === aiModelsModal) {
+                aiModelsModal.classList.add('hidden');
             }
         });
     }
-    
-    if (undoBtn) undoBtn.addEventListener('click', undoChat);
-    if (redoBtn) redoBtn.addEventListener('click', redoChat);
-    
-    if (diceBtn) {
-        diceBtn.addEventListener('click', function() {
-            const p1Name = playerNames[1] || "Player 1";
-            const diceCommandInput = { value: "/roll 1d20" };
-            addMessage(p1Name, "rolls 1d20...");
-            sendMessage(diceCommandInput, 1);
-        });
-    }
-    
-    if (copyChatBtn) {
-        copyChatBtn.addEventListener('click', function() {
-            let chatText = "";
-            chatWindow.querySelectorAll('.message').forEach(msgDiv => {
-                const sender = msgDiv.querySelector('.message-sender').textContent;
-                const content = msgDiv.querySelector('.message-content').textContent;
-                chatText += `${sender} ${content}\n`;
-            });
-            navigator.clipboard.writeText(chatText.trim())
-                .then(() => addSystemMessage("Chat copied to clipboard!", false, true, true))
-                .catch(err => addSystemMessage("Failed to copy chat.", false, true, true));
-        });
-    }
-    
+
+    // Sidebar toggle functionality
     if (menuToggleBtn && sideMenu) {
-        menuToggleBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
+        menuToggleBtn.addEventListener('click', function() {
+            debugLog('Menu toggle clicked');
             sideMenu.classList.toggle('open');
-            // Add/remove menu-open class to the toggle button itself
-            menuToggleBtn.classList.toggle('menu-open', sideMenu.classList.contains('open'));
-            const icon = menuToggleBtn.querySelector('i');
-            if (icon) {
-                if (sideMenu.classList.contains('open')) {
-                    icon.classList.remove('fa-bars');
-                    icon.classList.add('fa-times');
-                } else {
-                    icon.classList.remove('fa-times');
-                    icon.classList.add('fa-bars');
-                }
-            }
+            menuToggleBtn.classList.toggle('menu-open');
         });
-        
-        // Modified document click handler to better handle player selection
-        document.addEventListener('click', function(e) {
-            // Don't close sidebar if clicking on player input elements
-            if (e.target.closest('.player-input')) {
-                debugLog("Click on player input detected, not closing sidebar");
-                return;
-            }
+    }
+
+    // Close sidebar when clicking outside
+    document.addEventListener('click', function(e) {
+        if (sideMenu && menuToggleBtn) {
+            const isClickInsideSidebar = sideMenu.contains(e.target);
+            const isClickOnToggle = menuToggleBtn.contains(e.target);
             
-            // Don't close sidebar if clicking on sidebar buttons
-            if (e.target.closest('.side-menu-btn')) {
-                debugLog("Click on sidebar button detected, not closing sidebar");
-                return;
-            }
-            
-            // Don't close sidebar if clicking inside the sidebar itself
-            if (sideMenu.contains(e.target)) {
-                debugLog("Click inside sidebar detected, not closing sidebar");
-                return;
-            }
-            
-            // Don't close sidebar if clicking on the menu toggle button
-            if (e.target === menuToggleBtn || menuToggleBtn.contains(e.target)) {
-                debugLog("Click on menu toggle detected, not closing sidebar");
-                return;
-            }
-            
-            // Close the sidebar for all other clicks
-            if (sideMenu.classList.contains('open')) {
-                debugLog("Closing sidebar due to outside click");
+            if (!isClickInsideSidebar && !isClickOnToggle && sideMenu.classList.contains('open')) {
                 sideMenu.classList.remove('open');
                 menuToggleBtn.classList.remove('menu-open');
-                const icon = menuToggleBtn.querySelector('i');
-                if (icon) {
-                    icon.classList.remove('fa-times');
-                    icon.classList.add('fa-bars');
-                }
-            }
-        });
-    }
-
-    // Add the missing updatePlayerLabels function
-    function updatePlayerLabels() {
-        debugLog("updatePlayerLabels called with playerNames:", playerNames);
-        
-        // Update Player 1 label
-        const p1Label = document.getElementById('player1-label');
-        if (p1Label) {
-            if (playerNames[1]) {
-                p1Label.textContent = `${playerNames[1]}:`;
-                debugLog(`Set Player 1 label to: ${playerNames[1]}:`);
-            } else {
-                p1Label.textContent = 'Player 1:';
-                debugLog("Set Player 1 label to default: Player 1:");
             }
         }
-        
-        // Update additional player labels
-        Object.entries(playerNames).forEach(([num, name]) => {
-            if (num !== '1' && name) {
-                const playerLabel = document.getElementById(`player${num}-label`);
-                if (playerLabel) {
-                    playerLabel.textContent = `${name}:`;
-                    debugLog(`Set Player ${num} label to: ${name}:`);
-                }
+    });
+
+    // Copy chat functionality
+    if (copyChatBtn) {
+        copyChatBtn.addEventListener('click', function() {
+            const messages = Array.from(chatWindow.querySelectorAll('.message:not(.temporary-message)'));
+            const chatText = messages.map(msg => {
+                const sender = msg.querySelector('.message-sender')?.textContent || '';
+                const content = msg.querySelector('.message-content')?.textContent || '';
+                return `${sender} ${content}`;
+            }).join('\n\n');
+            
+            navigator.clipboard.writeText(chatText).then(() => {
+                addSystemMessage('Chat copied to clipboard!', false, false, true);
+            }).catch(err => {
+                debugLog('Error copying to clipboard:', err);
+                addSystemMessage('Error copying chat to clipboard.', false, false, true);
+            });
+        });
+    }
+
+    // Dice button for Player 1
+    if (diceBtn) {
+        diceBtn.addEventListener('click', function() {
+            if (!isGenerating) {
+                const playerName = playerNames[1] || 'Player 1';
+                addMessage(playerName, 'rolls 1d20...');
+                const diceCommandInput = { value: '/roll 1d20' };
+                sendMessage(diceCommandInput, 1);
             }
         });
     }
 
-    // Add a function to sync player selection between PlayerManager and main.js
-    window.updatePlayerSelection = function(element, num) {
-        debugLog("Updating player selection in main.js:", num, element);
-        selectedPlayerElement = element;
-        selectedPlayerNum = num;
-    };
+    // Undo/Redo functionality
+    if (undoBtn) {
+        undoBtn.addEventListener('click', undoChat);
+    }
+    
+    if (redoBtn) {
+        redoBtn.addEventListener('click', redoChat);
+    }
 
     // Initial setup - clean and clear flow
     if (currentGameId) {
         debugLog("Restoring session:", currentGameId);
         initialize();
+        loadAvailableModels(); // Load models after initialization
     } else {
         debugLog("No previous gameId. Setting up for a new game implicitly.");
         
@@ -1268,6 +1352,7 @@ document.addEventListener('DOMContentLoaded', function() {
         nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
         updatePlayerLabels(); // Apply saved names to UI
         updateUndoRedoButtons();
+        loadAvailableModels(); // Load models for new games too
     }
 
     window.sendMessage = sendMessage;
@@ -1277,3 +1362,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // IMPORTANT: REMOVE ANY FUNCTIONS DEFINED OUTSIDE THE DOM CONTENT LOADED EVENT
 // The selectPlayer and removePlayer functions were incorrectly defined here earlier
+
+// Global function for reasoning toggle (called from HTML)
+function toggleReasoning(reasoningId) {
+    const reasoningContent = document.getElementById(reasoningId);
+    if (!reasoningContent) return;
+    
+    // Find the toggle button (should be the previous sibling)
+    const toggleButton = reasoningContent.previousElementSibling;
+    
+    if (reasoningContent.style.display === 'none') {
+        reasoningContent.style.display = 'block';
+        if (toggleButton) toggleButton.classList.add('expanded');
+    } else {
+        reasoningContent.style.display = 'none';
+        if (toggleButton) toggleButton.classList.remove('expanded');
+    }
+}
+
+// Make the function globally available
+window.toggleReasoning = toggleReasoning;

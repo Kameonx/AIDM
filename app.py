@@ -1,29 +1,28 @@
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, redirect, url_for, send_from_directory
 import os
-import requests
-import time
+import sys
 import json
 import uuid
-import re  # Add this import at the top with the other imports
-from dotenv import load_dotenv  # Add this import
+import time
+import requests
+import re
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 
-load_dotenv(override=True)  # Ensure .env is loaded and overrides any existing env vars
+# Import configuration
+from config import (
+    VENICE_API_KEY, VENICE_URL, DEFAULT_MODEL_ID, CHAT_DIR, AVAILABLE_MODELS,
+    SYSTEM_PROMPT_BASE, MULTIPLAYER_PROMPT_ADDITION, SINGLEPLAYER_PROMPT_ADDITION, PROMPT_ENDING
+)
 
 app = Flask(__name__, static_folder='static')
 app.secret_key = os.urandom(24)  # Required for session
 
 # Create a directory to store user chat histories
-CHAT_DIR = 'chat_histories'
 if not os.path.exists(CHAT_DIR):
     os.makedirs(CHAT_DIR)
 
-# Venice AI Configuration
-VENICE_API_KEY = os.getenv("VENICE_API_KEY")
+# Validate API key
 if not VENICE_API_KEY:
-    import sys
     print("ERROR: VENICE_API_KEY not found in environment. Please check your .env file.", file=sys.stderr)
-MODEL_ID = "llama-3.3-70b"
-VENICE_URL = "https://api.venice.ai/api/v1/chat/completions"
 
 def get_user_id():
     """Get or create a unique user ID for the current session"""
@@ -114,12 +113,18 @@ def format_message_content(content):
     
     return content
 
-# Add route to serve static files
-@app.route('/static/<path:path>')
-def send_static(path):
-    return send_from_directory('static', path)
+def build_system_prompt(is_multiplayer):
+    """Build the complete system prompt based on game type"""
+    prompt = SYSTEM_PROMPT_BASE
+    
+    if is_multiplayer:
+        prompt += MULTIPLAYER_PROMPT_ADDITION
+    else:
+        prompt += SINGLEPLAYER_PROMPT_ADDITION
+    
+    prompt += PROMPT_ENDING
+    return prompt
 
-# Add helper function for loading game ID
 def load_or_create_game_id(user_id):
     """Get existing game ID or create a new one"""
     try:
@@ -137,13 +142,16 @@ def load_or_create_game_id(user_id):
             return user_games[0]
         else:
             # Create new game ID
-            import uuid, time
             return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
     except Exception as e:
         app.logger.error(f"Error in load_or_create_game_id: {e}")
         # Fallback to creating new game ID
-        import uuid, time
         return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+
+# Add route to serve static files
+@app.route('/static/<path:path>')
+def send_static(path):
+    return send_from_directory('static', path)
 
 # Route to serve the HTML page
 @app.route('/')
@@ -178,7 +186,8 @@ def chat():
         user_id = get_user_id()
         data = request.json
         if data is None or 'message' not in data:
-            return jsonify({"response": "Invalid request: missing message data.", "error": True}), 400
+            return jsonify({"response": "No message provided.", "error": True}), 400
+        
         user_input = data['message']
         game_id = data.get('game_id')
         player_number = data.get('player_number', 1)  # Default to player 1
@@ -216,6 +225,26 @@ def chat():
         app.logger.error("Error in /chat endpoint: %s", str(e))
         return jsonify({"response": "Internal server error.", "error": True}), 500
 
+def get_valid_model(model_id):
+    valid_models = [model['id'] for model in AVAILABLE_MODELS]
+    if model_id in valid_models:
+        return model_id
+    return DEFAULT_MODEL_ID
+
+def get_model_capabilities(model_id):
+    """Get model capabilities from config"""
+    for model in AVAILABLE_MODELS:
+        if model['id'] == model_id:
+            return {
+                'supportsFunctionCalling': model.get('supportsFunctionCalling', False),
+                'supportsParallelToolCalls': model.get('supportsParallelToolCalls', False)
+            }
+    # Default capabilities for unknown models
+    return {
+        'supportsFunctionCalling': False,
+        'supportsParallelToolCalls': False
+    }
+
 @app.route('/stream', methods=['POST', 'GET'])
 def stream_response():
     """Stream response for AI messages"""
@@ -226,23 +255,26 @@ def stream_response():
     if request.method == 'GET':
         game_id = request.args.get('game_id')
         message_id = request.args.get('message_id')
+        # Accept model_id as a query param for SSE fallback
+        model_id = request.args.get('model_id')
+        if model_id:
+            session['selected_model'] = get_valid_model(model_id)
     else:
         # For POST requests from fetch API
         data = json.loads(request.data)
         game_id = data.get('game_id')
         message_id = data.get('message_id')
-    
+        model_id = data.get('model_id')
+        if model_id:
+            session['selected_model'] = get_valid_model(model_id)
+
     # Load chat history for this specific user
     chat_history = load_chat_history(user_id, game_id)
     
     # Print debug info
-    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}")
+    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model')}")
 
     def generate():
-        # Check for player names in the chat history
-        player_names = {}
-        
-        # Rest of the generate function remains the same
         # Check if there are multiple players in the session and gather names
         player_counts = {}
         
@@ -255,139 +287,8 @@ def stream_response():
         # Check if multiple players are active
         is_multiplayer = len(player_counts) > 1
         
-        system_prompt = (
-            "Act as a friendly D&D 5e Dungeon Master. Keep responses brief and conversational - "
-            "Don't generate the story until after character creation and ask the player if they have a story in mind. "
-            "Remember key events in the story and refer to them when relevant. "
-            # Add this instruction to avoid the "land of Eridoria" pattern
-            "IMPORTANT: DO NOT use specific pre-defined locations or settings like 'land of Eridoria' until "
-            "the players have decided on a setting. Instead, just welcome players to the game with a general greeting. "
-            "Allow players to help shape the world through their backstories. "
-            "Only create location names after character creation is complete."
-            
-            "Make sure the story is engaging and immersive, not just a series of actions. "
-            "Think of a very powerful evil D&D enemy that the players will face at the end of the adventure, if applicable to their story. "
-            "Have smaller enemies hint at the powerful enemy throughout the story. "
-            "Don't just give away the enemy's name, but drop hints about their power and influence. "
-            
-            "FORMAT YOUR RESPONSES WITH RICH FORMATTING FOR MAXIMUM IMMERSION! This is extremely important:"
-            "1. Use **bold text** for IMPORTANT information, dramatic moments, and critical announcements"
-            "2. Use *italics* for subtle descriptions, mood setting, and atmospheric details"
-            "3. Use [element]text[/element] color formatting extensively for all magical effects and environmental descriptions"
-            
-            "USE EXTENSIVE FORMATTING FOR IMMERSION: Use [fire], [ice], [lightning], [poison], [acid], [radiant], [necrotic], "
-            "[psychic], [thunder], and [force] tags around corresponding spell names, effects, and related descriptions. For example, write "
-            "'The dragon breathes [fire]fire[/fire] at you!' or 'The wizard casts [lightning]lightning bolt[/lightning]!' "
-            "USE THESE FORMATTING TAGS FOR ALL APPROPRIATE NOUNS AND DESCRIPTIONS, not just spell names."
-            
-            "ALWAYS USE BOLD TEXT: Use ** (bold) for important announcements, dramatic moments, and intense actions. "
-            "For example: '**The dragon roars** and the entire cavern shakes!' or '**CRITICAL HIT!** Your sword strikes true.' "
-            "Use bold text for enemy introductions, important discoveries, and major plot points."
-            
-            "ALWAYS USE ITALICS: Use * (italics) for subtle descriptions, whispered speech, thoughts, and atmospheric details. "
-            "For example: '*A gentle breeze carries the scent of roses*' or '*The thief whispers a warning*' "
-            "Use italics for ambient scene descriptions, character emotions, and subtle cues."
-            
-            "USE THESE FORMATTING OPTIONS LIBERALLY - at least once or twice in every message to make the game more exciting and easy to read."
-            
-            "COLORS: Describe objects with their colors and use spell formatting tags for colored objects when appropriate. "
-            "For fire-colored things (red/orange flames, molten lava) use [fire]red flames[/fire]. "
-            "For ice-colored things (blue/white frost, winter scenes) use [ice]blue ice crystals[/ice]. "
-            "For lightning-colored things (blue/white electricity) use [lightning]crackling blue energy[/lightning]. "
-            "For poison-colored things (green toxins) use [poison]sickly green vapors[/poison]. "
-            "For acid-colored things (yellow-green) use [acid]bubbling green acid[/acid]. "
-            "For radiant-colored things (holy light, golden glow) use [radiant]golden divine light[/radiant]. "
-            "For necrotic-colored things (black/purple darkness) use [necrotic]dark shadowy energy[/necrotic]. "
-            "For psychic-colored things (pink/purple) use [psychic]shimmering purple energy[/psychic]. "
-            
-            "use just 2-3 sentences unless more detail is necessary for rules, combat or important descriptions. "
-            "Use emojis frequently to emphasize emotions and actions. "
-            "adjust difficulty based on their character's level, party size, and abilities. "
-            "limit responses to a readable length, ideally under 500 characters. "
-            "Make NPCs unique and memorable, with distinct personalities and quirks. "
-            "Have NPCs introduce themselves by initating dialogue, or by other unique methods, not just narrating their name and roles."
-            "For example, an NPC might say: 'Ah, greetings! I am Elara, the keeper of this ancient library. What knowledge do you seek?' "
-            "Also never use Elara as an NPC name, use unique names for each NPC. Generate NPC names that fit the setting and culture. "
-            
-            "PLAYER STATS: Keep a mental record of each player's character sheet including: "
-            "name, race, class, level, HP, AC, and ability scores (STR, DEX, CON, INT, WIS, CHA). "
-            "When players provide their stats, acknowledge them and refer to them in relevant situations. "
-            "If a player takes damage, track their HP and remind them of their current HP total. Include where they're injured for immersion. "
-            "If a player rolls a dice, consider their stat modifiers and apply them to the story. "
-            "If a player asks for their stats, provide them in a concise format: "
-            
-            "COMBAT RULES: When combat begins, say 'Roll for initiative!' and track the order. "
-            "Adhere to D&D 5e combat rules: "
-            "Each player gets one action, one bonus action, movement, and potentially one reaction. "
-            "Always mention enemy HP and AC during combat. Describe hits, misses and damage clearly. "
-            "Consider enemy class, actions, bonus actions, movement, and reactions. "
-            "Track damage to enemies and announce when they're bloodied (half HP) or defeated. "
-            "For each player's turn, remind them they get one action, one bonus action, movement, "
-            "and potentially one reaction (on other creatures' turns). Track which actions each player "
-            "has used in a round. Suggest tactical options based on their character's abilities and position. "
-            "update battlefield conditions (e.g., difficult terrain, cover, distance to enemy) as needed. "
-            "determine if conditions meet advantage or disadvantage criteria to add to the immersion. "
-            "be descriptive and detailed about the player's ability and how/where it affects enemies. "
-            
-            "DICE ROLLS: Calculate most damage rolls automatically (e.g., 'Your greatsword hits for 2d6+3 damage... "
-            "that's 10 damage!'). Ask players to roll dice during important story moments, critical hits, "
-            "death saves, and decisive actions. Apply advantage (roll twice, take higher) or disadvantage "
-            "(roll twice, take lower) based on narrative circumstances and terrain. Ask for specific checks "
-            "based on player actions (e.g., 'Make a Dexterity (Acrobatics) check to leap across the chasm'). "
-            "follow D&D 5e rules for ability checks, saving throws, and skill checks. "
-            "have players roll often, especially for combat, skill checks, and saving throws. "
-            "When a player rolls, describe the action and outcome based on the roll result. "
-            "apply the rule of cool and tell them if appropriate, they can roll with advantage or disadvantage. "
-
-            "For standard rolls, ask the player to roll (e.g., 'Roll a d20 + your Strength modifier') but also "
-            "offer to roll for them (e.g., 'Or I can roll for you if you prefer.'). If the player asks you to roll, "
-            "generate a random result, apply appropriate modifiers, and describe the outcome. "
-            
-            "Use appropriate emojis including: 🧙 for magic, ⚔️ for combat, 🐉 for monsters, "
-            "🏰 for locations, 💰 for treasure, 🍺 for taverns, 🔮 for mystical elements, "
-            "🎲 for dice rolls, 💥 for damage, 🛡️ for defense, ❤️ for healing, "
-            "🌲 for nature, 🏆 for achievements, and ❓ for mysteries. "
-            "Start most of your responses with a relevant emoji. "
-        )
-        
-        # Add multiplayer context if needed
-        if is_multiplayer:
-            system_prompt += (
-                "You are running a multiplayer game with multiple players. "
-                "When a new player joins, welcome them warmly and ALWAYS ASK FOR THEIR NAME EXPLICITLY. "
-                "For example, if Player 2 joins, say something like: '👋 **Welcome, new adventurer!** I'm delighted "
-                "to have another hero join our quest. *What is your name, brave one?* Please introduce yourself to the party!' "
-                "NEVER just use a wave emoji alone. ALWAYS ask their name with a full sentence question."
-                "When a player tells you their name, acknowledge with 'Player X is now named [NAME]'. "
-                # Add instruction to avoid the specific land pattern
-                "AVOID mentioning specific lands or places until AFTER all players have introduced themselves "
-                "and character creation is complete. Just welcome them to the game, not to a specific place."
-                "Treat each player as an independent character in the story. "
-                "Keep track of each character's stats, inventory and abilities separately. "
-                "specifically address each player by their name when they take actions or make decisions. "
-                "address specific players to make actions, if the story is focused on them. "
-                
-                "CRITICAL: When you receive a system message that a player has LEFT THE GAME, "
-                "immediately stop addressing that player and ONLY interact with the remaining active players. "
-                "The system will tell you exactly which players are still active - ONLY address those players. "
-                "Do NOT ask the departed player any questions or wait for their response. "
-                "Briefly acknowledge their departure in the story and continue with remaining players only."
-            )
-        else:
-            system_prompt += (
-                # Modify the default acknowledgement to avoid specific land mentions
-                "When the player tells you their name, acknowledge with 'So your name is [NAME]' and add a welcoming emoji. "
-                "DO NOT follow this with 'welcome to the land of Eridoria' or any other pre-defined location name. "
-                "Instead say 'Welcome to our adventure!' or ask about their character details."
-            )
-        
-        system_prompt += (
-            "When asking for stats (STR, DEX, CON, INT, WIS, CHA), offer to generate random stats. "
-            "After gathering character info, ask if they're ready to begin an adventure "
-            "and offer to create a story or let them choose the type of adventure. "
-            "Automatically apply modifiers to any dice rolls. Use 🎲 when describing dice rolls. "
-            "Respond succinctly like a human DM would, keeping emoji use natural and appropriate."
-        )
+        # Build system prompt based on multiplayer status
+        system_prompt = build_system_prompt(is_multiplayer)
         
         # Prepare messages for the API
         api_messages = [
@@ -420,95 +321,122 @@ def stream_response():
                     "content": msg.get("content", "")
                 })
         
+        # Get selected model from session, default to DEFAULT_MODEL_ID
+        selected_model = get_valid_model(session.get('selected_model', DEFAULT_MODEL_ID))
+        app.logger.debug(f"Using Venice model: {selected_model}")
+        
+        # Get model capabilities to determine which parameters to include
+        capabilities = get_model_capabilities(selected_model)
+        app.logger.debug(f"Model capabilities: {capabilities}")
+
         payload = {
             "venice_parameters": {"include_venice_system_prompt": True},
-            "model": MODEL_ID,
+            "model": selected_model,
             "messages": api_messages,
             "temperature": 1,
             "top_p": 1,
             "n": 1,
-            "stream": True,  # Enable streaming
+            "stream": True,
             "presence_penalty": 0,
-            "frequency_penalty": 0,
-            "parallel_tool_calls": True
+            "frequency_penalty": 0
         }
+        
+        # Only add parallel_tool_calls if the model supports it
+        if capabilities['supportsParallelToolCalls']:
+            payload["parallel_tool_calls"] = True
+            app.logger.debug("Added parallel_tool_calls to payload")
+        else:
+            app.logger.debug("Skipped parallel_tool_calls - not supported by this model")
 
         headers = {
             "Authorization": f"Bearer {VENICE_API_KEY}",
             "Content-Type": "application/json"
         }
-
         try:
-            # Make a streaming request to Venice API
             with requests.post(
                 VENICE_URL,
                 json=payload,
                 headers=headers,
                 stream=True,
-                timeout=60  # Increase timeout to 60 seconds for longer responses
+                timeout=60
             ) as response:
                 full_response = ""
+                app.logger.debug(f"Venice API response status: {response.status_code}")
+                app.logger.debug(f"Venice API response headers: {response.headers}")
                 
-                # Use startswith to check for SSE streaming
-                if response.headers.get('content-type', '').startswith('text/event-stream'):
-                    # Process SSE stream
+                # Check if the response is successful
+                if response.status_code != 200:
+                    app.logger.error(f"Venice API error: {response.status_code} - {response.text}")
+                    yield f"data: {json.dumps({'content': f'API Error: {response.status_code}', 'full': f'API Error: {response.status_code}', 'error': True})}\n\n"
+                    yield f"event: done\ndata: {{}}\n\n"
+                    return
+                
+                # Check content type to determine if streaming or not
+                content_type = response.headers.get('content-type', '').lower()
+                app.logger.debug(f"Content-Type: {content_type}")
+                
+                if 'text/event-stream' in content_type:
+                    # Handle streaming response
+                    app.logger.debug("Processing as streaming response")
                     for line in response.iter_lines():
                         if line:
-                            line_text = line.decode('utf-8')
-                            if line_text.startswith('data: '):
-                                data = line_text[6:]  # Remove 'data: ' prefix
-                                if data == '[DONE]':
-                                    break
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
                                 try:
-                                    json_data = json.loads(data)
-                                    if 'choices' in json_data and len(json_data['choices']) > 0:
-                                        delta = json_data['choices'][0].get('delta', {})
-                                        if 'content' in delta:
-                                            content = delta['content']
+                                    data_json = line[6:]
+                                    if data_json.strip() == '[DONE]':
+                                        break
+                                    data = json.loads(data_json)
+                                    if 'choices' in data and len(data['choices']) > 0:
+                                        delta = data['choices'][0].get('delta', {})
+                                        content = delta.get('content', '')
+                                        if content:
                                             full_response += content
                                             yield f"data: {json.dumps({'content': content, 'full': full_response})}\n\n"
-                                            # Make sure to properly flush responses for chunked data
-                                except json.JSONDecodeError:
+                                except Exception as e:
+                                    app.logger.error(f"Error parsing Venice SSE: {e}")
                                     continue
                 else:
-                    # Fallback to non-streaming API
+                    # Handle non-streaming JSON response
+                    app.logger.debug("Processing as non-streaming JSON response")
                     try:
                         response_data = response.json()
+                        app.logger.debug(f"Non-streaming response data: {response_data}")
+                        
+                        if 'choices' in response_data and len(response_data['choices']) > 0:
+                            choice = response_data['choices'][0]
+                            if 'message' in choice and 'content' in choice['message']:
+                                full_response = choice['message']['content']
+                                app.logger.debug(f"Extracted content length: {len(full_response)}")
+                                # Send the full response at once
+                                yield f"data: {json.dumps({'content': full_response, 'full': full_response})}\n\n"
+                            else:
+                                app.logger.error(f"Unexpected response structure: {choice}")
+                                yield f"data: {json.dumps({'content': 'Invalid response structure from AI', 'full': 'Invalid response structure from AI', 'error': True})}\n\n"
+                        elif 'error' in response_data:
+                            error_msg = response_data.get('error', {}).get('message', 'Unknown API error')
+                            app.logger.error(f"API returned error: {error_msg}")
+                            yield f"data: {json.dumps({'content': f'API Error: {error_msg}', 'full': f'API Error: {error_msg}', 'error': True})}\n\n"
+                        else:
+                            app.logger.error(f"No choices in response: {response_data}")
+                            yield f"data: {json.dumps({'content': 'No response from AI', 'full': 'No response from AI', 'error': True})}\n\n"
                     except Exception as e:
-                        app.logger.error(f"Venice API returned non-JSON response: {response.text}")
-                        error_msg = "The AI service is currently unavailable (bad gateway). Please try again later."
-                        yield f"data: {json.dumps({'content': error_msg, 'full': error_msg, 'error': True})}\n\n"
-                        return
-
-                    if 'choices' in response_data and len(response_data['choices']) > 0:
-                        content = response_data['choices'][0]['message']['content']
-                        full_response = content
-                        yield f"data: {json.dumps({'content': content, 'full': full_response})}\n\n"
-                    else:
-                        app.logger.error(f"Venice API error response: {response_data}")
-                        error_msg = response_data.get("error", "The AI service is currently unavailable (bad gateway). Please try again later.")
-                        full_response = error_msg
-                        yield f"data: {json.dumps({'content': error_msg, 'full': error_msg, 'error': True})}\n\n"
+                        app.logger.error(f"Error parsing JSON response: {e}")
+                        app.logger.error(f"Raw response: {response.text}")
+                        yield f"data: {json.dumps({'content': 'Error parsing AI response', 'full': 'Error parsing AI response', 'error': True})}\n\n"
                 
-                # Store the complete response in the user's chat history
+                # Store the complete response in chat history
                 if full_response:
-                    # Apply formatting before saving to history AND ensure it's processed properly
+                    # Always format the content before storing
                     formatted_content = format_message_content(full_response)
                     chat_history.append({"role": "assistant", "content": formatted_content})
                     save_chat_history(user_id, chat_history, game_id)
-                    
-                # When all done, send a done event
-                yield f"event: done\ndata: {{}}\n\n"
-                    
+                    app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")
         except Exception as e:
-            app.logger.error(f"Stream error: {str(e)}")
-            error_msg = f"I'm having trouble connecting to my brain right now. Please try again in a few moments."
-            yield f"data: {json.dumps({'content': error_msg, 'full': error_msg, 'error': True})}\n\n"
-            # Add error response to history
-            chat_history.append({"role": "assistant", "content": error_msg})
-            save_chat_history(user_id, chat_history, game_id)
+            app.logger.error(f"Error in API request: {str(e)}")
+            yield f"data: {json.dumps({'content': f'Error: {str(e)}', 'full': f'Error: {str(e)}', 'error': True})}\n\n"
             yield f"event: done\ndata: {{}}\n\n"
-
+    
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 @app.route('/new_game', methods=['POST'])
@@ -532,10 +460,19 @@ def load_history():
     # Load chat history
     chat_history = load_chat_history(user_id, game_id)
     
-    # Return the chat history
-    return jsonify({"history": chat_history})
+    # Process each message to ensure formatting is preserved
+    processed_history = []
+    for msg in chat_history:
+        processed_msg = msg.copy()
+        # Ensure all assistant messages are properly formatted
+        if msg.get('role') == 'assistant' and msg.get('content'):
+            # Re-apply formatting to ensure colors and effects show up
+            processed_msg['content'] = format_message_content(msg['content'])
+        processed_history.append(processed_msg)
+    
+    # Return the processed chat history
+    return jsonify({"history": processed_history})
 
-# Simplify the get_updates endpoint
 @app.route('/get_updates', methods=['POST'])
 def get_updates():
     """Get updates to chat history since last timestamp"""
@@ -607,27 +544,29 @@ def set_player_name():
         app.logger.error(f"Error in /set_player_name: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Add this function near the top with the other helper functions
-def is_valid_player_name(name):
-    """Check if a name is valid for a player"""
-    if not name or len(name) < 2:
-        return False
+@app.route('/get_models', methods=['GET'])
+def get_models():
+    """Get available AI models"""
+    return jsonify({"models": AVAILABLE_MODELS})
+
+@app.route('/set_model', methods=['POST'])
+def set_model():
+    """Set the current AI model for the session"""
+    data = request.get_json()
+    model_id = data.get('model_id')
     
-    # List of words that shouldn't be used as player names
-    invalid_names = [
-        "your", "you", "player", "adventurer", "friend", "traveler", 
-        "hero", "warrior", "wizard", "character", "party", "team",
-        "user", "person", "human", "my", "mine", "self", "their"
-    ]
+    if not model_id:
+        return jsonify({"success": False, "error": "Missing model_id"}), 400
     
-    if name.lower() in invalid_names:
-        return False
+    # Validate model exists
+    valid_models = [model['id'] for model in AVAILABLE_MODELS]
+    if model_id not in valid_models:
+        return jsonify({"success": False, "error": "Invalid model_id"}), 400
     
-    # Check if first letter is capitalized (proper name convention)
-    if not name[0].isupper():
-        return False
-        
-    return True
+    # Store in session (you could also store in database if needed)
+    session['selected_model'] = model_id
+    
+    return jsonify({"success": True, "model_id": model_id})
 
 if __name__ == '__main__':
     app.run(debug=True)

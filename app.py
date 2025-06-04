@@ -58,58 +58,34 @@ def format_message_content(content):
         return content
     
     # Don't re-format if content already has HTML formatting tags
-    if re.search(r'<span class="(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)">', content):
+    if re.search(r'<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">', content):
         return content
     
-    # Don't re-format if content already has formatting tags (square brackets)
-    if re.search(r'\[(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)\]', content):
+    # Don't re-format if content already has new color formatting tags
+    if re.search(r'\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal):', content):
         return content
     
-    # Add spell formatting to common spell terms
-    spell_types = {
-        "fire": ["fireball", "burning hands", "fire bolt", "flame strike", "wall of fire", "fire storm", "fiery", "flames", "inferno", "blaze", "red dragon", "ember"],
-        "ice": ["ice knife", "cone of cold", "frost bite", "ice storm", "wall of ice", "freezing sphere", "frostbite", "frozen", "icicle", "snow", "white dragon", "freeze"],
-        "lightning": ["lightning bolt", "chain lightning", "shocking grasp", "call lightning", "lightning arrow", "electric", "thunder", "shock", "electrocute", "blue dragon", "spark"],
-        "poison": ["poison spray", "cloudkill", "ray of sickness", "poison gas", "venom", "toxic", "poisonous", "green dragon", "toxin"],
-        "acid": ["acid splash", "acid arrow", "vitriolic sphere", "melf's acid arrow", "acidic", "dissolve", "corrode", "black dragon", "melt"],
-        "radiant": ["sacred flame", "guiding bolt", "sunbeam", "sunburst", "divine", "holy", "radiance", "radiant", "celestial", "solar", "angelic", "divine", "heavenly"],
-        "necrotic": ["chill touch", "blight", "circle of death", "finger of death", "harm", "necrotic", "undead", "decay", "rot", "wither", "shadow", "death"],
-        "psychic": ["mind sliver", "mind blast", "psychic scream", "mental", "telepathic", "psychic", "mind", "telepathy", "psionic"],
-        "thunder": ["thunderwave", "thunderclap", "shatter", "thunder step", "thunderous smite", "thunderous", "thunder", "sonic", "booming"],
-        "force": ["magic missile", "eldritch blast", "force cage", "wall of force", "bigby's hand", "arcane", "force", "magical energy"]
+    # Apply color formatting for common D&D terms
+    color_mappings = {
+        "red": ["fire", "flame", "burn", "hot", "dragon", "blood", "anger", "rage", "demon", "devil", "heat", "scorch", "blaze", "inferno"],
+        "blue": ["ice", "cold", "frost", "freeze", "water", "ocean", "sea", "calm", "peace", "sad", "tears", "chill"],
+        "yellow": ["lightning", "light", "bright", "gold", "golden", "divine", "holy", "sacred", "sun", "solar", "electric", "shock"],
+        "green": ["poison", "venom", "toxic", "nature", "forest", "plant", "tree", "sick", "disease", "goblin", "orc"],
+        "purple": ["magic", "magical", "mystic", "mysterious", "enchant", "spell", "arcane", "psychic", "royal", "noble"],
+        "orange": ["explosion", "explode", "adventure", "treasure", "excitement", "energy", "enthusiastic", "warm"],
+        "pink": ["charm", "love", "beauty", "fairy", "gentle", "kind", "sweet", "romance", "affection"],
+        "cyan": ["heal", "healing", "cure", "bless", "blessing", "divine", "restoration", "recovery", "mend"],
+        "lime": ["life", "growth", "renewal", "nature", "alive", "vibrant", "fresh", "spring"],
+        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"]
     }
     
-    # Apply formatting to each spell type keyword
-    for spell_type, keywords in spell_types.items():
+    # Apply color formatting to relevant words
+    for color, keywords in color_mappings.items():
         for keyword in keywords:
-            # Use a case-insensitive regex with word boundaries
-            pattern = r'\b(' + re.escape(keyword) + r's?)\b'
-            # Wrap matching words with spell type tags
-            content = re.sub(pattern, f'[{spell_type}]\\1[/{spell_type}]', content, flags=re.IGNORECASE)
-    
-    # Add emphasis to subtle descriptions
-    subtle_phrases = [
-        r'(?i:whispers)\s', r'(?i:murmurs)\s', r'(?i:barely audible)', r'(?i:hushed tone)', 
-        r'(?i:quietly)', r'(?i:softly)', r'(?i:subtle)', r'(?i:faintly)'
-    ]
-    
-    for phrase in subtle_phrases:
-        # Find phrases containing these keywords
-        pattern = f'({phrase}[^.!?;:]*)'
-        content = re.sub(pattern, '*\\1*', content)
-    
-    # Add bold to dramatic moments, damage announcements
-    dramatic_phrases = [
-        r'(?i:critical hit\!*)', r'(?i:massive damage\!*)', r'(?i:deals \d+ damage)', 
-        r'(?i:takes \d+ damage)', r'(?i:BOOM\!*)', r'(?i:CRASH\!*)', r'(?i:SMASH\!*)',
-        r'(?i:SUCCESS\!+)', r'(?i:FAILURE\!+)', r'(?i:natural 20\!*)', r'(?i:natural 1\!*)',
-        r'(?i:Initiative order:)', r'(?i:You succeeded)', r'(?i:You failed)', r'(?i:Attack roll:)',
-        r'(?i:has been defeated\!)', r'(?i:victory\!)', r'(?i:level up\!)', r'(?i:treasure chest)',
-        r'(?i:You found)'
-    ]
-    
-    for phrase in dramatic_phrases:
-        content = re.sub(phrase, '**\\g<0>**', content)
+            # Use word boundaries and case-insensitive matching
+            pattern = r'\b(' + re.escape(keyword) + r'(?:s|ing|ed|er|est)?)\b'
+            replacement = f'[{color}:\\1]'
+            content = re.sub(pattern, replacement, content, flags=re.IGNORECASE)
     
     return content
 

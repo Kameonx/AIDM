@@ -16,7 +16,7 @@ const Utils = (function() {
         if (!text) return '';
         
         // Check if the text already contains proper HTML formatting
-        if (/<span class="(fire|ice|lightning|poison|acid|radiant|necrotic|psychic|thunder|force)">/.test(text)) {
+        if (/<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">/.test(text)) {
             return text; // Already formatted with HTML, return as is
         }
         
@@ -29,18 +29,17 @@ const Utils = (function() {
         // Handle reasoning text from AI models FIRST (before other processing)
         processedText = processReasoningText(processedText);
         
-        // Process emphasis tags FIRST (before spell tags to avoid conflicts)
+        // Process emphasis tags FIRST (before color tags to avoid conflicts)
         processedText = processedText
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
             .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
         
-        // Process spell tags [type]...[/type]
-        const spellTypes = ['fire', 'ice', 'lightning', 'poison', 'acid', 'radiant', 
-                            'necrotic', 'psychic', 'thunder', 'force'];
+        // Process new color tags [color:text]
+        const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal'];
         
-        for (const type of spellTypes) {
-            const regex = new RegExp(`\\[${type}\\](.*?)\\[\\/${type}\\]`, 'gi');
-            processedText = processedText.replace(regex, `<span class="${type}">$1</span>`);
+        for (const color of colorTypes) {
+            const regex = new RegExp(`\\[${color}:(.*?)\\]`, 'gi');
+            processedText = processedText.replace(regex, `<span class="${color}">$1</span>`);
         }
     
         return processedText;

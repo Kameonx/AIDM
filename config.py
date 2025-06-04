@@ -8,7 +8,7 @@ load_dotenv(override=True)
 # Venice AI Configuration
 VENICE_API_KEY = os.getenv("VENICE_API_KEY")
 VENICE_URL = "https://api.venice.ai/api/v1/chat/completions"
-DEFAULT_MODEL_ID = "llama-3.3-70b"
+DEFAULT_MODEL_ID = "venice-uncensored"
 
 # Validate API key
 if not VENICE_API_KEY:

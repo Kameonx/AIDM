@@ -4,7 +4,7 @@ AIDM README
 
 🔳 Using AIDM
 
-🐍 Visit the web app hosted here: https://aidm.onrender.com/
+🐍 Visit the web app hosted here: https://aidm.pro
 
 ---
 

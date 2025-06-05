@@ -336,7 +336,8 @@ html {
     margin: 0 0 10px 0;
     font-size: 0.7em; /* Reduced from 0.75em to 0.7em for better mobile fit */
     word-wrap: break-word; /* Add word wrapping for long words */
-    hyphens: auto; /* Enable automatic hyphenation */
+    overflow-wrap: break-word; /* Modern browsers */
+    /* Removed hyphens: auto to prevent hyphenation */
 }
 
 .side-menu-donation a {
@@ -644,77 +645,54 @@ span.pink, span.cyan, span.lime, span.teal {
     .modal-body {
         padding: 15px;
     }
+    
+    /* Add mobile-specific sidebar adjustments */
+    .side-menu {
+        width: 280px; /* Slightly wider on mobile for better readability */
+    }
+    
+    .side-menu-donation {
+        margin: 10px 8px; /* Reduce margins on mobile */
+        padding: 10px;
+    }
+    
+    .side-menu-donation p {
+        font-size: 0.65em; /* Even smaller text on mobile */
+        line-height: 1.3; /* Tighter line height on mobile */
+    }
+    
+    .side-menu-footer {
+        font-size: 0.7em; /* Slightly smaller footer text on mobile */
+        padding: 8px;
+    }
+    
+    /* Adjust menu toggle position when sidebar is wider on mobile */
+    .menu-toggle.menu-open {
+        left: 295px; /* Adjust for wider mobile sidebar */
+    }
+    
+    /* Ensure app wrapper shifts properly on mobile */
+    .side-menu.open + .app-wrapper {
+        margin-left: 280px; /* Match mobile sidebar width */
+    }
 }
 
-/* Reasoning section styles - Small square caret only */
-.reasoning-toggle-inline {
-    display: inline-block;
-    cursor: pointer;
-    margin: 0 2px 0 0; /* Remove bottom margin completely */
-    padding: 0;
-    background: rgba(98, 114, 164, 0.2) !important;
-    border: 1px solid rgba(98, 114, 164, 0.4) !important;
-    border-radius: 2px !important;
-    transition: background-color 0.2s ease;
-    width: 16px;
-    height: 16px;
-    text-decoration: none !important;
-    outline: none !important;
-    vertical-align: top;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0; /* Prevent shrinking */
-}
-
-.reasoning-toggle-inline:hover {
-    background: rgba(98, 114, 164, 0.35) !important;
-    text-decoration: none !important;
-}
-
-.reasoning-toggle-inline:focus {
-    outline: none !important;
-    box-shadow: none !important;
-}
-
-.reasoning-caret {
-    color: #6272a4;
-    font-size: 10px;
-    transition: transform 0.2s ease;
-    display: block;
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    line-height: 1;
-    text-align: center;
-}
-
-.reasoning-toggle-inline.expanded .reasoning-caret {
-    transform: rotate(90deg);
-}
-
-.reasoning-content-inline {
-    display: block;
-    margin: 0 0 4px 0; /* Remove top margin, keep only bottom margin */
-    padding: 8px 12px;
-    background: rgba(40, 42, 54, 0.6);
-    border-left: 3px solid #6272a4;
-    border-radius: 0 4px 4px 0;
-    max-height: 200px;
-    overflow-y: auto;
-    word-wrap: break-word; /* Add word wrapping to reasoning content */
-    overflow-wrap: break-word;
-    max-width: 100%; /* Ensure reasoning doesn't overflow */
-    box-sizing: border-box;
-}
-
-.reasoning-text-inline {
-    color: #6272a4;
-    font-style: italic;
-    line-height: 1.4;
-    font-size: 0.85em;
-    white-space: pre-wrap;
-    word-wrap: break-word; /* Ensure reasoning text wraps */
-    overflow-wrap: break-word;
+/* Additional mobile adjustments for very small screens */
+@media (max-width: 480px) {
+    .side-menu {
+        width: 100vw; /* Full width on very small screens */
+        transform: translateX(-100vw);
+    }
+    
+    .side-menu.open + .app-wrapper {
+        margin-left: 100vw; /* Hide main content when sidebar is open */
+    }
+    
+    .menu-toggle.menu-open {
+        left: calc(100vw - 45px); /* Position toggle button at the right edge */
+    }
+    
+    .side-menu-donation p {
+        font-size: 0.6em; /* Even smaller on very small screens */
+    }
 }

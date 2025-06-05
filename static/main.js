@@ -259,7 +259,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 removePlayerBtn.classList.add('hidden');
             }
         }
+        
+        debugLog(`Selection complete. selectedPlayerNum: ${selectedPlayerNum}, selectedPlayerElement:`, selectedPlayerElement);
     }
+    
+    // Expose the selectPlayer function globally for PlayerManager
+    window.updatePlayerSelection = function(element, num) {
+        selectedPlayerElement = element;
+        selectedPlayerNum = num;
+    };
     
     // Fix the removePlayerBtn click handler
     if (removePlayerBtn) {
@@ -272,13 +280,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (selectedPlayerNum && selectedPlayerNum > 1) {
                 debugLog(`Attempting to remove Player ${selectedPlayerNum}`);
                 // Use PlayerManager.removePlayer instead of local function
-                PlayerManager.removePlayer(selectedPlayerNum);
+                const removedName = PlayerManager.removePlayer(selectedPlayerNum);
+                
+                // Update local playerNames object after removal
+                delete playerNames[selectedPlayerNum];
+                savePlayerNames();
+                savePlayerState();
                 
                 // Reset local selection state after removal
                 selectedPlayerElement = null;
                 selectedPlayerNum = null;
                 removePlayerBtn.classList.add('hidden');
-                debugLog("Reset selection state after removal");
+                debugLog(`Successfully removed player. Remaining players:`, playerNames);
             } else {
                 debugLog("Invalid removal attempt - selectedPlayerNum:", selectedPlayerNum);
                 addSystemMessage("Please select a player other than Player 1 to remove", false, false, true);
@@ -1251,7 +1264,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Sidebar toggle functionality
+    // Sidebar toggle functionality - ONLY use button to toggle
     if (menuToggleBtn && sideMenu) {
         menuToggleBtn.addEventListener('click', function() {
             debugLog('Menu toggle clicked');
@@ -1260,18 +1273,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Close sidebar when clicking outside
-    document.addEventListener('click', function(e) {
-        if (sideMenu && menuToggleBtn) {
-            const isClickInsideSidebar = sideMenu.contains(e.target);
-            const isClickOnToggle = menuToggleBtn.contains(e.target);
-            
-            if (!isClickInsideSidebar && !isClickOnToggle && sideMenu.classList.contains('open')) {
-                sideMenu.classList.remove('open');
-                menuToggleBtn.classList.remove('menu-open');
-            }
-        }
-    });
+    // REMOVED: Close sidebar when clicking outside - this was causing issues
+    // The sidebar will now only open/close via the menu button
 
     // Copy chat functionality
     if (copyChatBtn) {

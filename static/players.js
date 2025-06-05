@@ -243,7 +243,7 @@ const PlayerManager = (function() {
     function removePlayer(playerNumber) {
         if (playerNumber <= 1) {
             debugLog("Cannot remove Player 1");
-            return; // Can't remove Player 1
+            return null; // Can't remove Player 1
         }
         
         debugLog(`Removing Player ${playerNumber}`);
@@ -261,7 +261,7 @@ const PlayerManager = (function() {
     
         // Remove player from data structures
         delete playerNames[playerNumber];
-        savePlayerNames();
+        savePlayerNames(playerNames);
         savePlayerState();
         
         // Remove player UI

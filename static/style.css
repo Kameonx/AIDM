@@ -3,6 +3,7 @@ body {
     padding: 0;
     width: 100%;
     height: 100vh;
+    height: calc(var(--vh, 1vh) * 100); /* Use custom vh for mobile browsers */
     background: #1d1f21;
     color: #ffffff;
     font-family: 'Consolas', monospace;
@@ -13,6 +14,7 @@ body {
 
 html {
     height: 100%;
+    height: calc(var(--vh, 1vh) * 100); /* Use custom vh for mobile browsers */
     width: 100%;
     margin: 0;
     padding: 0;
@@ -22,6 +24,7 @@ html {
 .app-wrapper {
     width: 100%;
     height: 100vh;
+    height: calc(var(--vh, 1vh) * 100); /* Use custom vh for mobile browsers */
     display: flex;
     justify-content: center;
     background: #282a36;
@@ -61,6 +64,7 @@ html {
     display: flex;
     flex-direction: column;
     padding: 20px;
+    padding-bottom: 10px; /* Reduce bottom padding on mobile */
     box-sizing: border-box;
 }
 
@@ -78,6 +82,7 @@ html {
     border-radius: 8px;
     background: rgba(30, 31, 40, 0.8);
     word-wrap: break-word; /* Add word wrapping to chat window */
+    min-height: 0; /* Allow flex shrinking */
 }
 
 /* Improve alignment between chat window and player inputs */
@@ -155,6 +160,8 @@ html {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex-shrink: 0; /* Prevent inputs from shrinking */
+    padding-bottom: env(safe-area-inset-bottom, 10px); /* Add safe area padding for iOS */
 }
 
 .player-input {
@@ -637,6 +644,55 @@ span.pink, span.cyan, span.lime, span.teal {
 
 /* Mobile adjustments for modal */
 @media (max-width: 768px) {
+    body {
+        /* Ensure proper mobile viewport handling */
+        height: 100vh;
+        height: calc(var(--vh, 1vh) * 100);
+        /* Add webkit-fill-available for better iOS support */
+        height: -webkit-fill-available;
+    }
+    
+    .app-wrapper {
+        height: 100vh;
+        height: calc(var(--vh, 1vh) * 100);
+        height: -webkit-fill-available;
+    }
+    
+    .chat-container {
+        padding: 15px;
+        padding-bottom: max(15px, env(safe-area-inset-bottom, 15px)); /* Respect safe areas */
+        height: 100%;
+        min-height: 0; /* Allow proper flex behavior */
+    }
+    
+    .chat-window {
+        /* Ensure chat window can shrink properly */
+        min-height: 200px; /* Minimum height for usability */
+        margin-bottom: 10px; /* Reduce margin on mobile */
+    }
+    
+    .player-inputs {
+        /* Ensure inputs are always visible */
+        flex-shrink: 0;
+        padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+        /* Add extra padding to account for Safari address bar */
+        margin-bottom: 20px;
+    }
+    
+    .player-input {
+        /* Ensure player inputs are properly sized on mobile */
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+    
+    .player-input-field {
+        /* Prevent zoom on iOS when focusing input */
+        font-size: 16px;
+        /* Ensure input is properly sized */
+        min-height: 44px; /* iOS recommended touch target size */
+    }
+    
+    /* Adjust menu toggle and sidebar for mobile */
     .modal-content {
         width: 95%;
         margin: 10px;
@@ -683,6 +739,23 @@ span.pink, span.cyan, span.lime, span.teal {
 
 /* Additional mobile adjustments for very small screens */
 @media (max-width: 480px) {
+    .chat-container {
+        padding: 10px;
+        padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    }
+    
+    .player-inputs {
+        gap: 8px;
+        /* Extra bottom spacing for very small screens */
+        padding-bottom: max(25px, env(safe-area-inset-bottom, 25px));
+        margin-bottom: 25px;
+    }
+    
+    .player-input {
+        padding: 8px;
+        margin-bottom: 6px;
+    }
+    
     .side-menu {
         width: 100vw; /* Full width on very small screens */
         transform: translateX(-100vw);
@@ -698,5 +771,30 @@ span.pink, span.cyan, span.lime, span.teal {
     
     .side-menu-donation p {
         font-size: 0.6em; /* Even smaller on very small screens */
+    }
+}
+
+/* Add viewport height variables for mobile browsers */
+:root {
+    --vh: 1vh; /* Will be updated by JavaScript */
+}
+
+/* Safari-specific fixes */
+@supports (-webkit-touch-callout: none) {
+    /* Target Safari specifically */
+    body {
+        height: -webkit-fill-available;
+    }
+    
+    .app-wrapper {
+        height: -webkit-fill-available;
+    }
+    
+    /* Ensure inputs are never covered by the address bar */
+    .player-inputs {
+        position: relative;
+        /* Add extra bottom margin for Safari */
+        margin-bottom: 30px;
+        padding-bottom: 30px;
     }
 }

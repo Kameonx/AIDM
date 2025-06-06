@@ -14,8 +14,8 @@ DEFAULT_MODEL_ID = "venice-uncensored"
 if not VENICE_API_KEY:
     print("ERROR: VENICE_API_KEY not found in environment. Please check your .env file.", file=sys.stderr)
 
-# Chat configuration
-CHAT_DIR = 'chat_histories'
+# Chat configuration - Server-side storage removed for complete privacy
+# All chat history is now stored client-side only in browser localStorage
 MAX_HISTORY_SIZE = 50
 
 # System prompts

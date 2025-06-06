@@ -450,23 +450,18 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.dm-message .message-sender').forEach(span => {
                 span.textContent = `${dmName}: `;
             });
+        }        // Load chat history from localStorage (privacy-first approach)
+        debugLog("Loading chat history from localStorage for game:", currentGameId);
+        const localHistory = Utils.loadChatHistoryFromLocal(currentGameId);
+        if (localHistory && localHistory.length > 0) {
+            debugLog("Restored chat history from localStorage:", localHistory.length, "messages");
+            displayMessages(localHistory);
+        } else {
+            debugLog("No history found in localStorage, showing welcome message");
+            ensureWelcomeMessage();
         }
-
-        // Load chat history for the current game
-        fetch('/load_history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ game_id: currentGameId })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.history && data.history.length > 0) {
-                displayMessages(data.history);
-            } else {
-                ensureWelcomeMessage();
-            }
-            
-            initializeHistory();
+        
+        initializeHistory();
             
             // CRITICAL: Pass the loaded playerNames to PlayerManager setup
             const playerResult = PlayerManager.setup({
@@ -493,34 +488,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // ALWAYS update labels after everything is set up
             updatePlayerLabels();
             updateUndoRedoButtons();
-            
-            syncPlayerNamesWithServer();
-        })
-        .catch(error => {
-            debugLog("Error loading chat history:", error);
-            ensureWelcomeMessage();
-            initializeHistory();
-            
-            // Even on error, set up PlayerManager with our loaded names
-            PlayerManager.setup({
-                playerNames: playerNames,
-                nextPlayerNumber: 2,
-                additionalPlayersContainer: additionalPlayersContainer,
-                removePlayerBtn: removePlayerBtn,
-                currentGameId: currentGameId,
-                debugLog: debugLog,
-                addSystemMessage: addSystemMessage,
-                createLoadingDivForDM: createLoadingDivForDM,
-                sendStreamRequest: sendStreamRequest,
-                savePlayerNames: savePlayerNames,
-                savePlayerState: savePlayerState
-            });
-            
-            nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
-            updatePlayerLabels();
-            updateUndoRedoButtons();
-            syncPlayerNamesWithServer();
-        });
+              syncPlayerNamesWithServer();
     }
     
     /**
@@ -587,9 +555,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.PlayerManager) {
             window.PlayerManager.playerNames = playerNames;
         }
-    }
-
-    // --- Chat message handling functions ---
+    }    // --- Chat message handling functions ---
     function displayMessages(messages) {
         if (!Array.isArray(messages)) {
             debugLog("Invalid messages array:", messages);
@@ -632,6 +598,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        // Save chat history to localStorage after displaying messages
+        if (currentGameId && messages.length > 0) {
+            Utils.saveChatHistoryToLocal(currentGameId, messages);
+        }
     }
     
     function restoreChatState(index) {
@@ -916,14 +887,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function sendStreamRequest(messageId, loadingDiv) {
-        debugLog("Starting stream request for message ID:", messageId, ". Current isGenerating:", isGenerating);
-
-        const eventSourceUrl = new URL('/stream', window.location.href);
+        debugLog("Starting stream request for message ID:", messageId, ". Current isGenerating:", isGenerating);        const eventSourceUrl = new URL('/stream', window.location.href);
         eventSourceUrl.searchParams.append('t', Date.now());
         eventSourceUrl.searchParams.append('game_id', currentGameId || '');
         eventSourceUrl.searchParams.append('message_id', messageId || '');
         // Always send the selected model as a query param
         eventSourceUrl.searchParams.append('model_id', selectedModel);
+        
+        // Send chat history to server for AI context (base64 encoded)
+        const chatHistory = Utils.loadChatHistoryFromLocal(currentGameId) || [];
+        if (chatHistory.length > 0) {
+            try {
+                const chatHistoryJson = JSON.stringify(chatHistory);
+                const chatHistoryB64 = btoa(chatHistoryJson);
+                eventSourceUrl.searchParams.append('chat_history', chatHistoryB64);
+                debugLog("Sending chat history to server:", chatHistory.length, "messages");
+            } catch (error) {
+                debugLog("Error encoding chat history:", error);
+            }
+        }
 
         debugLog("Stream URL:", eventSourceUrl.toString());
 
@@ -1134,12 +1116,18 @@ document.addEventListener('DOMContentLoaded', function() {
             messageHistory.shift();
             historyIndex--; // Adjust index because an element was removed from the beginning
         }
-        
-        try {
+          try {
             localStorage.setItem('chatHistory', JSON.stringify(messageHistory)); 
         } catch (e) {
             debugLog("Error saving chatHistory to localStorage:", e);
         }
+        
+        // Also save chat messages to persistent localStorage backup
+        if (currentGameId && messages.length > 0) {
+            const chatMessages = Utils.convertDOMMessagesToStorageFormat(chatWindow);
+            Utils.saveChatHistoryToLocal(currentGameId, chatMessages);
+        }
+        
         updateUndoRedoButtons();
         debugLog(`Chat state saved. New history size: ${messageHistory.length}, New Index: ${historyIndex}. Last saved state:`, messages.map(m => m.content.substring(0,20)).join(" | "));
     }

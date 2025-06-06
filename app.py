@@ -7,10 +7,9 @@ import requests
 import re
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 
-# Import configuration with error handling
 try:
     from config import (
-        VENICE_API_KEY, VENICE_URL, DEFAULT_MODEL_ID, CHAT_DIR, AVAILABLE_MODELS,
+        VENICE_API_KEY, VENICE_URL, DEFAULT_MODEL_ID, AVAILABLE_MODELS,
         SYSTEM_PROMPT_BASE, MULTIPLAYER_PROMPT_ADDITION, SINGLEPLAYER_PROMPT_ADDITION, PROMPT_ENDING
     )
 except ImportError as e:
@@ -19,17 +18,11 @@ except ImportError as e:
     sys.exit(1)
 
 app = Flask(__name__, static_folder='static')
-app.secret_key = os.urandom(24)  # Required for session
+app.secret_key = os.urandom(24)
 
-# Validate API key
 if not VENICE_API_KEY or VENICE_API_KEY == "YOUR_API_KEY_HERE":
     print("ERROR: VENICE_API_KEY not properly configured. Please set it in your .env file.", file=sys.stderr)
     print("Example: VENICE_API_KEY=your_actual_api_key_here", file=sys.stderr)
-    # Don't exit here, just warn - the app might still work for testing
-
-# Create a directory to store user chat histories
-if not os.path.exists(CHAT_DIR):
-    os.makedirs(CHAT_DIR)
 
 def get_user_id():
     """Get or create a unique user ID for the current session"""
@@ -39,40 +32,16 @@ def get_user_id():
         session['user_id'] = user_id
     return user_id
 
-def get_chat_file_path(user_id, game_id=None):
-    """Get the file path for a specific user's chat history"""
-    if game_id:
-        return os.path.join(CHAT_DIR, f"chat_history_{user_id}_{game_id}.json")
-    return os.path.join(CHAT_DIR, f"chat_history_{user_id}_current.json")
-
-def load_chat_history(user_id, game_id=None):
-    """Load chat history for a specific user and game"""
-    file_path = get_chat_file_path(user_id, game_id)
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    return []
-
-def save_chat_history(user_id, chat_history, game_id=None):
-    """Save chat history for a specific user and game"""
-    file_path = get_chat_file_path(user_id, game_id)
-    with open(file_path, 'w') as file:
-        json.dump(chat_history, file)
-
 def format_message_content(content):
     """Format AI responses with markdown-like syntax for the frontend"""
     if not content:
         return content
     
-    # Don't re-format if content already has HTML formatting tags
     if re.search(r'<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">', content):
         return content
     
-    # Don't re-format if content already has new color formatting tags
     if re.search(r'\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal):', content):
         return content
-    
-    # Apply color formatting for common D&D terms
     color_mappings = {
         "red": ["fire", "flame", "burn", "hot", "dragon", "blood", "anger", "rage", "demon", "devil", "heat", "scorch", "blaze", "inferno"],
         "blue": ["ice", "cold", "frost", "freeze", "water", "ocean", "sea", "calm", "peace", "sad", "tears", "chill"],
@@ -83,13 +52,10 @@ def format_message_content(content):
         "pink": ["charm", "love", "beauty", "fairy", "gentle", "kind", "sweet", "romance", "affection"],
         "cyan": ["heal", "healing", "cure", "bless", "blessing", "divine", "restoration", "recovery", "mend"],
         "lime": ["life", "growth", "renewal", "nature", "alive", "vibrant", "fresh", "spring"],
-        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"]
-    }
+        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"]    }
     
-    # Apply color formatting to relevant words
     for color, keywords in color_mappings.items():
         for keyword in keywords:
-            # Use word boundaries and case-insensitive matching
             pattern = r'\b(' + re.escape(keyword) + r'(?:s|ing|ed|er|est)?)\b'
             replacement = f'[{color}:\\1]'
             content = re.sub(pattern, replacement, content, flags=re.IGNORECASE)
@@ -108,64 +74,20 @@ def build_system_prompt(is_multiplayer):
     prompt += PROMPT_ENDING
     return prompt
 
-def load_or_create_game_id(user_id):
-    """Get existing game ID or create a new one"""
-    try:
-        # Check for existing games for this user
-        user_games = []
-        for filename in os.listdir(CHAT_DIR):
-            if f"chat_history_{user_id}_" in filename and not filename.endswith("_current.json"):
-                game_id = filename.replace(f"chat_history_{user_id}_", "").replace(".json", "")
-                user_games.append(game_id)
-        
-        # Use most recent game or create new one
-        if user_games:
-            # Sort by timestamp (assuming game_id starts with timestamp)
-            user_games.sort(reverse=True)
-            return user_games[0]
-        else:
-            # Create new game ID
-            return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
-    except Exception as e:
-        app.logger.error(f"Error in load_or_create_game_id: {e}")
-        # Fallback to creating new game ID
-        return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
-
-# Add route to serve static files
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
 
-# Route to serve the HTML page
 @app.route('/')
 def index():
     user_id = get_user_id()
-    game_id = request.cookies.get('game_id')
     
-    if not game_id:
-        # Generate a new game id if none is stored
-        game_id = load_or_create_game_id(user_id)
-        chat_history = load_chat_history(user_id, game_id)
-        if not chat_history:
-            # Always include a welcome message
-            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
-            save_chat_history(user_id, chat_history, game_id)
-    else:
-        chat_history = load_chat_history(user_id, game_id)
-        # Even if we have a chat history, make sure it has at least one message
-        if not chat_history:
-            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
-            save_chat_history(user_id, chat_history, game_id)
-    
-    # Pass the chat history to the template to display immediately on load
     try:
-        response = make_response(render_template('index.html', chat_history=chat_history))
-        response.set_cookie('user_id', user_id, max_age=60*60*24*365)  # Expire in 1 year
-        response.set_cookie('game_id', game_id, max_age=60*60*24*365)
+        response = make_response(render_template('index.html', chat_history=[]))
+        response.set_cookie('user_id', user_id, max_age=60*60*24*365)
         return response
     except Exception as e:
         app.logger.error(f"Error rendering template: {e}")
-        # Return a simple HTML response if template fails
         return f"""
         <!DOCTYPE html>
         <html>
@@ -180,6 +102,7 @@ def index():
 
 @app.route('/chat', methods=['POST'])
 def chat():
+    """Handle chat messages - no server-side storage"""
     try:
         user_id = get_user_id()
         data = request.json
@@ -188,35 +111,15 @@ def chat():
         
         user_input = data['message']
         game_id = data.get('game_id')
-        player_number = data.get('player_number', 1)  # Default to player 1
+        player_number = data.get('player_number', 1)
         is_system = data.get('is_system', False)
-        invisible_to_players = data.get('invisible_to_players', False)  # New flag
+        invisible_to_players = data.get('invisible_to_players', False)
         
-        # Load chat history
-        chat_history = load_chat_history(user_id, game_id)
-        
-        # Add user message to history with player number
-        message_entry = {
-            "role": "user" if not is_system else "system",
-            "content": user_input,
-            "player": f"player{player_number}" if not is_system else "system"
-        }
-        
-        # Mark invisible messages so they don't show in chat
-        if invisible_to_players:
-            message_entry["invisible"] = True
-        
-        chat_history.append(message_entry)
-        
-        # Save chat history
-        save_chat_history(user_id, chat_history, game_id)
-        
-        # Return message ID for streaming
         return jsonify({
-            "message_id": len(chat_history),
+            "message_id": int(time.time() * 1000),
             "streaming": True,
             "player_number": player_number,
-            "invisible": invisible_to_players  # Let client know this is invisible
+            "invisible": invisible_to_players
         })
         
     except Exception as e:
@@ -245,16 +148,16 @@ def get_model_capabilities(model_id):
 
 @app.route('/stream', methods=['POST', 'GET'])
 def stream_response():
-    """Stream response for AI messages"""
-    # Get the user ID from session
+    """Stream response for AI messages - uses client-provided chat history"""
     user_id = get_user_id()
     
-    # For GET requests (EventSource uses GET by default)
+    # Get parameters from request
     if request.method == 'GET':
         game_id = request.args.get('game_id')
         message_id = request.args.get('message_id')
-        # Accept model_id as a query param for SSE fallback
         model_id = request.args.get('model_id')
+        # Get chat history from query parameter (base64 encoded JSON)
+        chat_history_param = request.args.get('chat_history')
         if model_id:
             session['selected_model'] = get_valid_model(model_id)
     else:
@@ -263,11 +166,19 @@ def stream_response():
         game_id = data.get('game_id')
         message_id = data.get('message_id')
         model_id = data.get('model_id')
+        chat_history_param = data.get('chat_history')
         if model_id:
             session['selected_model'] = get_valid_model(model_id)
 
-    # Load chat history for this specific user
-    chat_history = load_chat_history(user_id, game_id)
+    # Parse chat history from client
+    chat_history = []
+    if chat_history_param:
+        try:
+            import base64
+            chat_history = json.loads(base64.b64decode(chat_history_param).decode('utf-8'))
+        except Exception as e:
+            app.logger.error(f"Error parsing chat history: {e}")
+            chat_history = []
     
     # Print debug info
     app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model')}")
@@ -350,6 +261,7 @@ def stream_response():
             "Authorization": f"Bearer {VENICE_API_KEY}",
             "Content-Type": "application/json"
         }
+        
         try:
             with requests.post(
                 VENICE_URL,
@@ -423,13 +335,13 @@ def stream_response():
                         app.logger.error(f"Raw response: {response.text}")
                         yield f"data: {json.dumps({'content': 'Error parsing AI response', 'full': 'Error parsing AI response', 'error': True})}\n\n"
                 
-                # Store the complete response in chat history
+                # Format the response content for consistent display
                 if full_response:
-                    # Always format the content before storing
                     formatted_content = format_message_content(full_response)
-                    chat_history.append({"role": "assistant", "content": formatted_content})
-                    save_chat_history(user_id, chat_history, game_id)
-                    app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")
+                    # Send the final formatted content
+                    yield f"data: {json.dumps({'content': formatted_content, 'full': formatted_content, 'final': True})}\n\n"
+                    app.logger.debug(f"Sent formatted final response, length: {len(formatted_content)}")
+                    
         except Exception as e:
             app.logger.error(f"Error in API request: {str(e)}")
             yield f"data: {json.dumps({'content': f'Error: {str(e)}', 'full': f'Error: {str(e)}', 'error': True})}\n\n"
@@ -439,108 +351,26 @@ def stream_response():
 
 @app.route('/new_game', methods=['POST'])
 def new_game():
+    """Generate a new game ID - purely client-side operation"""
     user_id = get_user_id()
     game_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
-    chat_history = []
-    # Only add the welcome message once
-    chat_history.append({"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"})
-    save_chat_history(user_id, chat_history, game_id)
     response_data = {"game_id": game_id, "success": True}
     return jsonify(response_data)
 
 @app.route('/load_history', methods=['POST'])
 def load_history():
-    """Load the chat history for display on the frontend"""
-    user_id = get_user_id()
-    data = request.get_json()
-    game_id = data.get('game_id')
-    
-    # Load chat history
-    chat_history = load_chat_history(user_id, game_id)
-    
-    # Process each message to ensure formatting is preserved
-    processed_history = []
-    for msg in chat_history:
-        processed_msg = msg.copy()
-        # Ensure all assistant messages are properly formatted
-        if msg.get('role') == 'assistant' and msg.get('content'):
-            # Re-apply formatting to ensure colors and effects show up
-            processed_msg['content'] = format_message_content(msg['content'])
-        processed_history.append(processed_msg)
-    
-    # Return the processed chat history
-    return jsonify({"history": processed_history})
+    """Load history endpoint - now returns empty (client-side only)"""
+    return jsonify({"history": [], "message": "Chat history is now stored client-side only"})
 
 @app.route('/get_updates', methods=['POST'])
 def get_updates():
-    """Get updates to chat history since last timestamp"""
-    user_id = get_user_id()
-    data = request.get_json()
-    game_id = data.get('game_id')
-    last_message_count = int(data.get('last_message_count', 0))
-    
-    if not game_id:
-        return jsonify({"success": False, "error": "No game ID provided"})
-    
-    # Get the chat file path for this user and game
-    file_path = get_chat_file_path(user_id, game_id)
-    
-    if not os.path.exists(file_path):
-        app.logger.error(f"Game session file not found: {file_path}")
-        return jsonify({
-            "success": False, 
-            "error": "Game session file not found"
-        })
-    
-    try:
-        # Read the full chat history
-        with open(file_path, 'r') as file:
-            chat_history = json.load(file)
-        
-        result = {
-            "success": True,
-            "message_count": len(chat_history)
-        }
-        
-        # Check if there are new messages
-        if len(chat_history) > last_message_count:
-            # Return only the new messages
-            new_messages = chat_history[last_message_count:]
-            result["has_updates"] = True
-            result["updates"] = new_messages
-        else:
-            result["has_updates"] = False
-        
-        return jsonify(result)
-            
-    except Exception as e:
-        app.logger.error(f"Error checking for updates: {str(e)}")
-        return jsonify({"success": False, "error": str(e)})
+    """Get updates - disabled for client-side only mode"""
+    return jsonify({"success": False, "error": "Updates disabled - client-side only mode"})
 
 @app.route('/set_player_name', methods=['POST'])
 def set_player_name():
-    try:
-        data = request.get_json()
-        user_id = get_user_id()
-        game_id = data.get('game_id')
-        player_number = data.get('player_number', 1)
-        new_name = data.get('new_name')
-
-        if not (game_id and new_name):
-            return jsonify({"success": False, "error": "Missing game_id or new_name"}), 400
-
-        # Load the chat history for the specified game
-        chat_history = load_chat_history(user_id, game_id)
-        # Update every message from this player with the new name
-        for msg in chat_history:
-            if msg.get("role") == "user" and msg.get("player") == f"player{player_number}":
-                msg["player"] = new_name
-        # Save the updated chat history
-        save_chat_history(user_id, chat_history, game_id)
-        return jsonify({"success": True})
-    except Exception as e:
-        app.logger.error(f"Error in /set_player_name: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
+    """Set player name - client-side only operation"""
+    return jsonify({"success": True, "message": "Player names are now managed client-side only"})
 
 @app.route('/get_models', methods=['GET'])
 def get_models():

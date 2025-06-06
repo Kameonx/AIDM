@@ -251,9 +251,7 @@ const Utils = (function() {
             debugLog("Error loading player state:", e); 
         }
         return { names: { 1: null }, nextPlayerNumber: 2, isMultiplayerActive: false, dmName: "DM" };
-    }
-
-    /**
+    }    /**
      * Check if a message hash exists to avoid duplicates
      */
     function messageExists(processedMessageIds, role, content) {
@@ -272,7 +270,179 @@ const Utils = (function() {
         return false;
     }
 
-    // Expose public methods
+    /**
+     * Save chat history to localStorage
+     * This provides backup storage when server resets
+     */
+    function saveChatHistoryToLocal(gameId, chatHistory) {
+        try {
+            if (!gameId || !Array.isArray(chatHistory)) {
+                debugLog("Invalid parameters for saveChatHistoryToLocal:", { gameId, chatHistory });
+                return false;
+            }
+
+            const chatData = {
+                gameId: gameId,
+                timestamp: Date.now(),
+                history: chatHistory,
+                version: "1.0"
+            };
+
+            // Save individual game history
+            localStorage.setItem(`chatHistory_${gameId}`, JSON.stringify(chatData));
+            
+            // Also maintain a list of all saved game IDs
+            const savedGames = getSavedGamesList();
+            if (!savedGames.includes(gameId)) {
+                savedGames.push(gameId);
+                // Keep only the 10 most recent games to avoid localStorage bloat
+                const recentGames = savedGames.slice(-10);
+                localStorage.setItem('savedGamesList', JSON.stringify(recentGames));
+            }
+
+            debugLog(`Chat history saved to localStorage for game ${gameId}:`, chatHistory.length, "messages");
+            return true;
+        } catch (e) {
+            debugLog("Error saving chat history to localStorage:", e);
+            return false;
+        }
+    }
+
+    /**
+     * Load chat history from localStorage
+     */
+    function loadChatHistoryFromLocal(gameId) {
+        try {
+            if (!gameId) {
+                debugLog("No gameId provided for loadChatHistoryFromLocal");
+                return null;
+            }
+
+            const saved = localStorage.getItem(`chatHistory_${gameId}`);
+            if (saved) {
+                const chatData = JSON.parse(saved);
+                if (chatData && chatData.history && Array.isArray(chatData.history)) {
+                    debugLog(`Loaded chat history from localStorage for game ${gameId}:`, chatData.history.length, "messages");
+                    return chatData.history;
+                }
+            }
+            
+            debugLog(`No chat history found in localStorage for game ${gameId}`);
+            return null;
+        } catch (e) {
+            debugLog("Error loading chat history from localStorage:", e);
+            return null;
+        }
+    }
+
+    /**
+     * Get list of saved game IDs
+     */
+    function getSavedGamesList() {
+        try {
+            const saved = localStorage.getItem('savedGamesList');
+            if (saved) {
+                const gamesList = JSON.parse(saved);
+                return Array.isArray(gamesList) ? gamesList : [];
+            }
+        } catch (e) {
+            debugLog("Error loading saved games list:", e);
+        }
+        return [];
+    }
+
+    /**
+     * Get all saved chat histories for backup/restore purposes
+     */
+    function getAllSavedChatHistories() {
+        const savedGames = getSavedGamesList();
+        const allHistories = {};
+        
+        savedGames.forEach(gameId => {
+            const history = loadChatHistoryFromLocal(gameId);
+            if (history) {
+                allHistories[gameId] = history;
+            }
+        });
+        
+        return allHistories;
+    }
+
+    /**
+     * Clean up old chat histories from localStorage
+     */
+    function cleanupOldChatHistories(keepCount = 5) {
+        try {
+            const savedGames = getSavedGamesList();
+            if (savedGames.length <= keepCount) {
+                return; // Nothing to clean up
+            }
+
+            // Sort by timestamp (assuming gameId contains timestamp) and keep the most recent
+            const gamesToDelete = savedGames.slice(0, -keepCount);
+            
+            gamesToDelete.forEach(gameId => {
+                localStorage.removeItem(`chatHistory_${gameId}`);
+                debugLog(`Cleaned up old chat history for game ${gameId}`);
+            });
+
+            // Update the saved games list
+            const recentGames = savedGames.slice(-keepCount);
+            localStorage.setItem('savedGamesList', JSON.stringify(recentGames));
+            
+            debugLog(`Cleaned up ${gamesToDelete.length} old chat histories, kept ${keepCount} most recent`);
+        } catch (e) {
+            debugLog("Error cleaning up old chat histories:", e);
+        }
+    }
+
+    /**
+     * Convert chat messages from DOM to a format suitable for storage
+     */
+    function convertDOMMessagesToStorageFormat(chatWindow) {
+        try {
+            const messages = Array.from(chatWindow.querySelectorAll('.message:not(.temporary-message)'))
+                .map(msg => {
+                    const senderEl = msg.querySelector('.message-sender');
+                    const contentEl = msg.querySelector('.message-content');
+                    
+                    if (!senderEl || !contentEl) return null;
+
+                    const sender = senderEl.textContent.replace(':', '').trim();
+                    const content = contentEl.textContent.trim();
+                    const contentHTML = contentEl.innerHTML.trim();
+                    
+                    if (!content) return null;
+
+                    // Determine message role/type
+                    let role = 'user';
+                    let type = 'player';
+                    
+                    if (msg.classList.contains('system-message')) {
+                        role = 'system';
+                        type = 'system';
+                    } else if (msg.classList.contains('dm-message') || sender.toLowerCase() === 'dm') {
+                        role = 'assistant';
+                        type = 'dm';
+                    }
+
+                    return {
+                        role: role,
+                        type: type,
+                        sender: sender,
+                        content: content,
+                        contentHTML: contentHTML,
+                        timestamp: Date.now()
+                    };
+                })
+                .filter(msg => msg !== null);
+
+            return messages;
+        } catch (e) {
+            debugLog("Error converting DOM messages to storage format:", e);
+            return [];
+        }
+    }    // Expose public methods
     return {
         processFormattedText,
         extractName,
@@ -282,6 +452,12 @@ const Utils = (function() {
         savePlayerState,
         loadPlayerState,
         messageExists,
+        saveChatHistoryToLocal,
+        loadChatHistoryFromLocal,
+        getSavedGamesList,
+        getAllSavedChatHistories,
+        cleanupOldChatHistories,
+        convertDOMMessagesToStorageFormat,
         debugLog
     };
 })();

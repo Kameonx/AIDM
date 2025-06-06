@@ -170,12 +170,16 @@ html {
 }
 
 .player-label {
-    width: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
+    width: auto;               /* Allow label to grow as needed */
+    min-width: 80px;           /* Minimum width for short names */
+    max-width: 220px;          /* Prevent label from being too wide */
+    white-space: nowrap;       /* Prevent wrapping */
+    overflow: hidden;          /* Hide overflowed text */
+    text-overflow: ellipsis;   /* Show ellipsis if too long */
+    display: block;            /* Use block to avoid flex shrinking issues */
     font-weight: bold;
     color: #50fa7b;
+    /* Remove flex properties that cause shrinking/cropping */
 }
 
 .player-input-field {

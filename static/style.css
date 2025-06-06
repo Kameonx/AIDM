@@ -484,11 +484,36 @@ span.teal {
     font-weight: bold;
 }
 
-/* Add word wrapping to color spans */
-span.red, span.green, span.blue, span.yellow, span.purple, span.orange, 
-span.pink, span.cyan, span.lime, span.teal {
-    word-wrap: break-word !important;
-    overflow-wrap: break-word !important;
+/* Extra color classes for AI tags */
+span.gold {
+    color: #ffd700;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+    font-weight: bold;
+}
+span.brown {
+    color: #a0522d;
+    text-shadow: 0 0 5px rgba(160, 82, 45, 0.5);
+    font-weight: bold;
+}
+span.white {
+    color: #fff;
+    text-shadow: 0 0 5px rgba(255,255,255,0.5);
+    font-weight: bold;
+}
+span.black {
+    color: #222;
+    text-shadow: 0 0 5px rgba(0,0,0,0.5);
+    font-weight: bold;
+}
+span.gray, span.grey, span.silver {
+    color: #ccc;
+    text-shadow: 0 0 5px rgba(200,200,200,0.5);
+    font-weight: bold;
+}
+span.fresh {
+    color: #7fff7f;
+    text-shadow: 0 0 5px rgba(127,255,127,0.5);
+    font-weight: bold;
 }
 
 /* Modal styles */

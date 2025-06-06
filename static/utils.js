@@ -14,34 +14,40 @@ const Utils = (function() {
      */
     function processFormattedText(text) {
         if (!text) return '';
-        
-        // Check if the text already contains proper HTML formatting
-        if (/<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">/.test(text)) {
+
+        // Check if the text already contains any <span class="..."> color formatting
+        if (/<span class="[\w\-]+">/.test(text)) {
             return text; // Already formatted with HTML, return as is
         }
-        
+
         // Escape HTML first to prevent XSS, but preserve intentional formatting
         let processedText = text
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
-        
+
         // Handle reasoning text from AI models FIRST (before other processing)
         processedText = processReasoningText(processedText);
-        
+
         // Process emphasis tags FIRST (before color tags to avoid conflicts)
         processedText = processedText
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
             .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
-        
-        // Process new color tags [color:text]
-        const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal'];
-        
-        for (const color of colorTypes) {
-            const regex = new RegExp(`\\[${color}:(.*?)\\]`, 'gi');
-            processedText = processedText.replace(regex, `<span class="${color}">$1</span>`);
-        }
-    
+
+        // Replace any [color:text] with <span class="color">text</span>
+        // Accepts any color/class name (letters, numbers, dash, underscore)
+        processedText = processedText.replace(
+            /\[([a-zA-Z0-9_\-]+):(.*?)\]/g,
+            function(match, color, value) {
+                color = color.toLowerCase();
+                value = value.trim();
+                if (/^[a-z0-9_\-]+$/.test(color)) {
+                    return `<span class="${color}">${value}</span>`;
+                }
+                return value;
+            }
+        );
+
         return processedText;
     }
 

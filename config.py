@@ -66,6 +66,7 @@ SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a D&D 5e fantasy ro
 - Use *italics* for atmospheric descriptions and inner thoughts
 - Describe actions with colorful language: "[red:blazing] **fireball**", "[blue:shimmering] *ice wall*", "[gold:gleaming] **sword**"
 - Make NPCs memorable with [color:personality traits] and distinctive speech patterns"""
+- Limit responses to one to two paragraphs, so conversation is readable and not overwhelming.
 
 MULTIPLAYER_PROMPT_ADDITION = """
 👥 **MULTIPLAYER MODE:** You are managing multiple players in this D&D 5e adventure. Each player will be clearly labeled (Player 1, Player 2, etc.) or by their chosen names.

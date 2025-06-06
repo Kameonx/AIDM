@@ -1,11 +1,16 @@
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 import os
 import sys
-import json
-import uuid
 import time
-import requests
+import uuid
+import json
+import base64
 import re
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
+import requests
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 try:
     from config import (
@@ -42,6 +47,7 @@ def format_message_content(content):
     
     if re.search(r'\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal):', content):
         return content
+    
     color_mappings = {
         "red": ["fire", "flame", "burn", "hot", "dragon", "blood", "anger", "rage", "demon", "devil", "heat", "scorch", "blaze", "inferno"],
         "blue": ["ice", "cold", "frost", "freeze", "water", "ocean", "sea", "calm", "peace", "sad", "tears", "chill"],
@@ -52,12 +58,13 @@ def format_message_content(content):
         "pink": ["charm", "love", "beauty", "fairy", "gentle", "kind", "sweet", "romance", "affection"],
         "cyan": ["heal", "healing", "cure", "bless", "blessing", "divine", "restoration", "recovery", "mend"],
         "lime": ["life", "growth", "renewal", "nature", "alive", "vibrant", "fresh", "spring"],
-        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"]    }
+        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"]
+    }
     
     for color, keywords in color_mappings.items():
         for keyword in keywords:
-            pattern = r'\b(' + re.escape(keyword) + r'(?:s|ing|ed|er|est)?)\b'
-            replacement = f'[{color}:\\1]'
+            pattern = r'\b' + re.escape(keyword) + r'\b'
+            replacement = f'[{color}:{keyword}]'
             content = re.sub(pattern, replacement, content, flags=re.IGNORECASE)
     
     return content
@@ -83,48 +90,38 @@ def index():
     user_id = get_user_id()
     
     try:
-        response = make_response(render_template('index.html', chat_history=[]))
-        response.set_cookie('user_id', user_id, max_age=60*60*24*365)
+        response = make_response(render_template('index.html'))
+        if 'user_id' not in request.cookies:
+            response.set_cookie('user_id', user_id, max_age=30*24*60*60)  # 30 days
         return response
     except Exception as e:
-        app.logger.error(f"Error rendering template: {e}")
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head><title>AI Dungeon Master</title></head>
-        <body>
-        <h1>AI Dungeon Master</h1>
-        <p>Error: Template not found. Please ensure templates/index.html exists.</p>
-        <p>Error details: {str(e)}</p>
-        </body>
-        </html>
-        """, 500
+        app.logger.error(f"Error rendering index: {e}")
+        return f"Error loading page: {e}", 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
     """Handle chat messages - no server-side storage"""
     try:
-        user_id = get_user_id()
-        data = request.json
-        if data is None or 'message' not in data:
-            return jsonify({"response": "No message provided.", "error": True}), 400
-        
-        user_input = data['message']
+        data = request.get_json()
+        message = data.get('message', '')
         game_id = data.get('game_id')
         player_number = data.get('player_number', 1)
-        is_system = data.get('is_system', False)
-        invisible_to_players = data.get('invisible_to_players', False)
+        
+        if not message.strip():
+            return jsonify({"error": "Empty message"}), 400
+            
+        # Generate a unique message ID for streaming
+        message_id = str(int(time.time() * 1000))
         
         return jsonify({
-            "message_id": int(time.time() * 1000),
-            "streaming": True,
-            "player_number": player_number,
-            "invisible": invisible_to_players
+            "success": True,
+            "message_id": message_id,
+            "game_id": game_id
         })
         
     except Exception as e:
-        app.logger.error("Error in /chat endpoint: %s", str(e))
-        return jsonify({"response": "Internal server error.", "error": True}), 500
+        app.logger.error(f"Error in chat endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
 
 def get_valid_model(model_id):
     valid_models = [model['id'] for model in AVAILABLE_MODELS]
@@ -153,199 +150,139 @@ def stream_response():
     
     # Get parameters from request
     if request.method == 'GET':
-        game_id = request.args.get('game_id')
-        message_id = request.args.get('message_id')
-        model_id = request.args.get('model_id')
-        # Get chat history from query parameter (base64 encoded JSON)
-        chat_history_param = request.args.get('chat_history')
-        if model_id:
-            session['selected_model'] = get_valid_model(model_id)
+        game_id = request.args.get('game_id', '')
+        message_id = request.args.get('message_id', '')
+        model_id = request.args.get('model_id', DEFAULT_MODEL_ID)
+        chat_history_param = request.args.get('chat_history', '')
     else:
-        # For POST requests from fetch API
-        data = json.loads(request.data)
-        game_id = data.get('game_id')
-        message_id = data.get('message_id')
-        model_id = data.get('model_id')
-        chat_history_param = data.get('chat_history')
-        if model_id:
-            session['selected_model'] = get_valid_model(model_id)
+        data = request.get_json()
+        game_id = data.get('game_id', '')
+        message_id = data.get('message_id', '')
+        model_id = data.get('model_id', DEFAULT_MODEL_ID)
+        chat_history_param = data.get('chat_history', '')
 
     # Parse chat history from client
     chat_history = []
     if chat_history_param:
         try:
-            import base64
-            chat_history = json.loads(base64.b64decode(chat_history_param).decode('utf-8'))
+            decoded_history = base64.b64decode(chat_history_param).decode('utf-8')
+            chat_history = json.loads(decoded_history)
         except Exception as e:
-            app.logger.error(f"Error parsing chat history: {e}")
-            chat_history = []
+            app.logger.error(f"Error decoding chat history: {e}")
     
     # Print debug info
-    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model')}")
+    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model', model_id)}")
 
     def generate():
-        # Check if there are multiple players in the session and gather names
-        player_counts = {}
-        
-        # Look for player names in the chat history
-        for msg in chat_history:
-            if msg.get("role") == "user" and msg.get("player"):
-                player = msg.get("player")
-                player_counts[player] = player_counts.get(player, 0) + 1
-        
-        # Check if multiple players are active
-        is_multiplayer = len(player_counts) > 1
-        
-        # Build system prompt based on multiplayer status
-        system_prompt = build_system_prompt(is_multiplayer)
-        
-        # Prepare messages for the API
-        api_messages = [
-            {"role": "system", "content": system_prompt}
-        ]
-        
-        # Include conversation history but format it properly for the API
-        for msg in chat_history:
-            if msg.get("role") == "system" and msg.get("player") == "system":
-                # This is a system notification (like player joining)
-                api_messages.append({
-                    "role": "system", 
-                    "content": msg["content"]
-                })
-            elif msg.get("role") == "user":
-                # Format user messages with player labels if in multiplayer
-                prefix = ""
-                if is_multiplayer and msg.get("player"):
-                    player_num = msg.get("player").replace("player", "")
-                    prefix = f"Player {player_num}: "
-                
-                api_messages.append({
-                    "role": "user", 
-                    "content": prefix + msg["content"]
-                })
-            else:
-                # Assistant (DM) messages
-                api_messages.append({
-                    "role": msg.get("role", "assistant"),
-                    "content": msg.get("content", "")
-                })
-        
-        # Get selected model from session, default to DEFAULT_MODEL_ID
-        selected_model = get_valid_model(session.get('selected_model', DEFAULT_MODEL_ID))
-        app.logger.debug(f"Using Venice model: {selected_model}")
-        
-        # Get model capabilities to determine which parameters to include
-        capabilities = get_model_capabilities(selected_model)
-        app.logger.debug(f"Model capabilities: {capabilities}")
-
-        payload = {
-            "venice_parameters": {"include_venice_system_prompt": True},
-            "model": selected_model,
-            "messages": api_messages,
-            "temperature": 1,
-            "top_p": 1,
-            "n": 1,
-            "stream": True,
-            "presence_penalty": 0,
-            "frequency_penalty": 0
-        }
-        
-        # Only add parallel_tool_calls if the model supports it
-        if capabilities['supportsParallelToolCalls']:
-            payload["parallel_tool_calls"] = True
-            app.logger.debug("Added parallel_tool_calls to payload")
-        else:
-            app.logger.debug("Skipped parallel_tool_calls - not supported by this model")
-
-        headers = {
-            "Authorization": f"Bearer {VENICE_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
         try:
-            with requests.post(
-                VENICE_URL,
-                json=payload,
-                headers=headers,
-                stream=True,
-                timeout=60
-            ) as response:
-                full_response = ""
-                app.logger.debug(f"Venice API response status: {response.status_code}")
-                app.logger.debug(f"Venice API response headers: {response.headers}")
-                
-                # Check if the response is successful
-                if response.status_code != 200:
-                    app.logger.error(f"Venice API error: {response.status_code} - {response.text}")
-                    yield f"data: {json.dumps({'content': f'API Error: {response.status_code}', 'full': f'API Error: {response.status_code}', 'error': True})}\n\n"
-                    yield f"event: done\ndata: {{}}\n\n"
-                    return
-                
-                # Check content type to determine if streaming or not
-                content_type = response.headers.get('content-type', '').lower()
-                app.logger.debug(f"Content-Type: {content_type}")
-                
-                if 'text/event-stream' in content_type:
-                    # Handle streaming response
-                    app.logger.debug("Processing as streaming response")
-                    for line in response.iter_lines():
-                        if line:
-                            line = line.decode('utf-8')
-                            if line.startswith('data: '):
-                                try:
-                                    data_json = line[6:]
-                                    if data_json.strip() == '[DONE]':
-                                        break
-                                    data = json.loads(data_json)
-                                    if 'choices' in data and len(data['choices']) > 0:
-                                        delta = data['choices'][0].get('delta', {})
-                                        content = delta.get('content', '')
-                                        if content:
-                                            full_response += content
-                                            yield f"data: {json.dumps({'content': content, 'full': full_response})}\n\n"
-                                except Exception as e:
-                                    app.logger.error(f"Error parsing Venice SSE: {e}")
-                                    continue
-                else:
-                    # Handle non-streaming JSON response
-                    app.logger.debug("Processing as non-streaming JSON response")
-                    try:
-                        response_data = response.json()
-                        app.logger.debug(f"Non-streaming response data: {response_data}")
-                        
-                        if 'choices' in response_data and len(response_data['choices']) > 0:
-                            choice = response_data['choices'][0]
-                            if 'message' in choice and 'content' in choice['message']:
-                                full_response = choice['message']['content']
-                                app.logger.debug(f"Extracted content length: {len(full_response)}")
-                                # Send the full response at once
-                                yield f"data: {json.dumps({'content': full_response, 'full': full_response})}\n\n"
-                            else:
-                                app.logger.error(f"Unexpected response structure: {choice}")
-                                yield f"data: {json.dumps({'content': 'Invalid response structure from AI', 'full': 'Invalid response structure from AI', 'error': True})}\n\n"
-                        elif 'error' in response_data:
-                            error_msg = response_data.get('error', {}).get('message', 'Unknown API error')
-                            app.logger.error(f"API returned error: {error_msg}")
-                            yield f"data: {json.dumps({'content': f'API Error: {error_msg}', 'full': f'API Error: {error_msg}', 'error': True})}\n\n"
-                        else:
-                            app.logger.error(f"No choices in response: {response_data}")
-                            yield f"data: {json.dumps({'content': 'No response from AI', 'full': 'No response from AI', 'error': True})}\n\n"
-                    except Exception as e:
-                        app.logger.error(f"Error parsing JSON response: {e}")
-                        app.logger.error(f"Raw response: {response.text}")
-                        yield f"data: {json.dumps({'content': 'Error parsing AI response', 'full': 'Error parsing AI response', 'error': True})}\n\n"
-                
-                # Format the response content for consistent display
-                if full_response:
-                    formatted_content = format_message_content(full_response)
-                    # Send the final formatted content
-                    yield f"data: {json.dumps({'content': formatted_content, 'full': formatted_content, 'final': True})}\n\n"
-                    app.logger.debug(f"Sent formatted final response, length: {len(formatted_content)}")
+            # Use session model if available, otherwise use request parameter
+            selected_model = session.get('selected_model', model_id)
+            selected_model = get_valid_model(selected_model)
+            
+            app.logger.debug(f"Using Venice model: {selected_model}")
+            
+            # Get model capabilities
+            capabilities = get_model_capabilities(selected_model)
+            app.logger.debug(f"Model capabilities: {capabilities}")
+            
+            # Prepare messages for Venice API
+            messages = []
+            
+            # Add system prompt
+            is_multiplayer = len([msg for msg in chat_history if msg.get('role') == 'user']) > 1
+            system_prompt = build_system_prompt(is_multiplayer)
+            messages.append({"role": "system", "content": system_prompt})
+            
+            # Add chat history
+            for msg in chat_history:
+                if msg.get('invisible', False):
+                    continue  # Skip invisible messages in API calls
                     
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                
+                if content.strip():
+                    messages.append({"role": role, "content": content})
+            
+            # Prepare Venice API request
+            venice_data = {
+                "model": selected_model,
+                "messages": messages,
+                "stream": True,
+                "max_tokens": 2000,
+                "temperature": 0.8
+            }
+            
+            # Add function calling support if available
+            if capabilities.get('supportsFunctionCalling', False):
+                venice_data["functions"] = []  # Add your functions here if needed
+            else:
+                app.logger.debug("Skipped parallel_tool_calls - not supported by this model")
+            
+            # Make request to Venice API
+            response = requests.post(
+                VENICE_URL,
+                headers={
+                    'Authorization': f'Bearer {VENICE_API_KEY}',
+                    'Content-Type': 'application/json'
+                },
+                json=venice_data,
+                stream=True
+            )
+            
+            app.logger.debug(f"Venice API response status: {response.status_code}")
+            app.logger.debug(f"Venice API response headers: {dict(response.headers)}")
+            
+            if response.status_code != 200:
+                error_text = response.text
+                app.logger.error(f"Venice API error: {response.status_code} - {error_text}")
+                yield f"data: {json.dumps({'content': f'API Error: {response.status_code}', 'error': True})}\n\n"
+                return
+            
+            content_type = response.headers.get('content-type', '')
+            app.logger.debug(f"Content-Type: {content_type}")
+            
+            if 'text/event-stream' in content_type:
+                app.logger.debug("Processing as streaming response")
+                full_content = ""
+                
+                for line in response.iter_lines(decode_unicode=True):
+                    if line:
+                        if line.startswith('data: '):
+                            data_part = line[6:]  # Remove 'data: ' prefix
+                            if data_part.strip() == '[DONE]':
+                                break
+                            try:
+                                chunk_data = json.loads(data_part)
+                                if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
+                                    delta = chunk_data['choices'][0].get('delta', {})
+                                    content = delta.get('content', '')
+                                    if content:
+                                        full_content += content
+                                        yield f"data: {json.dumps({'content': content})}\n\n"
+                            except json.JSONDecodeError:
+                                continue
+                
+                # Send final formatted content
+                if full_content:
+                    formatted_content = format_message_content(full_content)
+                    app.logger.debug(f"Sent formatted final response, length: {len(formatted_content)}")
+                
+                yield f"event: done\ndata: {json.dumps({'content': '', 'complete': True})}\n\n"
+            else:
+                # Handle non-streaming response
+                try:
+                    json_response = response.json()
+                    content = json_response.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    formatted_content = format_message_content(content)
+                    yield f"data: {json.dumps({'content': formatted_content})}\n\n"
+                    yield f"event: done\ndata: {json.dumps({'content': '', 'complete': True})}\n\n"
+                except json.JSONDecodeError:
+                    yield f"data: {json.dumps({'content': 'Error parsing response', 'error': True})}\n\n"
+        
         except Exception as e:
-            app.logger.error(f"Error in API request: {str(e)}")
-            yield f"data: {json.dumps({'content': f'Error: {str(e)}', 'full': f'Error: {str(e)}', 'error': True})}\n\n"
-            yield f"event: done\ndata: {{}}\n\n"
+            app.logger.error(f"Error in stream generation: {e}")
+            yield f"data: {json.dumps({'content': f'Server error: {str(e)}', 'error': True})}\n\n"
     
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
@@ -375,26 +312,34 @@ def set_player_name():
 @app.route('/get_models', methods=['GET'])
 def get_models():
     """Get available AI models"""
-    return jsonify({"models": AVAILABLE_MODELS})
+    try:
+        return jsonify({"models": AVAILABLE_MODELS, "success": True})
+    except Exception as e:
+        app.logger.error(f"Error getting models: {e}")
+        return jsonify({"error": str(e), "success": False}), 500
 
 @app.route('/set_model', methods=['POST'])
 def set_model():
-    """Set the current AI model for the session"""
-    data = request.get_json()
-    model_id = data.get('model_id')
-    
-    if not model_id:
-        return jsonify({"success": False, "error": "Missing model_id"}), 400
-    
-    # Validate model exists
-    valid_models = [model['id'] for model in AVAILABLE_MODELS]
-    if model_id not in valid_models:
-        return jsonify({"success": False, "error": "Invalid model_id"}), 400
-    
-    # Store in session (you could also store in database if needed)
-    session['selected_model'] = model_id
-    
-    return jsonify({"success": True, "model_id": model_id})
+    """Set the selected AI model"""
+    try:
+        data = request.get_json()
+        model_id = data.get('model_id')
+        
+        if not model_id:
+            return jsonify({"error": "No model_id provided", "success": False}), 400
+        
+        # Validate model exists
+        valid_model = get_valid_model(model_id)
+        session['selected_model'] = valid_model
+        
+        return jsonify({
+            "success": True, 
+            "model": valid_model,
+            "message": f"Model set to {valid_model}"
+        })
+    except Exception as e:
+        app.logger.error(f"Error setting model: {e}")
+        return jsonify({"error": str(e), "success": False}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

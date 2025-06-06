@@ -405,27 +405,25 @@ const Utils = (function() {
                 .map(msg => {
                     const senderEl = msg.querySelector('.message-sender');
                     const contentEl = msg.querySelector('.message-content');
-                    
                     if (!senderEl || !contentEl) return null;
-
                     const sender = senderEl.textContent.replace(':', '').trim();
                     const content = contentEl.textContent.trim();
                     const contentHTML = contentEl.innerHTML.trim();
-                    
                     if (!content) return null;
-
                     // Determine message role/type
                     let role = 'user';
                     let type = 'player';
-                    
+                    // Robust DM detection: class or sender name (case-insensitive)
                     if (msg.classList.contains('system-message')) {
                         role = 'system';
                         type = 'system';
-                    } else if (msg.classList.contains('dm-message') || sender.toLowerCase() === 'dm') {
+                    } else if (msg.classList.contains('dm-message') || 
+                               sender.toLowerCase() === 'dm' || 
+                               sender.toLowerCase() === (window.dmName ? window.dmName.toLowerCase() : 'dm') ||
+                               sender === window.dmName) {
                         role = 'assistant';
                         type = 'dm';
                     }
-
                     return {
                         role: role,
                         type: type,
@@ -436,7 +434,6 @@ const Utils = (function() {
                     };
                 })
                 .filter(msg => msg !== null);
-
             return messages;
         } catch (e) {
             debugLog("Error converting DOM messages to storage format:", e);

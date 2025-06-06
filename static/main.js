@@ -1274,6 +1274,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (fullResponseText) {
                     PlayerManager.checkForPlayerNames(fullResponseText);
                 }
+                // --- PATCH: Ensure AI response is appended to chat history and saved ---
+                // Only add if not already present (avoid duplicates)
+                let chatHistory = Utils.loadChatHistoryFromLocal(currentGameId) || [];
+                const lastMsg = chatHistory[chatHistory.length - 1];
+                // Only add if last message is not the same as the current AI response
+                if (!lastMsg || lastMsg.content !== responseTextElem.textContent || lastMsg.role !== 'assistant') {
+                    chatHistory.push({
+                        role: 'assistant',
+                        type: 'dm',
+                        sender: dmName,
+                        content: responseTextElem.textContent,
+                        contentHTML: responseTextElem.innerHTML,
+                        timestamp: Date.now()
+                    });
+                    Utils.saveChatHistoryToLocal(currentGameId, chatHistory);
+                    debugLog("Patched: AI response appended and saved to chat history.");
+                }
             }
             
             eventSource.close();

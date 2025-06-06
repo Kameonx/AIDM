@@ -7,6 +7,61 @@ document.addEventListener('DOMContentLoaded', function() {
     
     debugLog("=== TOP-LEVEL DOMCONTENTLOADED STARTED ===");
     
+    // Mobile viewport height fix for Safari and other mobile browsers
+    function setViewportHeight() {
+        // Get the viewport height and multiply it by 1% to get a value for 1vh
+        let vh = window.innerHeight * 0.01;
+        // Set the value in the --vh custom property to the root of the document
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+        debugLog('Viewport height set to:', vh, 'px');
+    }
+    
+    // Set initial viewport height
+    setViewportHeight();
+    
+    // Update viewport height on resize and orientation change
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', function() {
+        // Add a small delay for orientation change to complete
+        setTimeout(setViewportHeight, 100);
+    });
+    
+    // For iOS Safari, also listen for visual viewport changes
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setViewportHeight);
+    }
+    
+    // Additional mobile input focus handling
+    function handleMobileInputFocus() {
+        const inputs = document.querySelectorAll('.player-input-field');
+        
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                // Small delay to ensure the virtual keyboard is shown
+                setTimeout(() => {
+                    // Scroll the input into view
+                    this.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                }, 300);
+            });
+            
+            input.addEventListener('blur', function() {
+                // Reset viewport height after virtual keyboard closes
+                setTimeout(setViewportHeight, 300);
+            });
+        });
+    }
+    
+    // Initialize mobile input handling
+    handleMobileInputFocus();
+    
+    // Re-initialize mobile input handling when new players are added
+    function reinitializeMobileInputHandling() {
+        handleMobileInputFocus();
+    }
+    
     // Core variables
     let isGenerating = false;
     let seenMessages = new Set();
@@ -214,6 +269,14 @@ document.addEventListener('DOMContentLoaded', function() {
         addMessage(playerName, "rolls 1d20...");
         const diceCommandInput = { value: "/roll 1d20" };
         sendMessage(diceCommandInput, playerNumber);
+    });
+    
+    // Add event listener for when new players are added
+    window.addEventListener('player-added', function() {
+        // Re-initialize mobile input handling for new inputs
+        reinitializeMobileInputHandling();
+        // Update viewport height
+        setViewportHeight();
     });
 
     // ==============================================
@@ -1239,7 +1302,28 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (addPlayerBtn) {
         addPlayerBtn.addEventListener('click', function() {
-            PlayerManager.addPlayer(sendMessage);
+            debugLog("Add player button clicked");
+            const newPlayerNumber = PlayerManager.addPlayer(sendMessage);
+            if (newPlayerNumber) {
+                debugLog("New player added:", newPlayerNumber);
+                // Dispatch event for mobile handling
+                window.dispatchEvent(new CustomEvent('player-added'));
+                
+                // Focus the new player's input after a brief delay
+                setTimeout(() => {
+                    const newPlayerInput = document.getElementById(`player${newPlayerNumber}-input`);
+                    if (newPlayerInput) {
+                        newPlayerInput.focus();
+                        // On mobile, scroll to the new input
+                        if (window.innerWidth <= 768) {
+                            newPlayerInput.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center'
+                            });
+                        }
+                    }
+                }, 100);
+            }
         });
     }
     

@@ -319,7 +319,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectedPlayerElement = null;
                 selectedPlayerNum = null;
                 removePlayerBtn.classList.add('hidden');
+                
+                // Update nextPlayerNumber - don't increment, just find next available
+                const playerNumbers = Object.keys(playerNames).map(Number);
+                nextPlayerNumber = playerNumbers.length > 0 ? Math.max(...playerNumbers) + 1 : 2;
+                
                 debugLog(`Successfully removed player. Remaining players:`, playerNames);
+                debugLog(`Next available player number: ${nextPlayerNumber}`);
             } else {
                 debugLog("Invalid removal attempt - selectedPlayerNum:", selectedPlayerNum);
                 addSystemMessage("Please select a player other than Player 1 to remove", false, false, true);
@@ -1267,7 +1273,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (addPlayerBtn) {
         addPlayerBtn.addEventListener('click', function() {
-            PlayerManager.addPlayer(sendMessage);
+            const addedPlayerNumber = PlayerManager.addPlayer(sendMessage);
+            // Update our local nextPlayerNumber tracking
+            const playerNumbers = Object.keys(playerNames).map(Number);
+            nextPlayerNumber = Math.max(...playerNumbers) + 1;
+            debugLog(`Player ${addedPlayerNumber} added. Next available number will be: ${nextPlayerNumber}`);
         });
     }
     

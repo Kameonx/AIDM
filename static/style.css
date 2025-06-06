@@ -467,14 +467,14 @@ span.pink {
 }
 
 span.cyan {
-    color: #8be9fd;
-    text-shadow: 0 0 5px rgba(139, 233, 253, 0.5);
+    color: #00ffff;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
     font-weight: bold;
 }
 
 span.lime {
-    color: #50fa7b;
-    text-shadow: 0 0 8px rgba(80, 250, 123, 0.7);
+    color: #00ff00;
+    text-shadow: 0 0 8px rgba(0, 255, 0, 0.7);
     font-weight: bold;
 }
 

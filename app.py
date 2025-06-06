@@ -7,22 +7,29 @@ import requests
 import re
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 
-# Import configuration
-from config import (
-    VENICE_API_KEY, VENICE_URL, DEFAULT_MODEL_ID, CHAT_DIR, AVAILABLE_MODELS,
-    SYSTEM_PROMPT_BASE, MULTIPLAYER_PROMPT_ADDITION, SINGLEPLAYER_PROMPT_ADDITION, PROMPT_ENDING
-)
+# Import configuration with error handling
+try:
+    from config import (
+        VENICE_API_KEY, VENICE_URL, DEFAULT_MODEL_ID, CHAT_DIR, AVAILABLE_MODELS,
+        SYSTEM_PROMPT_BASE, MULTIPLAYER_PROMPT_ADDITION, SINGLEPLAYER_PROMPT_ADDITION, PROMPT_ENDING
+    )
+except ImportError as e:
+    print(f"ERROR: Failed to import configuration: {e}", file=sys.stderr)
+    print("Please ensure config.py has all required variables defined.", file=sys.stderr)
+    sys.exit(1)
 
 app = Flask(__name__, static_folder='static')
 app.secret_key = os.urandom(24)  # Required for session
 
+# Validate API key
+if not VENICE_API_KEY or VENICE_API_KEY == "YOUR_API_KEY_HERE":
+    print("ERROR: VENICE_API_KEY not properly configured. Please set it in your .env file.", file=sys.stderr)
+    print("Example: VENICE_API_KEY=your_actual_api_key_here", file=sys.stderr)
+    # Don't exit here, just warn - the app might still work for testing
+
 # Create a directory to store user chat histories
 if not os.path.exists(CHAT_DIR):
     os.makedirs(CHAT_DIR)
-
-# Validate API key
-if not VENICE_API_KEY:
-    print("ERROR: VENICE_API_KEY not found in environment. Please check your .env file.", file=sys.stderr)
 
 def get_user_id():
     """Get or create a unique user ID for the current session"""
@@ -151,10 +158,25 @@ def index():
             save_chat_history(user_id, chat_history, game_id)
     
     # Pass the chat history to the template to display immediately on load
-    response = make_response(render_template('index.html', chat_history=chat_history))
-    response.set_cookie('user_id', user_id, max_age=60*60*24*365)  # Expire in 1 year
-    response.set_cookie('game_id', game_id, max_age=60*60*24*365)
-    return response
+    try:
+        response = make_response(render_template('index.html', chat_history=chat_history))
+        response.set_cookie('user_id', user_id, max_age=60*60*24*365)  # Expire in 1 year
+        response.set_cookie('game_id', game_id, max_age=60*60*24*365)
+        return response
+    except Exception as e:
+        app.logger.error(f"Error rendering template: {e}")
+        # Return a simple HTML response if template fails
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>AI Dungeon Master</title></head>
+        <body>
+        <h1>AI Dungeon Master</h1>
+        <p>Error: Template not found. Please ensure templates/index.html exists.</p>
+        <p>Error details: {str(e)}</p>
+        </body>
+        </html>
+        """, 500
 
 @app.route('/chat', methods=['POST'])
 def chat():

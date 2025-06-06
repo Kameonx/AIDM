@@ -696,3 +696,53 @@ span.pink, span.cyan, span.lime, span.teal {
         font-size: 0.6em; /* Even smaller on very small screens */
     }
 }
+
+/* Reasoning toggle styles - Add these at the end */
+.reasoning-toggle-inline {
+    display: inline-block;
+    cursor: pointer;
+    color: #6272a4;
+    font-size: 0.8em;
+    margin-right: 5px;
+    user-select: none;
+    vertical-align: top;
+}
+
+.reasoning-toggle-inline:hover {
+    color: #8be9fd;
+}
+
+.reasoning-toggle-inline.expanded .reasoning-caret {
+    transform: rotate(90deg);
+}
+
+.reasoning-caret {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 0.7em;
+}
+
+.reasoning-content-inline {
+    display: none;
+    background: rgba(98, 114, 164, 0.1);
+    border-left: 3px solid #6272a4;
+    margin: 5px 0;
+    border-radius: 4px;
+    max-width: 100%;
+}
+
+.reasoning-text-inline {
+    padding: 8px 12px;
+    font-size: 0.85em;
+    color: #6272a4;
+    font-style: italic;
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+
+/* Fix word wrapping issues */
+.message-content, .reasoning-text-inline {
+    word-break: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+}

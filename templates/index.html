@@ -44,7 +44,7 @@
                   {% if message.role == 'assistant' %}
                   <div class="message dm-message">
                       <span class="message-sender">DM: </span>
-                      <span class="message-content">{{ message.content|safe }}</span>
+                      <span class="message-content">{{ message.content|e }}</span>
                   </div>
                   {% endif %}
               {% endfor %}

@@ -67,9 +67,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function loadAvailableModels() {
         fetch('/get_models')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.models) {
+            if (data.models && Array.isArray(data.models)) {
                 availableModels = data.models;
                 populateModelList();
                 updateCurrentModelDisplay();
@@ -77,11 +82,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 // IMPORTANT: Set the model on the server after loading models
                 // This ensures the server knows which model to use on page refresh
                 setServerModel(selectedModel);
+            } else {
+                throw new Error('Invalid models data received');
             }
         })
         .catch(error => {
             debugLog("Error loading models:", error);
-            addSystemMessage("Error loading AI models.", false, false, true);
+            // Fallback to default model
+            availableModels = [{
+                id: 'venice-uncensored',
+                name: 'Venice Uncensored (Default)',
+                description: 'Default fallback model',
+                traits: [],
+                supportsFunctionCalling: false,
+                supportsParallelToolCalls: false
+            }];
+            populateModelList();
+            updateCurrentModelDisplay();
+            addSystemMessage("Using default AI model (models list unavailable).", false, false, true);
         });
     }
 
@@ -106,7 +124,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateModelList() {
+        if (!modelList) {
+            debugLog("Model list element not found");
+            return;
+        }
+        
         modelList.innerHTML = '';
+        
+        if (!availableModels || availableModels.length === 0) {
+            modelList.innerHTML = '<div class="model-item">No models available</div>';
+            return;
+        }
         
         availableModels.forEach(model => {
             const modelItem = document.createElement('div');
@@ -115,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 modelItem.classList.add('selected');
             }
             
-            const traits = model.traits.map(trait => {
+            const traits = (model.traits || []).map(trait => {
                 const traitNames = {
                     'default': 'Default',
                     'most_intelligent': 'Most Intelligent',
@@ -130,8 +158,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             modelItem.innerHTML = `
-                <div class="model-name">${model.name}</div>
-                <div class="model-description">${model.description}</div>
+                <div class="model-name">${model.name || 'Unknown Model'}</div>
+                <div class="model-description">${model.description || 'No description available'}</div>
                 ${traits.length > 0 ? `<div class="model-traits">${traits.map(trait => `<span class="trait-tag">${trait}</span>`).join('')}</div>` : ''}
             `;
             
@@ -1314,6 +1342,31 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (redoBtn) {
         redoBtn.addEventListener('click', redoChat);
+    }
+
+    // Add missing updatePlayerLabels function
+    function updatePlayerLabels() {
+        debugLog("Updating player labels with current names:", playerNames);
+        
+        // Update Player 1 label
+        const p1Label = document.getElementById('player1-label');
+        if (p1Label && playerNames[1]) {
+            p1Label.textContent = `${playerNames[1]}:`;
+            debugLog(`Updated Player 1 label to: ${playerNames[1]}:`);
+        } else if (p1Label) {
+            p1Label.textContent = 'Player 1:';
+        }
+        
+        // Update other player labels
+        Object.entries(playerNames).forEach(([num, name]) => {
+            if (num > 1 && name) {
+                const label = document.getElementById(`player${num}-label`);
+                if (label) {
+                    label.textContent = `${name}:`;
+                    debugLog(`Updated Player ${num} label to: ${name}:`);
+                }
+            }
+        });
     }
 
     // Initial setup - clean and clear flow

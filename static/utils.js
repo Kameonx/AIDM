@@ -29,24 +29,23 @@ const Utils = (function() {
         // Handle reasoning text from AI models FIRST (before other processing)
         processedText = processReasoningText(processedText);
 
-        // Process emphasis tags FIRST (before color tags to avoid conflicts)
-        processedText = processedText
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
+        // Process markdown-like formatting (matching the app.py format)
+        processedText = processedText.replace(/`([^`]+)`/g, '<code style="background: #2d2d2d; padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');
+        processedText = processedText.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        processedText = processedText.replace(/\*(.*?)\*/g, '<em>$1</em>');
 
-        // Replace any [color:text] with <span class="color">text</span>
-        // Accepts any color/class name (letters, numbers, dash, underscore)
-        processedText = processedText.replace(
-            /\[([a-zA-Z0-9_\-]+):(.*?)\]/g,
-            function(match, color, value) {
-                color = color.toLowerCase();
-                value = value.trim();
-                if (/^[a-z0-9_\-]+$/.test(color)) {
-                    return `<span class="${color}">${value}</span>`;
-                }
-                return value;
-            }
-        );
+        // Replace color tags with proper CSS classes
+        processedText = processedText.replace(/\[red:(.*?)\]/g, '<span class="color-red">$1</span>');
+        processedText = processedText.replace(/\[green:(.*?)\]/g, '<span class="color-green">$1</span>');
+        processedText = processedText.replace(/\[blue:(.*?)\]/g, '<span class="color-blue">$1</span>');
+        processedText = processedText.replace(/\[yellow:(.*?)\]/g, '<span class="color-yellow">$1</span>');
+        processedText = processedText.replace(/\[purple:(.*?)\]/g, '<span class="color-purple">$1</span>');
+        processedText = processedText.replace(/\[orange:(.*?)\]/g, '<span class="color-orange">$1</span>');
+        processedText = processedText.replace(/\[pink:(.*?)\]/g, '<span class="color-pink">$1</span>');
+        processedText = processedText.replace(/\[cyan:(.*?)\]/g, '<span class="color-cyan">$1</span>');
+        processedText = processedText.replace(/\[lime:(.*?)\]/g, '<span class="color-lime">$1</span>');
+        processedText = processedText.replace(/\[teal:(.*?)\]/g, '<span class="color-teal">$1</span>');
 
         return processedText;
     }

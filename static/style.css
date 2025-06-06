@@ -423,98 +423,78 @@ html {
     width: calc(100% - 10px); /* Account for any margins */
 }
 
-/* Color formatting styles - Replace old spell effect styling */
-span.red {
+/* Updated color formatting styles to match the new system */
+.color-red {
     color: #ff5555;
     text-shadow: 0 0 5px rgba(255, 85, 85, 0.5);
     font-weight: bold;
 }
 
-span.green {
+.color-green {
     color: #50fa7b;
     text-shadow: 0 0 5px rgba(80, 250, 123, 0.5);
     font-weight: bold;
 }
 
-span.blue {
+.color-blue {
     color: #8be9fd;
     text-shadow: 0 0 5px rgba(139, 233, 253, 0.5);
     font-weight: bold;
 }
 
-span.yellow {
+.color-yellow {
     color: #f1fa8c;
     text-shadow: 0 0 5px rgba(241, 250, 140, 0.5);
     font-weight: bold;
 }
 
-span.purple {
+.color-purple {
     color: #bd93f9;
     text-shadow: 0 0 5px rgba(189, 147, 249, 0.5);
     font-weight: bold;
 }
 
-span.orange {
+.color-orange {
     color: #ffb86c;
     text-shadow: 0 0 5px rgba(255, 184, 108, 0.5);
     font-weight: bold;
 }
 
-span.pink {
+.color-pink {
     color: #ff79c6;
     text-shadow: 0 0 5px rgba(255, 121, 198, 0.5);
     font-weight: bold;
 }
 
-span.cyan {
+.color-cyan {
     color: #00ffff;
     text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
     font-weight: bold;
 }
 
-span.lime {
+.color-lime {
     color: #00ff00;
     text-shadow: 0 0 8px rgba(0, 255, 0, 0.7);
     font-weight: bold;
 }
 
-span.teal {
+.color-teal {
     color: #44ffff;
     text-shadow: 0 0 5px rgba(68, 255, 255, 0.5);
     font-weight: bold;
 }
 
-/* Extra color classes for AI tags */
-span.gold {
-    color: #ffd700;
-    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
-    font-weight: bold;
-}
-span.brown {
-    color: #a0522d;
-    text-shadow: 0 0 5px rgba(160, 82, 45, 0.5);
-    font-weight: bold;
-}
-span.white {
-    color: #fff;
-    text-shadow: 0 0 5px rgba(255,255,255,0.5);
-    font-weight: bold;
-}
-span.black {
-    color: #222;
-    text-shadow: 0 0 5px rgba(0,0,0,0.5);
-    font-weight: bold;
-}
-span.gray, span.grey, span.silver {
-    color: #ccc;
-    text-shadow: 0 0 5px rgba(200,200,200,0.5);
-    font-weight: bold;
-}
-span.fresh {
-    color: #7fff7f;
-    text-shadow: 0 0 5px rgba(127,255,127,0.5);
-    font-weight: bold;
-}
+/* Keep old color classes for backward compatibility */
+span.red { color: #ff5555; text-shadow: 0 0 5px rgba(255, 85, 85, 0.5); font-weight: bold; }
+span.green { color: #50fa7b; text-shadow: 0 0 5px rgba(80, 250, 123, 0.5); font-weight: bold; }
+span.blue { color: #8be9fd; text-shadow: 0 0 5px rgba(139, 233, 253, 0.5); font-weight: bold; }
+span.yellow { color: #f1fa8c; text-shadow: 0 0 5px rgba(241, 250, 140, 0.5); font-weight: bold; }
+span.purple { color: #bd93f9; text-shadow: 0 0 5px rgba(189, 147, 249, 0.5); font-weight: bold; }
+span.orange { color: #ffb86c; text-shadow: 0 0 5px rgba(255, 184, 108, 0.5); font-weight: bold; }
+span.pink { color: #ff79c6; text-shadow: 0 0 5px rgba(255, 121, 198, 0.5); font-weight: bold; }
+span.cyan { color: #00ffff; text-shadow: 0 0 5px rgba(0, 255, 255, 0.5); font-weight: bold; }
+span.lime { color: #00ff00; text-shadow: 0 0 8px rgba(0, 255, 0, 0.7); font-weight: bold; }
+span.teal { color: #44ffff; text-shadow: 0 0 5px rgba(68, 255, 255, 0.5); font-weight: bold; }
 
 /* Modal styles */
 .modal {

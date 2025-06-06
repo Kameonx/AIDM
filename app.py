@@ -108,7 +108,11 @@ def chat():
         player_number = data.get('player_number', 1)
         
         if not message.strip():
-            return jsonify({"error": "Empty message"}), 400
+            return jsonify({"success": False, "error": "Empty message"}), 400
+            
+        # Validate API key
+        if not VENICE_API_KEY or VENICE_API_KEY == "YOUR_API_KEY_HERE":
+            return jsonify({"success": False, "error": "Venice API key not configured"}), 500
             
         # Generate a unique message ID for streaming
         message_id = str(int(time.time() * 1000))
@@ -121,7 +125,7 @@ def chat():
         
     except Exception as e:
         app.logger.error(f"Error in chat endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 def get_valid_model(model_id):
     valid_models = [model['id'] for model in AVAILABLE_MODELS]
@@ -165,124 +169,109 @@ def stream_response():
     chat_history = []
     if chat_history_param:
         try:
+            import base64
             decoded_history = base64.b64decode(chat_history_param).decode('utf-8')
             chat_history = json.loads(decoded_history)
         except Exception as e:
             app.logger.error(f"Error decoding chat history: {e}")
+            chat_history = []
     
     # Print debug info
-    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model', model_id)}")
+    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={model_id}")
 
     def generate():
         try:
-            # Use session model if available, otherwise use request parameter
+            # Get selected model from session or use provided model_id
             selected_model = session.get('selected_model', model_id)
-            selected_model = get_valid_model(selected_model)
             
-            app.logger.debug(f"Using Venice model: {selected_model}")
+            # Validate model
+            valid_model = get_valid_model(selected_model)
             
-            # Get model capabilities
-            capabilities = get_model_capabilities(selected_model)
-            app.logger.debug(f"Model capabilities: {capabilities}")
-            
-            # Prepare messages for Venice API
+            # Build messages for API
             messages = []
             
             # Add system prompt
-            is_multiplayer = len([msg for msg in chat_history if msg.get('role') == 'user']) > 1
+            is_multiplayer = len([p for p in chat_history if p.get('role') == 'user']) > 1
             system_prompt = build_system_prompt(is_multiplayer)
             messages.append({"role": "system", "content": system_prompt})
             
             # Add chat history
-            for msg in chat_history:
-                if msg.get('invisible', False):
-                    continue  # Skip invisible messages in API calls
-                    
-                role = msg.get('role', 'user')
-                content = msg.get('content', '')
-                
-                if content.strip():
-                    messages.append({"role": role, "content": content})
+            for msg in chat_history[-20:]:  # Limit to last 20 messages
+                if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
+                    messages.append({
+                        "role": msg['role'],
+                        "content": msg['content']
+                    })
             
-            # Prepare Venice API request
-            venice_data = {
-                "model": selected_model,
+            # Prepare request payload according to Venice API spec
+            payload = {
+                "model": valid_model,
                 "messages": messages,
                 "stream": True,
                 "max_tokens": 2000,
-                "temperature": 0.8
+                "temperature": 0.8,
+                "top_p": 0.9
             }
             
-            # Add function calling support if available
-            if capabilities.get('supportsFunctionCalling', False):
-                venice_data["functions"] = []  # Add your functions here if needed
-            else:
-                app.logger.debug("Skipped parallel_tool_calls - not supported by this model")
+            headers = {
+                'Authorization': f'Bearer {VENICE_API_KEY}',
+                'Content-Type': 'application/json'
+            }
             
-            # Make request to Venice API
+            app.logger.debug(f"Sending request to Venice API with model: {valid_model}")
+            
+            # Make the streaming request to Venice API
             response = requests.post(
                 VENICE_URL,
-                headers={
-                    'Authorization': f'Bearer {VENICE_API_KEY}',
-                    'Content-Type': 'application/json'
-                },
-                json=venice_data,
-                stream=True
+                headers=headers,
+                json=payload,
+                stream=True,
+                timeout=30
             )
-            
-            app.logger.debug(f"Venice API response status: {response.status_code}")
-            app.logger.debug(f"Venice API response headers: {dict(response.headers)}")
             
             if response.status_code != 200:
                 error_text = response.text
                 app.logger.error(f"Venice API error: {response.status_code} - {error_text}")
-                yield f"data: {json.dumps({'content': f'API Error: {response.status_code}', 'error': True})}\n\n"
+                yield f"data: {json.dumps({'content': f'API Error {response.status_code}: {error_text}', 'error': True})}\n\n"
+                yield "event: done\ndata: {}\n\n"
                 return
             
-            content_type = response.headers.get('content-type', '')
-            app.logger.debug(f"Content-Type: {content_type}")
-            
-            if 'text/event-stream' in content_type:
-                app.logger.debug("Processing as streaming response")
-                full_content = ""
-                
-                for line in response.iter_lines(decode_unicode=True):
-                    if line:
-                        if line.startswith('data: '):
-                            data_part = line[6:]  # Remove 'data: ' prefix
-                            if data_part.strip() == '[DONE]':
+            # Process streaming response
+            accumulated_content = ""
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        try:
+                            data_str = line[6:]  # Remove 'data: ' prefix
+                            if data_str.strip() == '[DONE]':
                                 break
-                            try:
-                                chunk_data = json.loads(data_part)
-                                if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
-                                    delta = chunk_data['choices'][0].get('delta', {})
-                                    content = delta.get('content', '')
-                                    if content:
-                                        full_content += content
-                                        yield f"data: {json.dumps({'content': content})}\n\n"
-                            except json.JSONDecodeError:
-                                continue
-                
-                # Send final formatted content
-                if full_content:
-                    formatted_content = format_message_content(full_content)
-                    app.logger.debug(f"Sent formatted final response, length: {len(formatted_content)}")
-                
-                yield f"event: done\ndata: {json.dumps({'content': '', 'complete': True})}\n\n"
-            else:
-                # Handle non-streaming response
-                try:
-                    json_response = response.json()
-                    content = json_response.get('choices', [{}])[0].get('message', {}).get('content', '')
-                    formatted_content = format_message_content(content)
-                    yield f"data: {json.dumps({'content': formatted_content})}\n\n"
-                    yield f"event: done\ndata: {json.dumps({'content': '', 'complete': True})}\n\n"
-                except json.JSONDecodeError:
-                    yield f"data: {json.dumps({'content': 'Error parsing response', 'error': True})}\n\n"
-        
+                            
+                            data = json.loads(data_str)
+                            if 'choices' in data and len(data['choices']) > 0:
+                                choice = data['choices'][0]
+                                delta = choice.get('delta', {})
+                                if 'content' in delta:
+                                    content_chunk = delta['content']
+                                    accumulated_content += content_chunk
+                                    yield f"data: {json.dumps({'content': content_chunk})}\n\n"
+                        except json.JSONDecodeError as e:
+                            app.logger.error(f"JSON decode error: {e} - Line: {line}")
+                            continue
+                        except Exception as e:
+                            app.logger.error(f"Error processing chunk: {e}")
+                            continue
+            
+            yield "event: done\ndata: {}\n\n"
+            
+        except requests.exceptions.RequestException as e:
+            app.logger.error(f"Request error in stream: {e}")
+            yield f"data: {json.dumps({'content': f'Network Error: {str(e)}', 'error': True})}\n\n"
+            yield "event: done\ndata: {}\n\n"
         except Exception as e:
-            app.logger.error(f"Error in stream generation: {e}")
-            yield f"data: {json.dumps({'content': f'Server error: {str(e)}', 'error': True})}\n\n"
+            app.logger.error(f"Error in stream generate function: {e}")
+            yield f"data: {json.dumps({'content': f'Error: {str(e)}', 'error': True})}\n\n"
+            yield "event: done\ndata: {}\n\n"
     
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
@@ -311,12 +300,100 @@ def set_player_name():
 
 @app.route('/get_models', methods=['GET'])
 def get_models():
-    """Get available AI models"""
+    """Get available AI models from Venice API"""
     try:
-        return jsonify({"models": AVAILABLE_MODELS, "success": True})
+        headers = {
+            'Authorization': f'Bearer {VENICE_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Call Venice API to get text models
+        models_url = VENICE_URL.replace('/chat/completions', '/models')
+        response = requests.get(
+            f"{models_url}?type=text",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Transform Venice API response to our format
+            models = []
+            if 'data' in data:
+                for model in data['data']:
+                    # Extract capabilities from model_spec
+                    capabilities = model.get('model_spec', {}).get('capabilities', {})
+                    traits = model.get('model_spec', {}).get('traits', [])
+                    
+                    model_info = {
+                        'id': model.get('id', ''),
+                        'name': model.get('id', '').replace('-', ' ').title(),
+                        'description': f"Venice AI model: {model.get('id', '')}",
+                        'type': model.get('type', 'text'),
+                        'traits': traits,
+                        'supportsFunctionCalling': capabilities.get('supportsFunctionCalling', False),
+                        'supportsParallelToolCalls': False,  # Venice doesn't specify this
+                        'supportsReasoning': capabilities.get('supportsReasoning', False),
+                        'supportsVision': capabilities.get('supportsVision', False)
+                    }
+                    
+                    # Add special trait mappings
+                    if 'most_uncensored' in traits:
+                        if 'most_uncensored' not in model_info['traits']:
+                            model_info['traits'].append('most_uncensored')
+                    if 'most_intelligent' in traits:
+                        if 'most_intelligent' not in model_info['traits']:
+                            model_info['traits'].append('most_intelligent')
+                    if 'default' in traits:
+                        if 'default' not in model_info['traits']:
+                            model_info['traits'].append('default')
+                    if 'fastest' in traits:
+                        if 'fastest' not in model_info['traits']:
+                            model_info['traits'].append('fastest')
+                    
+                    models.append(model_info)
+            
+            # If no models found, add default
+            if not models:
+                models.append({
+                    'id': 'venice-uncensored',
+                    'name': 'Venice Uncensored',
+                    'description': 'Default Venice AI model',
+                    'type': 'text',
+                    'traits': ['default', 'most_uncensored'],
+                    'supportsFunctionCalling': False,
+                    'supportsParallelToolCalls': False
+                })
+            
+            return jsonify({"models": models, "success": True})
+        else:
+            app.logger.error(f"Venice API error: {response.status_code} - {response.text}")
+            # Return fallback models
+            fallback_models = [{
+                'id': 'venice-uncensored',
+                'name': 'Venice Uncensored (Fallback)',
+                'description': 'Default Venice AI model (API unavailable)',
+                'type': 'text',
+                'traits': ['default'],
+                'supportsFunctionCalling': False,
+                'supportsParallelToolCalls': False
+            }]
+            return jsonify({"models": fallback_models, "success": True})
+            
     except Exception as e:
-        app.logger.error(f"Error getting models: {e}")
-        return jsonify({"error": str(e), "success": False}), 500
+        app.logger.error(f"Error fetching models: {e}")
+        # Return fallback models on error
+        fallback_models = [{
+            'id': 'venice-uncensored',
+            'name': 'Venice Uncensored (Error Fallback)',
+            'description': 'Default Venice AI model (error occurred)',
+            'type': 'text',
+            'traits': ['default'],
+            'supportsFunctionCalling': False,
+            'supportsParallelToolCalls': False
+        }]
+        return jsonify({"models": fallback_models, "success": True})
 
 @app.route('/set_model', methods=['POST'])
 def set_model():

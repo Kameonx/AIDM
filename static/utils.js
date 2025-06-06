@@ -29,6 +29,15 @@ const Utils = (function() {
         // Handle reasoning text from AI models FIRST (before other processing)
         processedText = processReasoningText(processedText);
 
+        // Process HTML font tags BEFORE escaping (since AI models output these)
+        // Convert <font color="colorname">text</font> to our color format
+        processedText = processedText.replace(/&lt;font color=&quot;(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)&quot;&gt;(.*?)&lt;\/font&gt;/gi, 
+            '<span class="color-$1">$2</span>');
+        
+        // Also handle single quotes in font tags
+        processedText = processedText.replace(/&lt;font color=&#x27;(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)&#x27;&gt;(.*?)&lt;\/font&gt;/gi, 
+            '<span class="color-$1">$2</span>');
+
         // Process markdown-like formatting (matching the app.py format)
         processedText = processedText.replace(/`([^`]+)`/g, '<code style="background: #2d2d2d; padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');
         processedText = processedText.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');

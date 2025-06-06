@@ -19,21 +19,29 @@ const Utils = (function() {
         if (/<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">/.test(text)) {
             return text; // Already formatted with HTML, return as is
         }
-        
+
+        // Convert <font color="...">...</font> to <span class="...">...</span>
+        text = text.replace(/<font\s+color=["']?(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)["']?>((?:.|\n)*?)<\/font>/gi, function(_, color, inner) {
+            return `<span class="${color}">${inner}</span>`;
+        });
+
         // Escape HTML first to prevent XSS, but preserve intentional formatting
         let processedText = text
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
-        
+
+        // Unescape our color spans (so they render as HTML)
+        processedText = processedText.replace(/&lt;span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)"&gt;([\s\S]*?)&lt;\/span&gt;/g, '<span class="$1">$2</span>');
+
         // Handle reasoning text from AI models FIRST (before other processing)
         processedText = processReasoningText(processedText);
-        
+
         // Process emphasis tags FIRST (before color tags to avoid conflicts)
         processedText = processedText
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
             .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
-        
+
         // Process new color tags [color:text]
         const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal'];
         
@@ -109,23 +117,23 @@ const Utils = (function() {
     function extractName(message) {
         if (!message || typeof message !== 'string') return null;
         
-        // Look for common ways people introduce themselves
+        // Accept multi-word names (with spaces, apostrophes, hyphens)
         const namePatterns = [
-            /my name is (\w+)/i,
-            /i am (\w+)/i,
-            /call me (\w+)/i, 
-            /name's (\w+)/i,
-            /i'm (\w+)/i,
-            /^(\w+) is my name/i,
-            /^(\w+)$/i // Just a name with nothing else
+            /my name is ([A-Za-z][\w\s'-]{1,50})/i,
+            /i am ([A-Za-z][\w\s'-]{1,50})/i,
+            /call me ([A-Za-z][\w\s'-]{1,50})/i, 
+            /name's ([A-Za-z][\w\s'-]{1,50})/i,
+            /i'm ([A-Za-z][\w\s'-]{1,50})/i,
+            /^([A-Za-z][\w\s'-]{1,50}) is my name/i,
+            /^([A-Za-z][\w\s'-]{1,50})$/i // Just a name with nothing else
         ];
         
         for (const pattern of namePatterns) {
             const match = message.match(pattern);
             if (match && match[1]) {
-                const name = match[1];
-                // Only accept properly capitalized words as names
-                if (name.charAt(0) === name.charAt(0).toUpperCase() && name.length > 1) {
+                const name = match[1].trim().replace(/\s+/g, ' ');
+                // Only accept names with at least 2 non-space characters
+                if (name.replace(/\s/g, '').length > 1) {
                     debugLog(`Extracted name from user message: ${name}`);
                     return name;
                 }
@@ -150,20 +158,26 @@ const Utils = (function() {
         ];
         
         // Clean up and normalize the string
-        const cleanStr = str.toLowerCase().trim().replace(/[.,!?:;'"()]/, '');
+        const cleanStr = str.toLowerCase().trim().replace(/[.,!?:;'"()]/g, '');
         
         // Reject if empty, too short, or a common word
-        if (cleanStr.length < 2 || commonWords.includes(cleanStr)) {
+        if (cleanStr.replace(/\s/g, '').length < 2 || commonWords.includes(cleanStr)) {
             return false;
         }
         
-        // Check if it starts with a capital letter in the original
-        // This is important for names!
-        if (!/^[A-Z]/.test(str)) {
-            return false;
+        // Accept multi-word names if each word starts with a capital letter
+        const words = str.trim().split(/\s+/);
+        if (words.length > 1) {
+            if (words.every(w => w.length > 0 && w[0] === w[0].toUpperCase())) {
+                return true;
+            }
+        }
+        // Or single word, starts with capital
+        if (/^[A-Z]/.test(str.trim())) {
+            return true;
         }
         
-        return true;
+        return false;
     }
 
     /**

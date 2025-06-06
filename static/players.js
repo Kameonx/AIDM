@@ -128,30 +128,12 @@ const PlayerManager = (function() {
         input.placeholder = `Player ${playerNum}, type your message...`;
         input.className = 'player-input-field';
         input.autocomplete = 'off';
-        
-        // Add mobile-specific attributes
-        input.setAttribute('inputmode', 'text');
-        input.style.fontSize = '16px'; // Prevent zoom on iOS
-        
         input.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && onSendMessage) {
                 e.preventDefault();
                 onSendMessage(input, playerNum);
             }
         });
-        
-        // Add mobile-specific focus handling
-        input.addEventListener('focus', function() {
-            if (window.innerWidth <= 768) {
-                setTimeout(() => {
-                    this.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center'
-                    });
-                }, 300);
-            }
-        });
-        
         playerContainer.appendChild(input);
 
         const buttonsContainer = document.createElement('div');
@@ -189,12 +171,6 @@ const PlayerManager = (function() {
         
         playerContainer.appendChild(buttonsContainer);
         additionalPlayersContainer.appendChild(playerContainer);
-        
-        // Dispatch event that player UI was added
-        window.dispatchEvent(new CustomEvent('player-ui-added', {
-            detail: { playerNumber: playerNum }
-        }));
-        
         return input; // Return the input element
     }
 

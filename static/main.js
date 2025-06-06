@@ -1385,3 +1385,167 @@ function toggleReasoning(reasoningId) {
 
 // Make the function globally available
 window.toggleReasoning = toggleReasoning;
+
+// Add mobile-specific fixes
+function initMobileFixes() {
+    // Fix for mobile viewport issues
+    function setViewportHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    // Set initial viewport height
+    setViewportHeight();
+    
+    // Update on resize (address bar show/hide)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(setViewportHeight, 100);
+    });
+    
+    // Fix for iOS Safari address bar
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setViewportHeight, 500);
+    });
+    
+    // Prevent zoom on input focus for iOS
+    const inputs = document.querySelectorAll('input[type="text"]');
+    inputs.forEach(input => {
+        input.addEventListener('focus', (e) => {
+            // Temporarily disable zoom
+            const viewport = document.querySelector('meta[name="viewport"]');
+            if (viewport) {
+                const originalContent = viewport.content;
+                viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+                
+                // Restore after blur
+                input.addEventListener('blur', () => {
+                    viewport.content = originalContent;
+                }, { once: true });
+            }
+        });
+    });
+    
+    // Fix for mobile browser back button
+    window.addEventListener('popstate', (e) => {
+        // Close sidebar if open when back button is pressed
+        if (sideMenu && sideMenu.classList.contains('open')) {
+            sideMenu.classList.remove('open');
+            menuToggleBtn.classList.remove('menu-open');
+            e.preventDefault();
+        }
+    });
+    
+    // Improve touch handling for mobile
+    let touchStartY = 0;
+    let touchEndY = 0;
+    
+    document.addEventListener('touchstart', (e) => {
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+    
+    document.addEventListener('touchend', (e) => {
+        touchEndY = e.changedTouches[0].screenY;
+        
+        // Prevent pull-to-refresh if at top of chat
+        if (chatWindow && chatWindow.scrollTop === 0 && touchEndY > touchStartY) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    // Fix for virtual keyboard on mobile
+    if ('visualViewport' in window) {
+        window.visualViewport.addEventListener('resize', () => {
+            const keyboardHeight = window.innerHeight - window.visualViewport.height;
+            if (keyboardHeight > 0) {
+                // Keyboard is open
+                document.body.style.paddingBottom = `${keyboardHeight}px`;
+            } else {
+                // Keyboard is closed
+                document.body.style.paddingBottom = '0px';
+            }
+        });
+    }
+    
+    debugLog("Mobile fixes initialized");
+}
+
+// Initialize mobile fixes
+initMobileFixes();
+
+// Update menu toggle functionality for better mobile support
+if (menuToggleBtn && sideMenu) {
+    menuToggleBtn.addEventListener('click', function() {
+        const isOpen = sideMenu.classList.contains('open');
+        
+        if (isOpen) {
+            sideMenu.classList.remove('open');
+            menuToggleBtn.classList.remove('menu-open');
+            // Re-enable scrolling on body
+            document.body.style.overflow = '';
+        } else {
+            sideMenu.classList.add('open');
+            menuToggleBtn.classList.add('menu-open');
+            // Prevent background scrolling on mobile
+            if (window.innerWidth <= 768) {
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    });
+    
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', function(e) {
+        if (window.innerWidth <= 768 && 
+            sideMenu.classList.contains('open') && 
+            !sideMenu.contains(e.target) && 
+            !menuToggleBtn.contains(e.target)) {
+            sideMenu.classList.remove('open');
+            menuToggleBtn.classList.remove('menu-open');
+            document.body.style.overflow = '';
+        }
+    });
+    
+    // Handle touch gestures for sidebar
+    let startX = 0;
+    let currentX = 0;
+    let isSwipeGesture = false;
+    
+    document.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        isSwipeGesture = false;
+    }, { passive: true });
+    
+    document.addEventListener('touchmove', (e) => {
+        if (!startX) return;
+        currentX = e.touches[0].clientX;
+        const diffX = currentX - startX;
+        
+        // Detect swipe gesture
+        if (Math.abs(diffX) > 50) {
+            isSwipeGesture = true;
+            
+            // Swipe right to open sidebar (from left edge)
+            if (diffX > 0 && startX < 50 && !sideMenu.classList.contains('open')) {
+                sideMenu.classList.add('open');
+                menuToggleBtn.classList.add('menu-open');
+                if (window.innerWidth <= 768) {
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+            
+            // Swipe left to close sidebar
+            if (diffX < 0 && sideMenu.classList.contains('open')) {
+                sideMenu.classList.remove('open');
+                menuToggleBtn.classList.remove('menu-open');
+                document.body.style.overflow = '';
+            }
+        }
+    }, { passive: true });
+    
+    document.addEventListener('touchend', () => {
+        startX = 0;
+        currentX = 0;
+        isSwipeGesture = false;
+    }, { passive: true });
+}

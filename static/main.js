@@ -457,6 +457,68 @@ document.addEventListener('DOMContentLoaded', function() {
                 hasContentHTML: !!(msg.contentHTML && msg.contentHTML.trim()),
                 invisible: msg.invisible
             });
+        });    }
+
+    /**
+     * Send context refresh to server after page refresh
+     * This ensures the DM gets the full conversation context
+     */    function sendContextRefreshToServer(chatHistory) {
+        debugLog("🔄 === SENDING CONTEXT REFRESH TO SERVER ===");
+        debugLog("🔄 Chat history length:", chatHistory.length);
+        debugLog("🔄 Current game ID:", currentGameId);
+        debugLog("🔄 Selected model:", selectedModel);
+        
+        if (!currentGameId || !chatHistory || chatHistory.length === 0) {
+            debugLog("❌ No context to refresh - skipping");
+            return;
+        }
+        
+        // Log first few messages for debugging
+        debugLog("🔄 First few messages in chat history:");
+        chatHistory.slice(0, 3).forEach((msg, i) => {
+            debugLog(`  ${i}: role=${msg.role}, type=${msg.type}, sender=${msg.sender}, content=${msg.content?.substring(0, 50)}...`);
+        });
+          // Create a hidden system message to the DM with context
+        const contextMessage = `[Context Refresh] The conversation history has been restored. There are ${chatHistory.length} messages in the conversation. Please continue the story naturally based on the previous context.`;
+        
+        debugLog("🔄 Context refresh message:", contextMessage);
+        debugLog("🔄 Will send refresh message with chat history length:", chatHistory.length);
+        
+        fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: contextMessage,
+                game_id: currentGameId,
+                player_number: 'system',
+                is_system: true,
+                invisible_to_players: true // This message is invisible to players
+            })
+        })        .then(response => response.json())
+        .then(data => {
+            if (data && data.message_id) {
+                debugLog("🔄 Context refresh sent to server successfully, message_id:", data.message_id);
+                // Store the context refresh message for the next stream request
+                const contextRefreshMsg = {
+                    role: 'system',
+                    type: 'system',
+                    sender: 'SYSTEM',
+                    content: contextMessage,
+                    player_number: 'system',
+                    timestamp: Date.now(),
+                    invisible: true,
+                    is_system: true
+                };
+                window.__contextRefreshMessage = contextRefreshMsg;
+                
+                // Don't create a separate EventSource here - let the normal flow handle it
+                debugLog("🔄 Context refresh message stored for next stream request");
+            } else {
+                debugLog("❌ Context refresh failed - no message_id in response:", data);
+            }
+        })
+        .catch(error => {
+            debugLog("❌ Error sending context refresh:", error);
         });
     }
 
@@ -504,8 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // ALWAYS update labels after everything is set up
         updatePlayerLabels();
-        
-        // Load chat history from localStorage AFTER PlayerManager is set up
+          // Load chat history from localStorage AFTER PlayerManager is set up
         debugLog("Loading chat history from localStorage for game:", currentGameId);
         const localHistory = Utils.loadChatHistoryFromLocal(currentGameId);
         if (localHistory && localHistory.length > 0) {
@@ -522,6 +583,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Initialize history after displaying messages
                 initializeHistory();
                 updateUndoRedoButtons();
+                  // CRITICAL: Send context refresh to server after page refresh
+                // This ensures the DM gets the full conversation context
+                if (localHistory.length > 0) { // Changed from > 1 to > 0 to catch single message cases
+                    debugLog("🔄 Sending context refresh - history length:", localHistory.length);
+                    sendContextRefreshToServer(localHistory);
+                } else {
+                    debugLog("❌ No context refresh needed - empty history");
+                }
             }, 100);
         } else {
             debugLog("No history found in localStorage, showing welcome message");
@@ -769,7 +838,7 @@ document.addEventListener('DOMContentLoaded', function() {
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
-    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false, saveImmediately = false) {
         // Ensure sender is valid
         if (!sender || sender.trim() === '') {
             sender = "Unknown";
@@ -822,13 +891,16 @@ document.addEventListener('DOMContentLoaded', function() {
             chatWindow.appendChild(msgDiv);
             chatWindow.scrollTop = chatWindow.scrollHeight;
             debugLog(`Message successfully added to DOM. Chat window now has ${chatWindow.children.length} children.`);
-            debugLog("Message div HTML:", msgDiv.outerHTML.substring(0, 100) + "...");
-        } else {
+            debugLog("Message div HTML:", msgDiv.outerHTML.substring(0, 100) + "...");        } else {
             debugLog("ERROR: chatWindow not found when trying to add message!");
         }
         
         if (!skipHistory) {
-            setTimeout(saveChatState, 0);
+            if (saveImmediately) {
+                saveChatState();
+            } else {
+                setTimeout(saveChatState, 0);
+            }
         }
         return true;
     }
@@ -932,10 +1004,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (extractedPlayerName && (!playerNames[playerNumber] || playerNames[playerNumber] === `Player ${playerNumber}`)) {
                 PlayerManager.updatePlayerLabel(playerNumber, extractedPlayerName);
             }
-        }
+        }        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
+        addMessage(sender, userMessage, false, false, false, false, true); // saveImmediately = true
         
-        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
-        addMessage(sender, userMessage);
+        // Note: saveChatState is now called immediately by addMessage, so no need to call it again here
         
         inputElement.value = '';
         
@@ -1053,17 +1125,36 @@ document.addEventListener('DOMContentLoaded', function() {
         // Always send the selected model as a query param
         eventSourceUrl.searchParams.append('model_id', selectedModel);
         
-        // Send chat history to server for AI context (base64 encoded)
-        const chatHistory = Utils.loadChatHistoryFromLocal(currentGameId) || [];
-        if (chatHistory.length > 0) {
-            try {
-                const chatHistoryJson = JSON.stringify(chatHistory);
-                const chatHistoryB64 = btoa(chatHistoryJson);
-                eventSourceUrl.searchParams.append('chat_history', chatHistoryB64);
-                debugLog("Sending chat history to server:", chatHistory.length, "messages");
-            } catch (error) {
-                debugLog("Error encoding chat history:", error);
+        // ALWAYS attach chat history from localStorage (client-side) - CRITICAL FIX
+        let chatHistory = Utils.loadChatHistoryFromLocal(currentGameId) || [];
+        debugLog("=== CHAT HISTORY DEBUG (sendStreamRequest) ===");
+        debugLog("Chat history length:", chatHistory.length);
+        debugLog("Current game ID:", currentGameId);
+        
+        // If a context refresh message was just sent, include it in the history
+        if (window.__contextRefreshMessage) {
+            chatHistory = [...chatHistory, window.__contextRefreshMessage];
+            window.__contextRefreshMessage = null;
+            debugLog("Added context refresh message to history for this request");
+        }
+        
+        // ALWAYS try to attach chat history, even if empty
+        try {
+            const chatHistoryJson = JSON.stringify(chatHistory);
+            const chatHistoryB64 = btoa(chatHistoryJson);
+            eventSourceUrl.searchParams.append('chat_history', chatHistoryB64);
+            debugLog("Successfully encoded and attached chat history to request - length:", chatHistory.length);
+            
+            if (chatHistory.length > 0) {
+                debugLog("Last 3 messages in chat history:");
+                chatHistory.slice(-3).forEach((msg, i) => {
+                    debugLog(`  ${chatHistory.length - 3 + i}: role=${msg.role}, type=${msg.type}, sender=${msg.sender}, content=${msg.content?.substring(0, 50)}...`);
+                });
             }
+        } catch (error) {
+            debugLog("Error encoding chat history:", error);
+            // Still attach empty history parameter so server knows we tried
+            eventSourceUrl.searchParams.append('chat_history', btoa('[]'));
         }
 
         debugLog("Stream URL:", eventSourceUrl.toString());

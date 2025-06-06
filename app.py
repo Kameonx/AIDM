@@ -106,6 +106,8 @@ def chat():
         message = data.get('message', '')
         game_id = data.get('game_id')
         player_number = data.get('player_number', 1)
+        is_system = data.get('is_system', False)
+        invisible_to_players = data.get('invisible_to_players', False)
         
         if not message.strip():
             return jsonify({"success": False, "error": "Empty message"}), 400
@@ -117,10 +119,16 @@ def chat():
         # Generate a unique message ID for streaming
         message_id = str(int(time.time() * 1000))
         
+        # Log system messages for debugging
+        if is_system:
+            app.logger.debug(f"System message received: {message[:100]}... (invisible: {invisible_to_players})")
+        
         return jsonify({
             "success": True,
             "message_id": message_id,
-            "game_id": game_id
+            "game_id": game_id,
+            "is_system": is_system,
+            "invisible_to_players": invisible_to_players
         })
         
     except Exception as e:
@@ -163,45 +171,85 @@ def stream_response():
         game_id = data.get('game_id', '')
         message_id = data.get('message_id', '')
         model_id = data.get('model_id', DEFAULT_MODEL_ID)
-        chat_history_param = data.get('chat_history', '')
-
-    # Parse chat history from client
+        chat_history_param = data.get('chat_history', '')    # Parse chat history from client
     chat_history = []
     if chat_history_param:
         try:
             import base64
             decoded_history = base64.b64decode(chat_history_param).decode('utf-8')
             chat_history = json.loads(decoded_history)
+            app.logger.debug(f"Decoded chat history: {len(chat_history)} messages")
+            # Log first few messages for debugging
+            for i, msg in enumerate(chat_history[:3]):
+                app.logger.debug(f"Message {i}: role={msg.get('role')}, type={msg.get('type')}, sender={msg.get('sender')}, content={msg.get('content', '')[:50]}...")
         except Exception as e:
             app.logger.error(f"Error decoding chat history: {e}")
+            app.logger.error(f"Chat history param length: {len(chat_history_param) if chat_history_param else 0}")
             chat_history = []
-    
-    # Print debug info
+    else:
+        app.logger.debug("No chat history parameter provided")
+      # Print debug info
     app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={model_id}")
-
+    
     def generate():
         try:
             # Get selected model from session or use provided model_id
             selected_model = session.get('selected_model', model_id)
             
             # Validate model
-            valid_model = get_valid_model(selected_model)
+            valid_model = get_valid_model(selected_model)            # Check if this is a context refresh message
+            is_context_refresh = False
+            if chat_history:
+                # Look for context refresh indicators in the last few messages
+                last_messages = chat_history[-5:]  # Check last 5 messages to be thorough
+                for msg in last_messages:
+                    content = msg.get('content', '')
+                    # Check for context refresh in any message type (system, user, assistant)
+                    if ('[Context Refresh]' in content or 
+                        'context refresh' in content.lower() or
+                        msg.get('is_system') == True and 'restored' in content.lower()):
+                        is_context_refresh = True
+                        app.logger.debug(f"🔄 CONTEXT REFRESH DETECTED! Message: {content[:100]}...")
+                        app.logger.debug(f"🔄 Message role: {msg.get('role')}, type: {msg.get('type')}")
+                        app.logger.debug(f"🔄 Full chat history length: {len(chat_history)}")
+                        break
+                
+                if not is_context_refresh:
+                    app.logger.debug("❌ No context refresh detected in recent messages")
+                    # Debug: Log the last few messages to see what we're missing
+                    app.logger.debug("Recent messages content:")
+                    for i, msg in enumerate(last_messages):
+                        app.logger.debug(f"  {i}: role={msg.get('role')}, content={msg.get('content', '')[:50]}...")
             
             # Build messages for API
             messages = []
-            
             # Add system prompt
             is_multiplayer = len([p for p in chat_history if p.get('role') == 'user']) > 1
-            system_prompt = build_system_prompt(is_multiplayer)
-            messages.append({"role": "system", "content": system_prompt})
+            system_prompt = build_system_prompt(is_multiplayer)            # For context refresh, add a special instruction
+            if is_context_refresh:
+                system_prompt += f"\n\n🔄 CRITICAL CONTEXT REFRESH INSTRUCTION: The conversation history above has been restored after a page refresh. You have full access to all {len(chat_history)} previous messages in this conversation. You should:\n1. REMEMBER and acknowledge the previous conversation context\n2. Continue the story naturally from where it left off\n3. DO NOT restart the story or ask for player names again if already provided\n4. Reference previous events, character details, and story elements as appropriate\n5. Maintain narrative continuity with established tone and style\n\nPlease respond as if you remember everything that happened before, because you do have access to the full conversation history."
+                app.logger.debug("🔄 Enhanced system prompt with comprehensive context refresh instructions")
             
-            # Add chat history
-            for msg in chat_history[-20:]:  # Limit to last 20 messages
-                if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
+            messages.append({"role": "system", "content": system_prompt})
+            # Add chat history - include all message types for context
+            for msg in chat_history:  # Send full chat history for context
+                if msg.get('role') in ['user', 'assistant', 'system'] and msg.get('content'):
+                    # Skip the context refresh message itself when sending to API
+                    if '[Context Refresh]' in msg.get('content', ''):
+                        continue
+                    # Skip duplicate system messages (we already added one above)
+                    if msg.get('role') == 'system' and any(m.get('role') == 'system' for m in messages):
+                        continue
                     messages.append({
                         "role": msg['role'],
                         "content": msg['content']
                     })
+                    app.logger.debug(f"Added to API: role={msg['role']}, sender={msg.get('sender', 'N/A')}, content={msg['content'][:50]}...")
+            
+            app.logger.debug(f"Final messages for API: {len(messages)} total messages")
+            # Log the final message sequence for debugging
+            for i, msg in enumerate(messages):
+                app.logger.debug(f"API Message {i}: role={msg['role']}, content={msg['content'][:100]}...")
             
             # Prepare request payload according to Venice API spec
             payload = {

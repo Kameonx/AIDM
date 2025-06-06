@@ -423,108 +423,73 @@ html {
     width: calc(100% - 10px); /* Account for any margins */
 }
 
-/* Updated color formatting styles to match the new system */
-.color-red {
+/* Color formatting styles - Replace old spell effect styling */
+span.red {
     color: #ff5555;
     text-shadow: 0 0 5px rgba(255, 85, 85, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-green {
+span.green {
     color: #50fa7b;
     text-shadow: 0 0 5px rgba(80, 250, 123, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-blue {
+span.blue {
     color: #8be9fd;
     text-shadow: 0 0 5px rgba(139, 233, 253, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-yellow {
+span.yellow {
     color: #f1fa8c;
     text-shadow: 0 0 5px rgba(241, 250, 140, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-purple {
+span.purple {
     color: #bd93f9;
     text-shadow: 0 0 5px rgba(189, 147, 249, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-orange {
+span.orange {
     color: #ffb86c;
     text-shadow: 0 0 5px rgba(255, 184, 108, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-pink {
+span.pink {
     color: #ff79c6;
     text-shadow: 0 0 5px rgba(255, 121, 198, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-cyan {
-    color: #00ffff;
-    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+span.cyan {
+    color: #8be9fd;
+    text-shadow: 0 0 5px rgba(139, 233, 253, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-lime {
-    color: #00ff00;
-    text-shadow: 0 0 8px rgba(0, 255, 0, 0.7);
+span.lime {
+    color: #50fa7b;
+    text-shadow: 0 0 8px rgba(80, 250, 123, 0.7);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-.color-teal {
+span.teal {
     color: #44ffff;
     text-shadow: 0 0 5px rgba(68, 255, 255, 0.5);
     font-weight: bold;
-    display: inline;
-    word-break: keep-all;
-    white-space: nowrap;
 }
 
-/* Keep old color classes for backward compatibility */
-span.red { color: #ff5555; text-shadow: 0 0 5px rgba(255, 85, 85, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.green { color: #50fa7b; text-shadow: 0 0 5px rgba(80, 250, 123, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.blue { color: #8be9fd; text-shadow: 0 0 5px rgba(139, 233, 253, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.yellow { color: #f1fa8c; text-shadow: 0 0 5px rgba(241, 250, 140, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.purple { color: #bd93f9; text-shadow: 0 0 5px rgba(189, 147, 249, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.orange { color: #ffb86c; text-shadow: 0 0 5px rgba(255, 184, 108, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.pink { color: #ff79c6; text-shadow: 0 0 5px rgba(255, 121, 198, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.cyan { color: #00ffff; text-shadow: 0 0 5px rgba(0, 255, 255, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
-span.lime { color: #00ff00; text-shadow: 0 0 8px rgba(0, 255, 0, 0.7); font-weight: bold; display: inline; word-break: keep-all; }
-span.teal { color: #44ffff; text-shadow: 0 0 5px rgba(68, 255, 255, 0.5); font-weight: bold; display: inline; word-break: keep-all; }
+/* Add word wrapping to color spans */
+span.red, span.green, span.blue, span.yellow, span.purple, span.orange, 
+span.pink, span.cyan, span.lime, span.teal {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+}
 
 /* Modal styles */
 .modal {
@@ -729,85 +694,5 @@ span.teal { color: #44ffff; text-shadow: 0 0 5px rgba(68, 255, 255, 0.5); font-w
     
     .side-menu-donation p {
         font-size: 0.6em; /* Even smaller on very small screens */
-    }
-}
-
-/* Reasoning toggle styles - Add these at the end */
-.reasoning-toggle-inline {
-    display: inline-block;
-    cursor: pointer;
-    color: #6272a4;
-    font-size: 0.8em;
-    margin-right: 5px;
-    user-select: none;
-    vertical-align: top;
-}
-
-.reasoning-toggle-inline:hover {
-    color: #8be9fd;
-}
-
-.reasoning-toggle-inline.expanded .reasoning-caret {
-    transform: rotate(90deg);
-}
-
-.reasoning-caret {
-    display: inline-block;
-    transition: transform 0.2s ease;
-    font-size: 0.7em;
-}
-
-.reasoning-content-inline {
-    display: none;
-    background: rgba(98, 114, 164, 0.1);
-    border-left: 3px solid #6272a4;
-    margin: 5px 0;
-    border-radius: 4px;
-    max-width: 100%;
-}
-
-.reasoning-text-inline {
-    padding: 8px 12px;
-    font-size: 0.85em;
-    color: #6272a4;
-    font-style: italic;
-    line-height: 1.4;
-    white-space: pre-wrap;
-}
-
-/* Fix word wrapping issues */
-.message-content, .reasoning-text-inline {
-    word-break: break-word;
-    overflow-wrap: break-word;
-    hyphens: auto;
-}
-
-/* Mobile color text fixes */
-@media (max-width: 768px) {
-    /* ...existing code... */
-    
-    /* Improve color text rendering on mobile */
-    .color-red, .color-green, .color-blue, .color-yellow, .color-purple,
-    .color-orange, .color-pink, .color-cyan, .color-lime, .color-teal,
-    span.red, span.green, span.blue, span.yellow, span.purple,
-    span.orange, span.pink, span.cyan, span.lime, span.teal {
-        text-shadow: none; /* Remove text-shadow on mobile for better performance */
-        font-weight: bold;
-        display: inline;
-        word-break: normal;
-        white-space: normal;
-    }
-}
-
-/* Additional mobile adjustments for very small screens */
-@media (max-width: 480px) {
-    /* ...existing code... */
-    
-    /* Further optimize color text for very small screens */
-    .color-red, .color-green, .color-blue, .color-yellow, .color-purple,
-    .color-orange, .color-pink, .color-cyan, .color-lime, .color-teal,
-    span.red, span.green, span.blue, span.yellow, span.purple,
-    span.orange, span.pink, span.cyan, span.lime, span.teal {
-        font-weight: normal; /* Reduce font weight on very small screens */
     }
 }

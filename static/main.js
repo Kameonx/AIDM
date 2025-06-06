@@ -10,8 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Core variables
     let isGenerating = false;
     let seenMessages = new Set();
-    let dmName = "DM";
-    window.dmName = dmName; // Make dmName globally accessible 
+    let dmName = "DM"; 
     let isMultiplayerActive = false;
     let lastSentMessage = "";
     let selectedPlayerElement = null;
@@ -68,14 +67,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function loadAvailableModels() {
         fetch('/get_models')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            if (data.models && Array.isArray(data.models)) {
+            if (data.models) {
                 availableModels = data.models;
                 populateModelList();
                 updateCurrentModelDisplay();
@@ -83,24 +77,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // IMPORTANT: Set the model on the server after loading models
                 // This ensures the server knows which model to use on page refresh
                 setServerModel(selectedModel);
-            } else {
-                throw new Error('Invalid models data received');
             }
         })
         .catch(error => {
             debugLog("Error loading models:", error);
-            // Fallback to default model
-            availableModels = [{
-                id: 'venice-uncensored',
-                name: 'Venice Uncensored (Default)',
-                description: 'Default fallback model',
-                traits: [],
-                supportsFunctionCalling: false,
-                supportsParallelToolCalls: false
-            }];
-            populateModelList();
-            updateCurrentModelDisplay();
-            addSystemMessage("Using default AI model (models list unavailable).", false, false, true);
+            addSystemMessage("Error loading AI models.", false, false, true);
         });
     }
 
@@ -125,17 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateModelList() {
-        if (!modelList) {
-            debugLog("Model list element not found");
-            return;
-        }
-        
         modelList.innerHTML = '';
-        
-        if (!availableModels || availableModels.length === 0) {
-            modelList.innerHTML = '<div class="model-item">No models available</div>';
-            return;
-        }
         
         availableModels.forEach(model => {
             const modelItem = document.createElement('div');
@@ -144,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 modelItem.classList.add('selected');
             }
             
-            const traits = (model.traits || []).map(trait => {
+            const traits = model.traits.map(trait => {
                 const traitNames = {
                     'default': 'Default',
                     'most_intelligent': 'Most Intelligent',
@@ -159,8 +130,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             modelItem.innerHTML = `
-                <div class="model-name">${model.name || 'Unknown Model'}</div>
-                <div class="model-description">${model.description || 'No description available'}</div>
+                <div class="model-name">${model.name}</div>
+                <div class="model-description">${model.description}</div>
                 ${traits.length > 0 ? `<div class="model-traits">${traits.map(trait => `<span class="trait-tag">${trait}</span>`).join('')}</div>` : ''}
             `;
             
@@ -320,13 +291,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectedPlayerElement = null;
                 selectedPlayerNum = null;
                 removePlayerBtn.classList.add('hidden');
-                
-                // Update nextPlayerNumber - don't increment, just find next available
-                const playerNumbers = Object.keys(playerNames).map(Number);
-                nextPlayerNumber = playerNumbers.length > 0 ? Math.max(...playerNumbers) + 1 : 2;
-                
                 debugLog(`Successfully removed player. Remaining players:`, playerNames);
-                debugLog(`Next available player number: ${nextPlayerNumber}`);
             } else {
                 debugLog("Invalid removal attempt - selectedPlayerNum:", selectedPlayerNum);
                 addSystemMessage("Please select a player other than Player 1 to remove", false, false, true);
@@ -348,7 +313,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 playerNames = { 1: null }; // Reset player names
                 nextPlayerNumber = 2;
                 dmName = "DM"; // Reset DM name
-                window.dmName = dmName; // Keep global reference in sync
                 savePlayerNames();
                 savePlayerState(); // Save reset state
                 
@@ -432,96 +396,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Add a debug function to inspect localStorage data - MOVE THIS OUTSIDE initialize()
-    function debugLocalStorage() {
-        debugLog("=== LOCALSTORAGE DEBUG ===");
-        const gameId = currentGameId;
-        if (!gameId) {
-            debugLog("No current game ID");
-            return;
-        }
-        
-        const localHistory = Utils.loadChatHistoryFromLocal(gameId);
-        if (!localHistory) {
-            debugLog("No chat history found in localStorage");
-            return;
-        }
-        
-        debugLog("Chat history from localStorage:", localHistory.length, "messages");
-        localHistory.forEach((msg, i) => {
-            debugLog(`Message ${i}:`, {
-                role: msg.role,
-                type: msg.type,
-                sender: msg.sender,
-                contentLength: msg.content ? msg.content.length : 0,
-                hasContentHTML: !!(msg.contentHTML && msg.contentHTML.trim()),
-                invisible: msg.invisible
-            });
-        });    }
-
-    /**
-     * Send context refresh to server after page refresh
-     * This ensures the DM gets the full conversation context
-     */    function sendContextRefreshToServer(chatHistory) {
-        debugLog("🔄 === SENDING CONTEXT REFRESH TO SERVER ===");
-        debugLog("🔄 Chat history length:", chatHistory.length);
-        debugLog("🔄 Current game ID:", currentGameId);
-        debugLog("🔄 Selected model:", selectedModel);
-        
-        if (!currentGameId || !chatHistory || chatHistory.length === 0) {
-            debugLog("❌ No context to refresh - skipping");
-            return;
-        }
-        
-        // Log first few messages for debugging
-        debugLog("🔄 First few messages in chat history:");
-        chatHistory.slice(0, 3).forEach((msg, i) => {
-            debugLog(`  ${i}: role=${msg.role}, type=${msg.type}, sender=${msg.sender}, content=${msg.content?.substring(0, 50)}...`);
-        });
-          // Create a hidden system message to the DM with context
-        const contextMessage = `[Context Refresh] The conversation history has been restored. There are ${chatHistory.length} messages in the conversation. Please continue the story naturally based on the previous context.`;
-        
-        debugLog("🔄 Context refresh message:", contextMessage);
-        debugLog("🔄 Will send refresh message with chat history length:", chatHistory.length);
-        
-        fetch('/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                message: contextMessage,
-                game_id: currentGameId,
-                player_number: 'system',
-                is_system: true,
-                invisible_to_players: true // This message is invisible to players
-            })
-        })        .then(response => response.json())
-        .then(data => {
-            if (data && data.message_id) {
-                debugLog("🔄 Context refresh sent to server successfully, message_id:", data.message_id);
-                // Store the context refresh message for the next stream request
-                const contextRefreshMsg = {
-                    role: 'system',
-                    type: 'system',
-                    sender: 'SYSTEM',
-                    content: contextMessage,
-                    player_number: 'system',
-                    timestamp: Date.now(),
-                    invisible: true,
-                    is_system: true
-                };
-                window.__contextRefreshMessage = contextRefreshMsg;
-                
-                // Don't create a separate EventSource here - let the normal flow handle it
-                debugLog("🔄 Context refresh message stored for next stream request");
-            } else {
-                debugLog("❌ Context refresh failed - no message_id in response:", data);
-            }
-        })
-        .catch(error => {
-            debugLog("❌ Error sending context refresh:", error);
-        });
-    }
-
     function initialize() {
         debugLog("Initializing application state...");
         
@@ -536,70 +410,83 @@ document.addEventListener('DOMContentLoaded', function() {
             debugLog("Fallback: loaded player names directly:", playerNames);
         }
         
-        // Restore DM name if saved - CRITICAL: Do this BEFORE loading chat history
+        // Restore DM name if saved
         if (loadedState && loadedState.dmName) {
             dmName = loadedState.dmName;
-            window.dmName = dmName; // Keep global reference in sync
-            debugLog("Restored DM name:", dmName);
+            document.querySelectorAll('.dm-message .message-sender').forEach(span => {
+                span.textContent = `${dmName}: `;
+            });
         }
-        
-        // CRITICAL: Set up PlayerManager BEFORE loading chat history
-        const playerResult = PlayerManager.setup({
-            playerNames: playerNames,
-            nextPlayerNumber: 2,
-            additionalPlayersContainer: additionalPlayersContainer,
-            removePlayerBtn: removePlayerBtn,
-            currentGameId: currentGameId,
-            debugLog: debugLog,
-            addSystemMessage: addSystemMessage,
-            createLoadingDivForDM: createLoadingDivForDM,
-            sendStreamRequest: sendStreamRequest,
-            savePlayerNames: savePlayerNames,
-            savePlayerState: savePlayerState
-        });
-        
-        // Update our variables with PlayerManager results but preserve our loaded names
-        nextPlayerNumber = playerResult.nextPlayerNumber;
-        
-        // Create UI for all existing players using our loaded names
-        nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
-        
-        // ALWAYS update labels after everything is set up
-        updatePlayerLabels();
-          // Load chat history from localStorage AFTER PlayerManager is set up
-        debugLog("Loading chat history from localStorage for game:", currentGameId);
-        const localHistory = Utils.loadChatHistoryFromLocal(currentGameId);
-        if (localHistory && localHistory.length > 0) {
-            debugLog("Restored chat history from localStorage:", localHistory.length, "messages");
+
+        // Load chat history for the current game
+        fetch('/load_history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: currentGameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.history && data.history.length > 0) {
+                displayMessages(data.history);
+            } else {
+                ensureWelcomeMessage();
+            }
             
-            // ADD DEBUG CALL HERE - NOW IT'S ACCESSIBLE
-            debugLocalStorage();
+            initializeHistory();
             
-            // Use setTimeout to ensure DOM is fully ready before displaying messages
-            setTimeout(() => {
-                debugLog("=== ABOUT TO CALL displayMessages ===");
-                displayMessages(localHistory);
-                debugLog("=== displayMessages COMPLETED ===");
-                // Initialize history after displaying messages
-                initializeHistory();
-                updateUndoRedoButtons();
-                  // CRITICAL: Send context refresh to server after page refresh
-                // This ensures the DM gets the full conversation context
-                if (localHistory.length > 0) { // Changed from > 1 to > 0 to catch single message cases
-                    debugLog("🔄 Sending context refresh - history length:", localHistory.length);
-                    sendContextRefreshToServer(localHistory);
-                } else {
-                    debugLog("❌ No context refresh needed - empty history");
-                }
-            }, 100);
-        } else {
-            debugLog("No history found in localStorage, showing welcome message");
+            // CRITICAL: Pass the loaded playerNames to PlayerManager setup
+            const playerResult = PlayerManager.setup({
+                playerNames: playerNames, // Use our loaded names
+                nextPlayerNumber: 2,
+                additionalPlayersContainer: additionalPlayersContainer,
+                removePlayerBtn: removePlayerBtn,
+                currentGameId: currentGameId,
+                debugLog: debugLog,
+                addSystemMessage: addSystemMessage,
+                createLoadingDivForDM: createLoadingDivForDM,
+                sendStreamRequest: sendStreamRequest,
+                savePlayerNames: savePlayerNames,
+                savePlayerState: savePlayerState
+            });
+            
+            // Update our variables with PlayerManager results but preserve our loaded names
+            nextPlayerNumber = playerResult.nextPlayerNumber;
+            // Don't overwrite playerNames here - keep our loaded ones
+            
+            // Create UI for all existing players using our loaded names
+            nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
+            
+            // ALWAYS update labels after everything is set up
+            updatePlayerLabels();
+            updateUndoRedoButtons();
+            
+            syncPlayerNamesWithServer();
+        })
+        .catch(error => {
+            debugLog("Error loading chat history:", error);
             ensureWelcomeMessage();
             initializeHistory();
+            
+            // Even on error, set up PlayerManager with our loaded names
+            PlayerManager.setup({
+                playerNames: playerNames,
+                nextPlayerNumber: 2,
+                additionalPlayersContainer: additionalPlayersContainer,
+                removePlayerBtn: removePlayerBtn,
+                currentGameId: currentGameId,
+                debugLog: debugLog,
+                addSystemMessage: addSystemMessage,
+                createLoadingDivForDM: createLoadingDivForDM,
+                sendStreamRequest: sendStreamRequest,
+                savePlayerNames: savePlayerNames,
+                savePlayerState: savePlayerState
+            });
+            
+            nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
+            updatePlayerLabels();
             updateUndoRedoButtons();
-        }
-        
-        syncPlayerNamesWithServer();
+            syncPlayerNamesWithServer();
+        });
     }
     
     /**
@@ -666,130 +553,51 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.PlayerManager) {
             window.PlayerManager.playerNames = playerNames;
         }
-    }    // --- Chat message handling functions ---
+    }
+
+    // --- Chat message handling functions ---
     function displayMessages(messages) {
         if (!Array.isArray(messages)) {
             debugLog("Invalid messages array:", messages);
             return;
         }
-        
-        debugLog("=== DISPLAY MESSAGES DEBUG ===");
-        debugLog("Total messages to display:", messages.length);
-        debugLog("Current dmName:", dmName);
         chatWindow.innerHTML = '';
-        
-        messages.forEach((msg, index) => {
-            debugLog(`\n--- Message ${index} ---`);
-            debugLog("Full message object:", msg);
-            debugLog("msg.role:", msg.role);
-            debugLog("msg.type:", msg.type);
-            debugLog("msg.sender:", msg.sender);
-            debugLog("msg.content:", msg.content ? msg.content.substring(0, 100) + "..." : "NO CONTENT");
-            debugLog("msg.contentHTML:", msg.contentHTML ? msg.contentHTML.substring(0, 100) + "..." : "NO HTML CONTENT");
-            
+        messages.forEach(msg => {
             // Skip invisible messages - don't show them in chat
             if (msg.invisible) {
-                debugLog("SKIPPING: Message is invisible");
                 return;
             }
             
-            // SIMPLIFIED LOGIC: Just check if it's a DM message by ANY means
-            const isDMMessage = (
-                msg.role === "assistant" || 
-                msg.type === "dm" || 
-                (msg.sender && (
-                    msg.sender.toLowerCase() === "dm" ||
-                    msg.sender.toLowerCase() === dmName.toLowerCase() ||
-                    msg.sender === dmName
-                ))
-            );
-            
-            const isPlayerMessage = (
-                msg.role === "user" || 
-                msg.type === "player" ||
-                (msg.sender && !isDMMessage && msg.sender !== "SYSTEM")
-            );
-            
-            const isSystemMessage = (
-                msg.role === "system" || 
-                msg.type === "system" ||
-                (msg.sender && msg.sender.toUpperCase() === "SYSTEM")
-            );
-            
-            debugLog("Classification:", { isDMMessage, isPlayerMessage, isSystemMessage });
-            
-            if (isDMMessage) {
-                const senderName = msg.sender || dmName || "DM";
-                const content = (msg.contentHTML && msg.contentHTML.trim()) ? msg.contentHTML : (msg.content || '');
-                
-                debugLog("PROCESSING DM MESSAGE:");
-                debugLog("- Sender name:", senderName);
-                debugLog("- Content length:", content.length);
-                debugLog("- Has contentHTML:", !!(msg.contentHTML && msg.contentHTML.trim()));
-                
-                if (content.trim()) {
-                    const isHTML = !!(msg.contentHTML && msg.contentHTML.trim());
-                    debugLog("- Adding DM message with isHTML:", isHTML);
-                    addMessage(senderName, content, false, true, true, isHTML);
-                } else {
-                    debugLog("- SKIPPING DM MESSAGE: No content");
-                }
-            } else if (isPlayerMessage) {
+            if (msg.role === "assistant" || msg.type === "dm") {
+                // ALWAYS process the content through formatting to ensure proper display
+                const processedContent = Utils.processFormattedText(msg.content);
+                addMessage(dmName, processedContent, false, true, true, true);
+            } else if (msg.role === "user" || msg.type === "player") {
+                // Always use playerNames mapping for sender label
                 let senderName = msg.sender;
-                
-                // Try multiple ways to get the sender name
-                if (!senderName) {
-                    if (msg.player_number && playerNames[msg.player_number]) {
-                        senderName = playerNames[msg.player_number];
-                    } else if (msg.player_number) {
-                        senderName = `Player ${msg.player_number}`;
-                    } else if (msg.player) {
-                        const playerNum = msg.player.replace('player','');
-                        if (playerNames[playerNum]) {
-                            senderName = playerNames[playerNum];
-                        } else {
-                            senderName = `Player ${playerNum}`;
-                        }
+                if (!senderName && msg.player) {
+                    // If msg.player is a name (after renaming), use it directly
+                    if (playerNames[msg.player.replace('player','')]) {
+                        senderName = playerNames[msg.player.replace('player','')];
+                    } else if (/^\d+$/.test(msg.player.replace('player',''))) {
+                        // If still a number, fallback to Player X
+                        senderName = `Player ${msg.player.replace('player','')}`;
+                    } else {
+                        // If msg.player is a name string, use it
+                        senderName = msg.player;
                     }
                 }
-                
-                const content = (msg.contentHTML && msg.contentHTML.trim()) ? msg.contentHTML : (msg.content || '');
-                
-                debugLog("PROCESSING PLAYER MESSAGE:");
-                debugLog("- Sender name:", senderName);
-                debugLog("- Content length:", content.length);
-                
-                if (content.trim() && senderName) {
-                    const isHTML = !!(msg.contentHTML && msg.contentHTML.trim());
-                    debugLog("- Adding player message");
-                    addMessage(senderName, content, false, true, true, isHTML);
-                } else {
-                    debugLog("- SKIPPING PLAYER MESSAGE: No content or sender");
-                }
-            } else if (isSystemMessage) {
-                if (!msg.invisible && msg.content && msg.content.trim()) {
-                    debugLog("PROCESSING SYSTEM MESSAGE");
+                // Process player messages through formatting as well
+                const processedContent = Utils.processFormattedText(msg.content);
+                addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
+            } else if (msg.role === "system" || msg.type === "system") {
+                // Only show system messages that aren't marked as invisible
+                if (!msg.invisible) {
                     addSystemMessage(msg.content, true, true);
-                } else {
-                    debugLog("SKIPPING SYSTEM MESSAGE: Invisible or no content");
                 }
-            } else {
-                debugLog("UNKNOWN MESSAGE TYPE - SKIPPING");
             }
         });
-        
         chatWindow.scrollTop = chatWindow.scrollHeight;
-        debugLog("=== DISPLAY MESSAGES COMPLETE ===");
-        debugLog("Final chat window children count:", chatWindow.children.length);
-        
-        // DEBUG: Log what's actually in the chat window now
-        const chatMessages = Array.from(chatWindow.children);
-        debugLog("Messages now in chat window:");
-        chatMessages.forEach((el, i) => {
-            const sender = el.querySelector('.message-sender')?.textContent || 'NO SENDER';
-            const content = el.querySelector('.message-content')?.textContent || 'NO CONTENT';
-            debugLog(`  ${i}: ${sender} - ${content.substring(0, 50)}...`);
-        });
     }
     
     function restoreChatState(index) {
@@ -797,54 +605,30 @@ document.addEventListener('DOMContentLoaded', function() {
             debugLog(`Invalid history index for restore: ${index}. History length: ${messageHistory.length}`);
             return;
         }
+        
         const state = messageHistory[index];
         debugLog(`Restoring chat state from history index ${index}. State contains ${state.length} messages.`);
-        chatWindow.innerHTML = '';
+        
+        chatWindow.innerHTML = ''; // Clear chat window
+        
         state.forEach(msg => {
             if (msg.type === 'system') {
-                addSystemMessage(msg.content, true, true); // fromUpdate=true, skipHistory=true
+                addSystemMessage(msg.content, true, true); // fromUpdate = true, skipHistory = true
             } else if (msg.type === 'dm') {
-                // COPY USER MESSAGE RESTORATION LOGIC - Handle DM messages same as player messages
-                let content;
-                let isHTML = false;
-                
-                if (msg.contentHTML && msg.contentHTML.trim()) {
-                    content = msg.contentHTML;
-                    isHTML = true;
-                } else {
-                    content = Utils.processFormattedText(msg.content);
-                    isHTML = true; // processFormattedText returns HTML
-                }
-                
-                // Use sender name if available, otherwise use dmName
-                const senderName = msg.sender || dmName || "DM";
-                addMessage(senderName, content, false, true, true, isHTML);
-            } else {
-                // Handle player messages
-                let content;
-                let isHTML = false;
-                
-                if (msg.contentHTML && msg.contentHTML.trim()) {
-                    content = msg.contentHTML;
-                    isHTML = true;
-                } else {
-                    content = Utils.processFormattedText(msg.content);
-                    isHTML = true; // processFormattedText returns HTML
-                }
-                
-                addMessage(msg.sender, content, false, true, true, isHTML);
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(dmName, content, false, true, true, true); // Added parameter to indicate HTML content
+            } else { // player message
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(msg.sender, content, false, true, true, true); // Added parameter to indicate HTML content
             }
         });
+        
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
-    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false, saveImmediately = false) {
-        // Ensure sender is valid
-        if (!sender || sender.trim() === '') {
-            sender = "Unknown";
-            debugLog("Warning: Empty sender name, using 'Unknown'");
-        }
-        
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
         const role = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm') ? 'assistant' : 'user';
         if (!fromUpdate && messageExists(role, text)) {
             debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
@@ -852,17 +636,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         lastPlayerMessages[sender] = text;
-        debugLog("=== ADDMESSAGE DEBUG ===");
         debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
-        debugLog("fromUpdate:", fromUpdate, "skipHistory:", skipHistory, "isHTML:", isHTML);
-        debugLog("dmName:", dmName);
-        debugLog("isDMMessage will be:", (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm'));
         
         const msgDiv = document.createElement('div');
         const isDMMessage = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm');
         msgDiv.className = `message ${isDMMessage ? 'dm-message' : 'player-message'}`;
-        
-        debugLog("Created msgDiv with className:", msgDiv.className);
         
         const nameSpan = document.createElement('span');
         nameSpan.textContent = `${sender}: `;
@@ -875,32 +653,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isHTML) {
             // If content is already HTML, use it directly
             contentSpan.innerHTML = text;
-            debugLog("Set content as HTML:", text.substring(0, 50) + "...");
         } else {
             // Always process content through formatting - even if it appears to be plain text
             const formattedText = Utils.processFormattedText(text);
             contentSpan.innerHTML = formattedText; // Use innerHTML to render HTML tags
-            debugLog("Processed and set content:", formattedText.substring(0, 50) + "...");
         }
         
         msgDiv.appendChild(contentSpan);
         
-        // Ensure the message is actually added to the DOM
-        if (chatWindow) {
-            debugLog("About to append msgDiv to chatWindow");
-            chatWindow.appendChild(msgDiv);
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-            debugLog(`Message successfully added to DOM. Chat window now has ${chatWindow.children.length} children.`);
-            debugLog("Message div HTML:", msgDiv.outerHTML.substring(0, 100) + "...");        } else {
-            debugLog("ERROR: chatWindow not found when trying to add message!");
-        }
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
         
         if (!skipHistory) {
-            if (saveImmediately) {
-                saveChatState();
-            } else {
-                setTimeout(saveChatState, 0);
-            }
+            setTimeout(saveChatState, 0);
         }
         return true;
     }
@@ -946,10 +711,10 @@ document.addEventListener('DOMContentLoaded', function() {
         debugLog(`Attempting to send message: "${userMessage}" from player ${playerNumber}. isGenerating: ${isGenerating}`);
         
         if (!userMessage) return;
-          // DM rename flow (secret, only when DM asks)
+        
+        // DM rename flow (secret, only when DM asks)
         if (window.awaitingDMRename) {
             dmName = userMessage;
-            window.dmName = dmName; // Keep global reference in sync
             window.awaitingDMRename = false;
             inputElement.value = '';
             document.querySelectorAll('.dm-message .message-sender').forEach(span => {
@@ -1004,10 +769,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (extractedPlayerName && (!playerNames[playerNumber] || playerNames[playerNumber] === `Player ${playerNumber}`)) {
                 PlayerManager.updatePlayerLabel(playerNumber, extractedPlayerName);
             }
-        }        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
-        addMessage(sender, userMessage, false, false, false, false, true); // saveImmediately = true
+        }
         
-        // Note: saveChatState is now called immediately by addMessage, so no need to call it again here
+        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
+        addMessage(sender, userMessage);
         
         inputElement.value = '';
         
@@ -1118,44 +883,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function sendStreamRequest(messageId, loadingDiv) {
         debugLog("Starting stream request for message ID:", messageId, ". Current isGenerating:", isGenerating);
+
         const eventSourceUrl = new URL('/stream', window.location.href);
         eventSourceUrl.searchParams.append('t', Date.now());
         eventSourceUrl.searchParams.append('game_id', currentGameId || '');
         eventSourceUrl.searchParams.append('message_id', messageId || '');
         // Always send the selected model as a query param
         eventSourceUrl.searchParams.append('model_id', selectedModel);
-        
-        // ALWAYS attach chat history from localStorage (client-side) - CRITICAL FIX
-        let chatHistory = Utils.loadChatHistoryFromLocal(currentGameId) || [];
-        debugLog("=== CHAT HISTORY DEBUG (sendStreamRequest) ===");
-        debugLog("Chat history length:", chatHistory.length);
-        debugLog("Current game ID:", currentGameId);
-        
-        // If a context refresh message was just sent, include it in the history
-        if (window.__contextRefreshMessage) {
-            chatHistory = [...chatHistory, window.__contextRefreshMessage];
-            window.__contextRefreshMessage = null;
-            debugLog("Added context refresh message to history for this request");
-        }
-        
-        // ALWAYS try to attach chat history, even if empty
-        try {
-            const chatHistoryJson = JSON.stringify(chatHistory);
-            const chatHistoryB64 = btoa(chatHistoryJson);
-            eventSourceUrl.searchParams.append('chat_history', chatHistoryB64);
-            debugLog("Successfully encoded and attached chat history to request - length:", chatHistory.length);
-            
-            if (chatHistory.length > 0) {
-                debugLog("Last 3 messages in chat history:");
-                chatHistory.slice(-3).forEach((msg, i) => {
-                    debugLog(`  ${chatHistory.length - 3 + i}: role=${msg.role}, type=${msg.type}, sender=${msg.sender}, content=${msg.content?.substring(0, 50)}...`);
-                });
-            }
-        } catch (error) {
-            debugLog("Error encoding chat history:", error);
-            // Still attach empty history parameter so server knows we tried
-            eventSourceUrl.searchParams.append('chat_history', btoa('[]'));
-        }
 
         debugLog("Stream URL:", eventSourceUrl.toString());
 
@@ -1257,9 +991,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         eventSource.addEventListener('done', function(event) {
-            debugLog("=== STREAM DONE EVENT ===");
             debugLog("Stream complete for messageId:", messageId, "Event data:", event.data);
-            debugLog("Full response text accumulated:", fullResponseText.substring(0, 100) + "...");
             clearTimeout(responseTimeout);
             
             const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
@@ -1267,61 +999,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const oldCursor = responseTextElem.querySelector('.cursor');
                 if (oldCursor) oldCursor.remove();
                 
-                // DEBUG: Check final content
-                debugLog("Final responseTextElem content:", responseTextElem.textContent.substring(0, 100) + "...");
-                debugLog("Final responseTextElem innerHTML:", responseTextElem.innerHTML.substring(0, 100) + "...");
-                
                 if (fullResponseText) {
                     PlayerManager.checkForPlayerNames(fullResponseText);
-                }
-                // --- PATCH: Ensure AI response is appended to chat history and saved ---
-                // Only add if not already present (avoid duplicates)
-                let chatHistory = Utils.loadChatHistoryFromLocal(currentGameId) || [];
-                const lastMsg = chatHistory[chatHistory.length - 1];
-                // Only add if last message is not the same as the current AI response
-                if (!lastMsg || lastMsg.content !== responseTextElem.textContent || lastMsg.role !== 'assistant') {
-                    chatHistory.push({
-                        role: 'assistant',
-                        type: 'dm',
-                        sender: dmName,
-                        content: responseTextElem.textContent,
-                        contentHTML: responseTextElem.innerHTML,
-                        timestamp: Date.now()
-                    });
-                    Utils.saveChatHistoryToLocal(currentGameId, chatHistory);
-                    debugLog("Patched: AI response appended and saved to chat history.");
                 }
             }
             
             eventSource.close();
             debugLog("Setting isGenerating = false (sendStreamRequest - done)");
             isGenerating = false;
-            
-            // DEBUG: Check chat window state before saving
-            debugLog("=== BEFORE SAVING CHAT STATE ===");
-            debugLog("Chat window children count:", chatWindow.children.length);
-            const lastMessage = chatWindow.lastElementChild;
-            if (lastMessage) {
-                const sender = lastMessage.querySelector('.message-sender')?.textContent || 'NO SENDER';
-                const content = lastMessage.querySelector('.message-content')?.textContent || 'NO CONTENT';
-                debugLog("Last message in chat:", sender, "-", content.substring(0, 50) + "...");
-                debugLog("Last message classes:", lastMessage.className);
-            }
-            
             saveChatState(); // Save chat state after DM response is fully received
-            
-            // DEBUG: Verify what was saved
-            setTimeout(() => {
-                debugLog("=== AFTER SAVING CHAT STATE ===");
-                const savedHistory = Utils.loadChatHistoryFromLocal(currentGameId);
-                if (savedHistory) {
-                    debugLog("Saved history length:", savedHistory.length);
-                    if (savedHistory.length > 0) {
-                        const lastSaved = savedHistory[savedHistory.length - 1];
-                        debugLog("Last saved message:", lastSaved.type, lastSaved.sender, lastSaved.content?.substring(0, 50) + "...");
-                    }
-                }
-            }, 100);
         });
         
         eventSource.onerror = function(e) {
@@ -1349,8 +1035,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
     }
-
-    // --- Chat state management functions ---
     
     function updateUndoRedoButtons() {
         if (undoBtn && redoBtn) {
@@ -1367,102 +1051,63 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function saveChatState() {
-        debugLog(`Saving chat state. Current historyIndex: ${historyIndex}, History length: ${messageHistory.length}`);
+        debugLog(`Attempting to save chat state. Current historyIndex: ${historyIndex}, History length: ${messageHistory.length}`);
         const messages = Array.from(chatWindow.querySelectorAll('.message:not(.temporary-message)')) 
-            .map(msgElement => {
-                const senderEl = msgElement.querySelector('.message-sender');
-                const contentEl = msgElement.querySelector('.message-content');
+            .map(msg => {
+                const senderEl = msg.querySelector('.message-sender');
+                const contentEl = msg.querySelector('.message-content');
                 
+                // Skip if essential elements are missing (e.g. loading indicators not fully formed)
                 if (!senderEl || !contentEl) return null;
 
-                // Skip messages that are just cursors or empty
-                const textContent = contentEl.textContent.trim();
-                if (!textContent || textContent === '🤔 Thinking...') return null;
-
                 const senderText = senderEl.textContent.replace(':', '').trim();
-                const isSystem = msgElement.classList.contains('system-message');
+                // Use innerHTML to preserve HTML formatting instead of textContent
+                const contentHTML = contentEl.innerHTML.trim();
+                const contentText = contentEl.textContent.trim();
                 
-                // FIX: More robust DM message detection for saving
-                const isDM = msgElement.classList.contains('dm-message') || 
-                             senderText.toLowerCase() === dmName.toLowerCase() || 
-                             senderText.toLowerCase() === 'dm';
+                // Skip empty messages or malformed ones
+                if (!contentText && !(msg.classList.contains('dm-message') && msg.querySelector('.typing'))) return null;
 
-                // DEBUG: Log what we're detecting for each message
-                debugLog(`Saving message: sender="${senderText}", isSystem=${isSystem}, isDM=${isDM}, classes="${msgElement.className}"`);
+                const isSystem = msg.classList.contains('system-message');
+                // Determine if DM by checking sender text against current dmName or if it's a DM loading message
+                const isDM = senderText === dmName || (msg.classList.contains('dm-message') && senderText === "DM");
+
 
                 return {
                     sender: senderText,
-                    content: textContent,
-                    contentHTML: contentEl.innerHTML.trim(),
+                    content: contentText,
+                    contentHTML: contentHTML,
                     type: isSystem ? 'system' : (isDM ? 'dm' : 'player')
                 };
             }).filter(msg => msg !== null); 
 
-        // DEBUG: Log what we're about to save
-        debugLog("Messages being saved to localStorage:", messages);
-
-        // Clear future history if we're at a point before the end
+        if (messages.length === 0 && chatWindow.children.length > 0 && !Array.from(chatWindow.children).every(child => child.classList.contains('temporary-message') || child.querySelector('.typing'))) {
+            debugLog("No valid messages to save, but chat window has non-transient children. This might be an issue. Current children:", chatWindow.innerHTML.substring(0,100));
+            // return; // Potentially skip saving if it seems like an invalid state
+        }
+        
+        // If historyIndex is behind the end of messageHistory, it means we undid and then performed a new action.
+        // Truncate the "future" states that were undone.
         if (historyIndex < messageHistory.length - 1) {
+            debugLog(`History divergence: historyIndex (${historyIndex}) < messageHistory.length - 1 (${messageHistory.length - 1}). Slicing history.`);
             messageHistory = messageHistory.slice(0, historyIndex + 1);
         }
         
         messageHistory.push(messages);
-        historyIndex = messageHistory.length - 1;
+        historyIndex = messageHistory.length - 1; // Point to the newly added state
         
         if (messageHistory.length > MAX_HISTORY_SIZE) {
             messageHistory.shift();
-            historyIndex--;
+            historyIndex--; // Adjust index because an element was removed from the beginning
         }
-
+        
         try {
             localStorage.setItem('chatHistory', JSON.stringify(messageHistory)); 
         } catch (e) {
             debugLog("Error saving chatHistory to localStorage:", e);
         }
-        
-        // Save to game-specific localStorage backup with proper format
-        if (currentGameId && messages.length > 0) {
-            const chatMessages = messages.map(msg => {
-                // Determine player number for user messages
-                let playerNumber = null;
-                if (msg.type === 'player') {
-                    // Try to extract player number from sender name
-                    const playerMatch = msg.sender.match(/Player (\d+)/);
-                    if (playerMatch) {
-                        playerNumber = parseInt(playerMatch[1]);
-                    } else {
-                        // Look up by name in playerNames
-                        for (const [num, name] of Object.entries(playerNames)) {
-                            if (name === msg.sender) {
-                                playerNumber = parseInt(num);
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                // FIX: Ensure DM messages get the correct role
-                const messageData = {
-                    role: msg.type === 'dm' ? 'assistant' : (msg.type === 'system' ? 'system' : 'user'),
-                    type: msg.type,
-                    sender: msg.sender,
-                    content: msg.content,
-                    contentHTML: msg.contentHTML,
-                    player_number: playerNumber,
-                    timestamp: Date.now()
-                };
-                
-                // DEBUG: Log each message being saved to game-specific storage
-                debugLog(`Saving to game storage: type=${messageData.type}, role=${messageData.role}, sender=${messageData.sender}`);
-                
-                return messageData;
-            });
-            
-            Utils.saveChatHistoryToLocal(currentGameId, chatMessages);
-            debugLog("Saved chat messages to localStorage:", chatMessages.length, "messages");
-        }
-        
         updateUndoRedoButtons();
+        debugLog(`Chat state saved. New history size: ${messageHistory.length}, New Index: ${historyIndex}. Last saved state:`, messages.map(m => m.content.substring(0,20)).join(" | "));
     }
     
     function undoChat() {
@@ -1594,11 +1239,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (addPlayerBtn) {
         addPlayerBtn.addEventListener('click', function() {
-            const addedPlayerNumber = PlayerManager.addPlayer(sendMessage);
-            // Update our local nextPlayerNumber tracking
-            const playerNumbers = Object.keys(playerNames).map(Number);
-            nextPlayerNumber = Math.max(...playerNumbers) + 1;
-            debugLog(`Player ${addedPlayerNumber} added. Next available number will be: ${nextPlayerNumber}`);
+            PlayerManager.addPlayer(sendMessage);
         });
     }
     
@@ -1675,39 +1316,11 @@ document.addEventListener('DOMContentLoaded', function() {
         redoBtn.addEventListener('click', redoChat);
     }
 
-    // Add missing updatePlayerLabels function
-    function updatePlayerLabels() {
-        debugLog("Updating player labels with current names:", playerNames);
-        
-        // Update Player 1 label
-        const p1Label = document.getElementById('player1-label');
-        if (p1Label && playerNames[1]) {
-            p1Label.textContent = `${playerNames[1]}:`;
-            debugLog(`Updated Player 1 label to: ${playerNames[1]}:`);
-        } else if (p1Label) {
-            p1Label.textContent = 'Player 1:';
-        }
-        
-        // Update other player labels
-        Object.entries(playerNames).forEach(([num, name]) => {
-            if (num > 1 && name) {
-                const label = document.getElementById(`player${num}-label`);
-                if (label) {
-                    label.textContent = `${name}:`;
-                    debugLog(`Updated Player ${num} label to: ${name}:`);
-                }
-            }
-        });
-    }
-
     // Initial setup - clean and clear flow
     if (currentGameId) {
         debugLog("Restoring session:", currentGameId);
-        // Add a small delay to ensure DOM is fully ready
-        setTimeout(() => {
-            initialize();
-            loadAvailableModels(); // Load models after initialization
-        }, 50);
+        initialize();
+        loadAvailableModels(); // Load models after initialization
     } else {
         debugLog("No previous gameId. Setting up for a new game implicitly.");
         
@@ -1718,18 +1331,11 @@ document.addEventListener('DOMContentLoaded', function() {
             debugLog("Restored player names for new game:", playerNames);
         }
         
-        // Restore DM name even for new games
-        if (loadedState && loadedState.dmName) {
-            dmName = loadedState.dmName;
-            window.dmName = dmName;
-            debugLog("Restored DM name for new game:", dmName);
-        }
-        
-        // Clear any existing history
         messageHistory = [];
         historyIndex = -1;
         localStorage.removeItem('chatHistory');
         chatWindow.innerHTML = '';
+        addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
         
         // Set up PlayerManager with loaded names
         PlayerManager.setup({
@@ -1748,14 +1354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
         updatePlayerLabels(); // Apply saved names to UI
-        
-        // Add welcome message and initialize history with delay to ensure DOM is ready
-        setTimeout(() => {
-            addMessage(dmName || "DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
-            initializeHistory();
-            updateUndoRedoButtons();
-        }, 50);
-        
+        updateUndoRedoButtons();
         loadAvailableModels(); // Load models for new games too
     }
 

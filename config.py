@@ -136,14 +136,6 @@ AVAILABLE_MODELS = [
         "pricing": {"input": 0.5, "output": 2},
         "supportsFunctionCalling": False,
         "supportsParallelToolCalls": False
-    },
-    {
-        "id": "claude-3-sonnet",
-        "name": "Claude 3 Sonnet", 
-        "description": "High-quality reasoning model",
-        "traits": ["most_intelligent", "default_reasoning"],
-        "supportsFunctionCalling": True,
-        "supportsParallelToolCalls": False
     }
 ]
 

@@ -1,33 +1,28 @@
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 import os
 import sys
-import time
-import uuid
 import json
-import base64
-import re
+import uuid
+import time
 import requests
-from dotenv import load_dotenv
+import re
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 
-# Load environment variables
-load_dotenv()
-
-try:
-    from config import (
-        VENICE_API_KEY, VENICE_URL, DEFAULT_MODEL_ID, AVAILABLE_MODELS,
-        SYSTEM_PROMPT_BASE, MULTIPLAYER_PROMPT_ADDITION, SINGLEPLAYER_PROMPT_ADDITION, PROMPT_ENDING
-    )
-except ImportError as e:
-    print(f"ERROR: Failed to import configuration: {e}", file=sys.stderr)
-    print("Please ensure config.py has all required variables defined.", file=sys.stderr)
-    sys.exit(1)
+# Import configuration
+from config import (
+    VENICE_API_KEY, VENICE_URL, DEFAULT_MODEL_ID, CHAT_DIR, AVAILABLE_MODELS,
+    SYSTEM_PROMPT_BASE, MULTIPLAYER_PROMPT_ADDITION, SINGLEPLAYER_PROMPT_ADDITION, PROMPT_ENDING
+)
 
 app = Flask(__name__, static_folder='static')
-app.secret_key = os.urandom(24)
+app.secret_key = os.urandom(24)  # Required for session
 
-if not VENICE_API_KEY or VENICE_API_KEY == "YOUR_API_KEY_HERE":
-    print("ERROR: VENICE_API_KEY not properly configured. Please set it in your .env file.", file=sys.stderr)
-    print("Example: VENICE_API_KEY=your_actual_api_key_here", file=sys.stderr)
+# Create a directory to store user chat histories
+if not os.path.exists(CHAT_DIR):
+    os.makedirs(CHAT_DIR)
+
+# Validate API key
+if not VENICE_API_KEY:
+    print("ERROR: VENICE_API_KEY not found in environment. Please check your .env file.", file=sys.stderr)
 
 def get_user_id():
     """Get or create a unique user ID for the current session"""
@@ -37,17 +32,40 @@ def get_user_id():
         session['user_id'] = user_id
     return user_id
 
+def get_chat_file_path(user_id, game_id=None):
+    """Get the file path for a specific user's chat history"""
+    if game_id:
+        return os.path.join(CHAT_DIR, f"chat_history_{user_id}_{game_id}.json")
+    return os.path.join(CHAT_DIR, f"chat_history_{user_id}_current.json")
+
+def load_chat_history(user_id, game_id=None):
+    """Load chat history for a specific user and game"""
+    file_path = get_chat_file_path(user_id, game_id)
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as file:
+            return json.load(file)
+    return []
+
+def save_chat_history(user_id, chat_history, game_id=None):
+    """Save chat history for a specific user and game"""
+    file_path = get_chat_file_path(user_id, game_id)
+    with open(file_path, 'w') as file:
+        json.dump(chat_history, file)
+
 def format_message_content(content):
     """Format AI responses with markdown-like syntax for the frontend"""
     if not content:
         return content
     
+    # Don't re-format if content already has HTML formatting tags
     if re.search(r'<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">', content):
         return content
     
+    # Don't re-format if content already has new color formatting tags
     if re.search(r'\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal):', content):
         return content
     
+    # Apply color formatting for common D&D terms
     color_mappings = {
         "red": ["fire", "flame", "burn", "hot", "dragon", "blood", "anger", "rage", "demon", "devil", "heat", "scorch", "blaze", "inferno"],
         "blue": ["ice", "cold", "frost", "freeze", "water", "ocean", "sea", "calm", "peace", "sad", "tears", "chill"],
@@ -61,10 +79,12 @@ def format_message_content(content):
         "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"]
     }
     
+    # Apply color formatting to relevant words
     for color, keywords in color_mappings.items():
         for keyword in keywords:
-            pattern = r'\b' + re.escape(keyword) + r'\b'
-            replacement = f'[{color}:{keyword}]'
+            # Use word boundaries and case-insensitive matching
+            pattern = r'\b(' + re.escape(keyword) + r'(?:s|ing|ed|er|est)?)\b'
+            replacement = f'[{color}:\\1]'
             content = re.sub(pattern, replacement, content, flags=re.IGNORECASE)
     
     return content
@@ -81,59 +101,105 @@ def build_system_prompt(is_multiplayer):
     prompt += PROMPT_ENDING
     return prompt
 
+def load_or_create_game_id(user_id):
+    """Get existing game ID or create a new one"""
+    try:
+        # Check for existing games for this user
+        user_games = []
+        for filename in os.listdir(CHAT_DIR):
+            if f"chat_history_{user_id}_" in filename and not filename.endswith("_current.json"):
+                game_id = filename.replace(f"chat_history_{user_id}_", "").replace(".json", "")
+                user_games.append(game_id)
+        
+        # Use most recent game or create new one
+        if user_games:
+            # Sort by timestamp (assuming game_id starts with timestamp)
+            user_games.sort(reverse=True)
+            return user_games[0]
+        else:
+            # Create new game ID
+            return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    except Exception as e:
+        app.logger.error(f"Error in load_or_create_game_id: {e}")
+        # Fallback to creating new game ID
+        return f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+
+# Add route to serve static files
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
 
+# Route to serve the HTML page
 @app.route('/')
 def index():
     user_id = get_user_id()
+    game_id = request.cookies.get('game_id')
     
-    try:
-        response = make_response(render_template('index.html'))
-        if 'user_id' not in request.cookies:
-            response.set_cookie('user_id', user_id, max_age=30*24*60*60)  # 30 days
-        return response
-    except Exception as e:
-        app.logger.error(f"Error rendering index: {e}")
-        return f"Error loading page: {e}", 500
+    if not game_id:
+        # Generate a new game id if none is stored
+        game_id = load_or_create_game_id(user_id)
+        chat_history = load_chat_history(user_id, game_id)
+        if not chat_history:
+            # Always include a welcome message
+            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
+            save_chat_history(user_id, chat_history, game_id)
+    else:
+        chat_history = load_chat_history(user_id, game_id)
+        # Even if we have a chat history, make sure it has at least one message
+        if not chat_history:
+            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
+            save_chat_history(user_id, chat_history, game_id)
+    
+    # Pass the chat history to the template to display immediately on load
+    response = make_response(render_template('index.html', chat_history=chat_history))
+    response.set_cookie('user_id', user_id, max_age=60*60*24*365)  # Expire in 1 year
+    response.set_cookie('game_id', game_id, max_age=60*60*24*365)
+    return response
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    """Handle chat messages - no server-side storage"""
     try:
-        data = request.get_json()
-        message = data.get('message', '')
+        user_id = get_user_id()
+        data = request.json
+        if data is None or 'message' not in data:
+            return jsonify({"response": "No message provided.", "error": True}), 400
+        
+        user_input = data['message']
         game_id = data.get('game_id')
-        player_number = data.get('player_number', 1)
+        player_number = data.get('player_number', 1)  # Default to player 1
         is_system = data.get('is_system', False)
-        invisible_to_players = data.get('invisible_to_players', False)
+        invisible_to_players = data.get('invisible_to_players', False)  # New flag
         
-        if not message.strip():
-            return jsonify({"success": False, "error": "Empty message"}), 400
-            
-        # Validate API key
-        if not VENICE_API_KEY or VENICE_API_KEY == "YOUR_API_KEY_HERE":
-            return jsonify({"success": False, "error": "Venice API key not configured"}), 500
-            
-        # Generate a unique message ID for streaming
-        message_id = str(int(time.time() * 1000))
+        # Load chat history
+        chat_history = load_chat_history(user_id, game_id)
         
-        # Log system messages for debugging
-        if is_system:
-            app.logger.debug(f"System message received: {message[:100]}... (invisible: {invisible_to_players})")
+        # Add user message to history with player number
+        message_entry = {
+            "role": "user" if not is_system else "system",
+            "content": user_input,
+            "player": f"player{player_number}" if not is_system else "system"
+        }
         
+        # Mark invisible messages so they don't show in chat
+        if invisible_to_players:
+            message_entry["invisible"] = True
+        
+        chat_history.append(message_entry)
+        
+        # Save chat history
+        save_chat_history(user_id, chat_history, game_id)
+        
+        # Return message ID for streaming
         return jsonify({
-            "success": True,
-            "message_id": message_id,
-            "game_id": game_id,
-            "is_system": is_system,
-            "invisible_to_players": invisible_to_players
+            "message_id": len(chat_history),
+            "streaming": True,
+            "player_number": player_number,
+            "invisible": invisible_to_players  # Let client know this is invisible
         })
         
     except Exception as e:
-        app.logger.error(f"Error in chat endpoint: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        app.logger.error("Error in /chat endpoint: %s", str(e))
+        return jsonify({"response": "Internal server error.", "error": True}), 500
 
 def get_valid_model(model_id):
     valid_models = [model['id'] for model in AVAILABLE_MODELS]
@@ -157,270 +223,326 @@ def get_model_capabilities(model_id):
 
 @app.route('/stream', methods=['POST', 'GET'])
 def stream_response():
-    """Stream response for AI messages - uses client-provided chat history"""
+    """Stream response for AI messages"""
+    # Get the user ID from session
     user_id = get_user_id()
     
-    # Get parameters from request
+    # For GET requests (EventSource uses GET by default)
     if request.method == 'GET':
-        game_id = request.args.get('game_id', '')
-        message_id = request.args.get('message_id', '')
-        model_id = request.args.get('model_id', DEFAULT_MODEL_ID)
-        chat_history_param = request.args.get('chat_history', '')
+        game_id = request.args.get('game_id')
+        message_id = request.args.get('message_id')
+        # Accept model_id as a query param for SSE fallback
+        model_id = request.args.get('model_id')
+        if model_id:
+            session['selected_model'] = get_valid_model(model_id)
     else:
-        data = request.get_json()
-        game_id = data.get('game_id', '')
-        message_id = data.get('message_id', '')
-        model_id = data.get('model_id', DEFAULT_MODEL_ID)
-        chat_history_param = data.get('chat_history', '')    # Parse chat history from client
-    chat_history = []
-    if chat_history_param:
-        try:
-            import base64
-            decoded_history = base64.b64decode(chat_history_param).decode('utf-8')
-            chat_history = json.loads(decoded_history)
-            app.logger.debug(f"Decoded chat history: {len(chat_history)} messages")
-            # Log first few messages for debugging
-            for i, msg in enumerate(chat_history[:3]):
-                app.logger.debug(f"Message {i}: role={msg.get('role')}, type={msg.get('type')}, sender={msg.get('sender')}, content={msg.get('content', '')[:50]}...")
-        except Exception as e:
-            app.logger.error(f"Error decoding chat history: {e}")
-            app.logger.error(f"Chat history param length: {len(chat_history_param) if chat_history_param else 0}")
-            chat_history = []
-    else:
-        app.logger.debug("No chat history parameter provided")
-      # Print debug info
-    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={model_id}")
+        # For POST requests from fetch API
+        data = json.loads(request.data)
+        game_id = data.get('game_id')
+        message_id = data.get('message_id')
+        model_id = data.get('model_id')
+        if model_id:
+            session['selected_model'] = get_valid_model(model_id)
+
+    # Load chat history for this specific user
+    chat_history = load_chat_history(user_id, game_id)
     
+    # Print debug info
+    app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model')}")
+
     def generate():
-        try:
-            # Get selected model from session or use provided model_id
-            selected_model = session.get('selected_model', model_id)
-            
-            # Validate model
-            valid_model = get_valid_model(selected_model)            # Check if this is a context refresh message
-            is_context_refresh = False
-            if chat_history:
-                # Look for context refresh indicators in the last few messages
-                last_messages = chat_history[-5:]  # Check last 5 messages to be thorough
-                for msg in last_messages:
-                    content = msg.get('content', '')
-                    # Check for context refresh in any message type (system, user, assistant)
-                    if ('[Context Refresh]' in content or 
-                        'context refresh' in content.lower() or
-                        msg.get('is_system') == True and 'restored' in content.lower()):
-                        is_context_refresh = True
-                        app.logger.debug(f"🔄 CONTEXT REFRESH DETECTED! Message: {content[:100]}...")
-                        app.logger.debug(f"🔄 Message role: {msg.get('role')}, type: {msg.get('type')}")
-                        app.logger.debug(f"🔄 Full chat history length: {len(chat_history)}")
-                        break
+        # Check if there are multiple players in the session and gather names
+        player_counts = {}
+        
+        # Look for player names in the chat history
+        for msg in chat_history:
+            if msg.get("role") == "user" and msg.get("player"):
+                player = msg.get("player")
+                player_counts[player] = player_counts.get(player, 0) + 1
+        
+        # Check if multiple players are active
+        is_multiplayer = len(player_counts) > 1
+        
+        # Build system prompt based on multiplayer status
+        system_prompt = build_system_prompt(is_multiplayer)
+        
+        # Prepare messages for the API
+        api_messages = [
+            {"role": "system", "content": system_prompt}
+        ]
+        
+        # Include conversation history but format it properly for the API
+        for msg in chat_history:
+            if msg.get("role") == "system" and msg.get("player") == "system":
+                # This is a system notification (like player joining)
+                api_messages.append({
+                    "role": "system", 
+                    "content": msg["content"]
+                })
+            elif msg.get("role") == "user":
+                # Format user messages with player labels if in multiplayer
+                prefix = ""
+                if is_multiplayer and msg.get("player"):
+                    player_num = msg.get("player").replace("player", "")
+                    prefix = f"Player {player_num}: "
                 
-                if not is_context_refresh:
-                    app.logger.debug("❌ No context refresh detected in recent messages")
-                    # Debug: Log the last few messages to see what we're missing
-                    app.logger.debug("Recent messages content:")
-                    for i, msg in enumerate(last_messages):
-                        app.logger.debug(f"  {i}: role={msg.get('role')}, content={msg.get('content', '')[:50]}...")
-            
-            # Build messages for API
-            messages = []
-            # Add system prompt
-            is_multiplayer = len([p for p in chat_history if p.get('role') == 'user']) > 1
-            system_prompt = build_system_prompt(is_multiplayer)            # For context refresh, add a special instruction
-            if is_context_refresh:
-                system_prompt += f"\n\n🔄 CRITICAL CONTEXT REFRESH INSTRUCTION: The conversation history above has been restored after a page refresh. You have full access to all {len(chat_history)} previous messages in this conversation. You should:\n1. REMEMBER and acknowledge the previous conversation context\n2. Continue the story naturally from where it left off\n3. DO NOT restart the story or ask for player names again if already provided\n4. Reference previous events, character details, and story elements as appropriate\n5. Maintain narrative continuity with established tone and style\n\nPlease respond as if you remember everything that happened before, because you do have access to the full conversation history."
-                app.logger.debug("🔄 Enhanced system prompt with comprehensive context refresh instructions")
-            
-            messages.append({"role": "system", "content": system_prompt})
-            # Add chat history - include all message types for context
-            for msg in chat_history:  # Send full chat history for context
-                if msg.get('role') in ['user', 'assistant', 'system'] and msg.get('content'):
-                    # Skip the context refresh message itself when sending to API
-                    if '[Context Refresh]' in msg.get('content', ''):
-                        continue
-                    # Skip duplicate system messages (we already added one above)
-                    if msg.get('role') == 'system' and any(m.get('role') == 'system' for m in messages):
-                        continue
-                    messages.append({
-                        "role": msg['role'],
-                        "content": msg['content']
-                    })
-                    app.logger.debug(f"Added to API: role={msg['role']}, sender={msg.get('sender', 'N/A')}, content={msg['content'][:50]}...")
-            
-            app.logger.debug(f"Final messages for API: {len(messages)} total messages")
-            # Log the final message sequence for debugging
-            for i, msg in enumerate(messages):
-                app.logger.debug(f"API Message {i}: role={msg['role']}, content={msg['content'][:100]}...")
-            
-            # Prepare request payload according to Venice API spec
-            payload = {
-                "model": valid_model,
-                "messages": messages,
-                "stream": True,
-                "max_tokens": 2000,
-                "temperature": 0.8,
-                "top_p": 0.9
-            }
-            
-            headers = {
-                'Authorization': f'Bearer {VENICE_API_KEY}',
-                'Content-Type': 'application/json'
-            }
-            
-            app.logger.debug(f"Sending request to Venice API with model: {valid_model}")
-            
-            # Make the streaming request to Venice API
-            response = requests.post(
+                api_messages.append({
+                    "role": "user", 
+                    "content": prefix + msg["content"]
+                })
+            else:
+                # Assistant (DM) messages
+                api_messages.append({
+                    "role": msg.get("role", "assistant"),
+                    "content": msg.get("content", "")
+                })
+        
+        # Get selected model from session, default to DEFAULT_MODEL_ID
+        selected_model = get_valid_model(session.get('selected_model', DEFAULT_MODEL_ID))
+        app.logger.debug(f"Using Venice model: {selected_model}")
+        
+        # Get model capabilities to determine which parameters to include
+        capabilities = get_model_capabilities(selected_model)
+        app.logger.debug(f"Model capabilities: {capabilities}")
+
+        payload = {
+            "venice_parameters": {"include_venice_system_prompt": True},
+            "model": selected_model,
+            "messages": api_messages,
+            "temperature": 1,
+            "top_p": 1,
+            "n": 1,
+            "stream": True,
+            "presence_penalty": 0,
+            "frequency_penalty": 0
+        }
+        
+        # Only add parallel_tool_calls if the model supports it
+        if capabilities['supportsParallelToolCalls']:
+            payload["parallel_tool_calls"] = True
+            app.logger.debug("Added parallel_tool_calls to payload")
+        else:
+            app.logger.debug("Skipped parallel_tool_calls - not supported by this model")
+
+        headers = {
+            "Authorization": f"Bearer {VENICE_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        try:
+            with requests.post(
                 VENICE_URL,
-                headers=headers,
                 json=payload,
+                headers=headers,
                 stream=True,
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                error_text = response.text
-                app.logger.error(f"Venice API error: {response.status_code} - {error_text}")
-                yield f"data: {json.dumps({'content': f'API Error {response.status_code}: {error_text}', 'error': True})}\n\n"
-                yield "event: done\ndata: {}\n\n"
-                return
-            
-            # Process streaming response
-            accumulated_content = ""
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
-                    if line.startswith('data: '):
-                        try:
-                            data_str = line[6:]  # Remove 'data: ' prefix
-                            if data_str.strip() == '[DONE]':
-                                break
-                            
-                            data = json.loads(data_str)
-                            if 'choices' in data and len(data['choices']) > 0:
-                                choice = data['choices'][0]
-                                delta = choice.get('delta', {})
-                                if 'content' in delta:
-                                    content_chunk = delta['content']
-                                    accumulated_content += content_chunk
-                                    yield f"data: {json.dumps({'content': content_chunk})}\n\n"
-                        except json.JSONDecodeError as e:
-                            app.logger.error(f"JSON decode error: {e} - Line: {line}")
-                            continue
-                        except Exception as e:
-                            app.logger.error(f"Error processing chunk: {e}")
-                            continue
-            
-            yield "event: done\ndata: {}\n\n"
-            
-        except requests.exceptions.RequestException as e:
-            app.logger.error(f"Request error in stream: {e}")
-            yield f"data: {json.dumps({'content': f'Network Error: {str(e)}', 'error': True})}\n\n"
-            yield "event: done\ndata: {}\n\n"
+                timeout=60
+            ) as response:
+                full_response = ""
+                app.logger.debug(f"Venice API response status: {response.status_code}")
+                app.logger.debug(f"Venice API response headers: {response.headers}")
+                
+                # Check if the response is successful
+                if response.status_code != 200:
+                    app.logger.error(f"Venice API error: {response.status_code} - {response.text}")
+                    yield f"data: {json.dumps({'content': f'API Error: {response.status_code}', 'full': f'API Error: {response.status_code}', 'error': True})}\n\n"
+                    yield f"event: done\ndata: {{}}\n\n"
+                    return
+                
+                # Check content type to determine if streaming or not
+                content_type = response.headers.get('content-type', '').lower()
+                app.logger.debug(f"Content-Type: {content_type}")
+                
+                if 'text/event-stream' in content_type:
+                    # Handle streaming response
+                    app.logger.debug("Processing as streaming response")
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
+                                try:
+                                    data_json = line[6:]
+                                    if data_json.strip() == '[DONE]':
+                                        break
+                                    data = json.loads(data_json)
+                                    if 'choices' in data and len(data['choices']) > 0:
+                                        delta = data['choices'][0].get('delta', {})
+                                        content = delta.get('content', '')
+                                        if content:
+                                            full_response += content
+                                            yield f"data: {json.dumps({'content': content, 'full': full_response})}\n\n"
+                                except Exception as e:
+                                    app.logger.error(f"Error parsing Venice SSE: {e}")
+                                    continue
+                else:
+                    # Handle non-streaming JSON response
+                    app.logger.debug("Processing as non-streaming JSON response")
+                    try:
+                        response_data = response.json()
+                        app.logger.debug(f"Non-streaming response data: {response_data}")
+                        
+                        if 'choices' in response_data and len(response_data['choices']) > 0:
+                            choice = response_data['choices'][0]
+                            if 'message' in choice and 'content' in choice['message']:
+                                full_response = choice['message']['content']
+                                app.logger.debug(f"Extracted content length: {len(full_response)}")
+                                # Send the full response at once
+                                yield f"data: {json.dumps({'content': full_response, 'full': full_response})}\n\n"
+                            else:
+                                app.logger.error(f"Unexpected response structure: {choice}")
+                                yield f"data: {json.dumps({'content': 'Invalid response structure from AI', 'full': 'Invalid response structure from AI', 'error': True})}\n\n"
+                        elif 'error' in response_data:
+                            error_msg = response_data.get('error', {}).get('message', 'Unknown API error')
+                            app.logger.error(f"API returned error: {error_msg}")
+                            yield f"data: {json.dumps({'content': f'API Error: {error_msg}', 'full': f'API Error: {error_msg}', 'error': True})}\n\n"
+                        else:
+                            app.logger.error(f"No choices in response: {response_data}")
+                            yield f"data: {json.dumps({'content': 'No response from AI', 'full': 'No response from AI', 'error': True})}\n\n"
+                    except Exception as e:
+                        app.logger.error(f"Error parsing JSON response: {e}")
+                        app.logger.error(f"Raw response: {response.text}")
+                        yield f"data: {json.dumps({'content': 'Error parsing AI response', 'full': 'Error parsing AI response', 'error': True})}\n\n"
+                
+                # Store the complete response in chat history
+                if full_response:
+                    # Always format the content before storing
+                    formatted_content = format_message_content(full_response)
+                    chat_history.append({"role": "assistant", "content": formatted_content})
+                    save_chat_history(user_id, chat_history, game_id)
+                    app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")
         except Exception as e:
-            app.logger.error(f"Error in stream generate function: {e}")
-            yield f"data: {json.dumps({'content': f'Error: {str(e)}', 'error': True})}\n\n"
-            yield "event: done\ndata: {}\n\n"
+            app.logger.error(f"Error in API request: {str(e)}")
+            yield f"data: {json.dumps({'content': f'Error: {str(e)}', 'full': f'Error: {str(e)}', 'error': True})}\n\n"
+            yield f"event: done\ndata: {{}}\n\n"
     
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 @app.route('/new_game', methods=['POST'])
 def new_game():
-    """Generate a new game ID - purely client-side operation"""
     user_id = get_user_id()
     game_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    chat_history = []
+    # Only add the welcome message once
+    chat_history.append({"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"})
+    save_chat_history(user_id, chat_history, game_id)
     response_data = {"game_id": game_id, "success": True}
     return jsonify(response_data)
 
 @app.route('/load_history', methods=['POST'])
 def load_history():
-    """Load history endpoint - now returns empty (client-side only)"""
-    return jsonify({"history": [], "message": "Chat history is now stored client-side only"})
+    """Load the chat history for display on the frontend"""
+    user_id = get_user_id()
+    data = request.get_json()
+    game_id = data.get('game_id')
+    
+    # Load chat history
+    chat_history = load_chat_history(user_id, game_id)
+    
+    # Process each message to ensure formatting is preserved
+    processed_history = []
+    for msg in chat_history:
+        processed_msg = msg.copy()
+        # Ensure all assistant messages are properly formatted
+        if msg.get('role') == 'assistant' and msg.get('content'):
+            # Re-apply formatting to ensure colors and effects show up
+            processed_msg['content'] = format_message_content(msg['content'])
+        processed_history.append(processed_msg)
+    
+    # Return the processed chat history
+    return jsonify({"history": processed_history})
 
 @app.route('/get_updates', methods=['POST'])
 def get_updates():
-    """Get updates - disabled for client-side only mode"""
-    return jsonify({"success": False, "error": "Updates disabled - client-side only mode"})
+    """Get updates to chat history since last timestamp"""
+    user_id = get_user_id()
+    data = request.get_json()
+    game_id = data.get('game_id')
+    last_message_count = int(data.get('last_message_count', 0))
+    
+    if not game_id:
+        return jsonify({"success": False, "error": "No game ID provided"})
+    
+    # Get the chat file path for this user and game
+    file_path = get_chat_file_path(user_id, game_id)
+    
+    if not os.path.exists(file_path):
+        app.logger.error(f"Game session file not found: {file_path}")
+        return jsonify({
+            "success": False, 
+            "error": "Game session file not found"
+        })
+    
+    try:
+        # Read the full chat history
+        with open(file_path, 'r') as file:
+            chat_history = json.load(file)
+        
+        result = {
+            "success": True,
+            "message_count": len(chat_history)
+        }
+        
+        # Check if there are new messages
+        if len(chat_history) > last_message_count:
+            # Return only the new messages
+            new_messages = chat_history[last_message_count:]
+            result["has_updates"] = True
+            result["updates"] = new_messages
+        else:
+            result["has_updates"] = False
+        
+        return jsonify(result)
+            
+    except Exception as e:
+        app.logger.error(f"Error checking for updates: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/set_player_name', methods=['POST'])
 def set_player_name():
-    """Set player name - client-side only operation"""
-    return jsonify({"success": True, "message": "Player names are now managed client-side only"})
+    try:
+        data = request.get_json()
+        user_id = get_user_id()
+        game_id = data.get('game_id')
+        player_number = data.get('player_number', 1)
+        new_name = data.get('new_name')
+
+        if not (game_id and new_name):
+            return jsonify({"success": False, "error": "Missing game_id or new_name"}), 400
+
+        # Load the chat history for the specified game
+        chat_history = load_chat_history(user_id, game_id)
+        # Update every message from this player with the new name
+        for msg in chat_history:
+            if msg.get("role") == "user" and msg.get("player") == f"player{player_number}":
+                msg["player"] = new_name
+        # Save the updated chat history
+        save_chat_history(user_id, chat_history, game_id)
+        return jsonify({"success": True})
+    except Exception as e:
+        app.logger.error(f"Error in /set_player_name: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/get_models', methods=['GET'])
 def get_models():
-    """Get available AI models from Venice API"""
-    try:
-        headers = {
-            'Authorization': f'Bearer {VENICE_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-        
-        # Call Venice API to get text models
-        models_url = VENICE_URL.replace('/chat/completions', '/models')
-        response = requests.get(
-            f"{models_url}?type=text",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            # Transform Venice API response to our format
-            models = []
-            if 'data' in data:
-                for model in data['data']:
-                    # Extract capabilities from model_spec
-                    capabilities = model.get('model_spec', {}).get('capabilities', {})
-                    traits = model.get('model_spec', {}).get('traits', [])
-                    
-                    model_info = {
-                        'id': model.get('id', ''),
-                        'name': model.get('id', '').replace('-', ' ').title(),
-                        'description': f"Venice AI model: {model.get('id', '')}",
-                        'type': model.get('type', 'text'),
-                        'traits': traits,
-                        'supportsFunctionCalling': capabilities.get('supportsFunctionCalling', False),
-                        'supportsParallelToolCalls': False,  # Venice doesn't specify this
-                        'supportsReasoning': capabilities.get('supportsReasoning', False),
-                        'supportsVision': capabilities.get('supportsVision', False)
-                    }
-                    models.append(model_info)
-            
-            return jsonify({"success": True, "models": models})
-            
-        else:
-            # Fallback to local model list if API fails
-            app.logger.warning(f"Venice API returned {response.status_code}, using fallback models")
-            return jsonify({"success": True, "models": AVAILABLE_MODELS})
-            
-    except Exception as e:
-        app.logger.error(f"Error fetching models from Venice API: {e}")
-        # Return fallback models from config
-        return jsonify({"success": True, "models": AVAILABLE_MODELS})
+    """Get available AI models"""
+    return jsonify({"models": AVAILABLE_MODELS})
 
 @app.route('/set_model', methods=['POST'])
 def set_model():
-    """Set the selected AI model"""
-    try:
-        data = request.get_json()
-        model_id = data.get('model_id')
-        
-        if not model_id:
-            return jsonify({"error": "No model_id provided", "success": False}), 400
-        
-        # Validate model exists
-        valid_model = get_valid_model(model_id)
-        session['selected_model'] = valid_model
-        
-        return jsonify({
-            "success": True, 
-            "model": valid_model,
-            "message": f"Model set to {valid_model}"
-        })
-    except Exception as e:
-        app.logger.error(f"Error setting model: {e}")
-        return jsonify({"error": str(e), "success": False}), 500
+    """Set the current AI model for the session"""
+    data = request.get_json()
+    model_id = data.get('model_id')
+    
+    if not model_id:
+        return jsonify({"success": False, "error": "Missing model_id"}), 400
+    
+    # Validate model exists
+    valid_models = [model['id'] for model in AVAILABLE_MODELS]
+    if model_id not in valid_models:
+        return jsonify({"success": False, "error": "Invalid model_id"}), 400
+    
+    # Store in session (you could also store in database if needed)
+    session['selected_model'] = model_id
+    
+    return jsonify({"success": True, "model_id": model_id})
 
 if __name__ == '__main__':
     app.run(debug=True)

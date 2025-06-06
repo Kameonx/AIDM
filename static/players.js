@@ -178,20 +178,14 @@ const PlayerManager = (function() {
      * Add a new player to the game
      */
     function addPlayer(onSendMessage) {
-        // Find the lowest available player number instead of using nextPlayerNumber
-        let newPlayerNumber = 2; // Start checking from player 2
-        while (playerNames.hasOwnProperty(newPlayerNumber)) {
-            newPlayerNumber++;
-        }
-        
-        debugLog("Adding new player UI for player number:", newPlayerNumber);
-        const newPlayerInput = addPlayerUI(newPlayerNumber, null, onSendMessage);
-        playerNames[newPlayerNumber] = null; // Add to playerNames map, initially unnamed
+        debugLog("Adding new player UI for player number:", nextPlayerNumber);
+        const newPlayerInput = addPlayerUI(nextPlayerNumber, null, onSendMessage);
+        playerNames[nextPlayerNumber] = null; // Add to playerNames map, initially unnamed
         savePlayerNames();
         savePlayerState(); // Save state including new nextPlayerNumber
         
         // Store the player number we're adding to reference in the system message
-        const joiningPlayerNumber = newPlayerNumber;
+        const joiningPlayerNumber = nextPlayerNumber;
         
         addSystemMessage(`Player ${joiningPlayerNumber} has joined the game! What is your name, adventurer?`, false, false, true);
         
@@ -237,10 +231,7 @@ const PlayerManager = (function() {
             });
         }
         
-        // Update nextPlayerNumber to be one more than the highest current player number
-        const playerNumbers = Object.keys(playerNames).map(Number);
-        nextPlayerNumber = Math.max(...playerNumbers) + 1;
-        
+        nextPlayerNumber++; // Increment for the next player
         if (newPlayerInput) newPlayerInput.focus();
         
         return joiningPlayerNumber;
@@ -388,7 +379,7 @@ const PlayerManager = (function() {
                 }
             });
     
-        // Update nextPlayerNumber based on loaded names - find the next available number
+        // Update nextPlayerNumber based on loaded names
         const playerNumbers = Object.keys(playerNames).map(Number);
         if (playerNumbers.length > 0) {
             nextPlayerNumber = Math.max(...playerNumbers) + 1;

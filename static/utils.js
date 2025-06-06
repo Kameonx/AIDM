@@ -35,7 +35,7 @@ const Utils = (function() {
         processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         processedText = processedText.replace(/\*(.*?)\*/g, '<em>$1</em>');
 
-        // Replace color tags with proper CSS classes
+        // Replace color tags with proper CSS classes - improved regex to handle spaces
         processedText = processedText.replace(/\[red:(.*?)\]/g, '<span class="color-red">$1</span>');
         processedText = processedText.replace(/\[green:(.*?)\]/g, '<span class="color-green">$1</span>');
         processedText = processedText.replace(/\[blue:(.*?)\]/g, '<span class="color-blue">$1</span>');
@@ -46,6 +46,10 @@ const Utils = (function() {
         processedText = processedText.replace(/\[cyan:(.*?)\]/g, '<span class="color-cyan">$1</span>');
         processedText = processedText.replace(/\[lime:(.*?)\]/g, '<span class="color-lime">$1</span>');
         processedText = processedText.replace(/\[teal:(.*?)\]/g, '<span class="color-teal">$1</span>');
+
+        // Fix spacing issues by ensuring proper word boundaries around color spans
+        processedText = processedText.replace(/(\S)<span class="color-/g, '$1 <span class="color-');
+        processedText = processedText.replace(/<\/span>(\S)/g, '</span> $1');
 
         return processedText;
     }

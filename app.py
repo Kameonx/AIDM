@@ -337,63 +337,19 @@ def get_models():
                         'supportsReasoning': capabilities.get('supportsReasoning', False),
                         'supportsVision': capabilities.get('supportsVision', False)
                     }
-                    
-                    # Add special trait mappings
-                    if 'most_uncensored' in traits:
-                        if 'most_uncensored' not in model_info['traits']:
-                            model_info['traits'].append('most_uncensored')
-                    if 'most_intelligent' in traits:
-                        if 'most_intelligent' not in model_info['traits']:
-                            model_info['traits'].append('most_intelligent')
-                    if 'default' in traits:
-                        if 'default' not in model_info['traits']:
-                            model_info['traits'].append('default')
-                    if 'fastest' in traits:
-                        if 'fastest' not in model_info['traits']:
-                            model_info['traits'].append('fastest')
-                    
                     models.append(model_info)
             
-            # If no models found, add default
-            if not models:
-                models.append({
-                    'id': 'venice-uncensored',
-                    'name': 'Venice Uncensored',
-                    'description': 'Default Venice AI model',
-                    'type': 'text',
-                    'traits': ['default', 'most_uncensored'],
-                    'supportsFunctionCalling': False,
-                    'supportsParallelToolCalls': False
-                })
+            return jsonify({"success": True, "models": models})
             
-            return jsonify({"models": models, "success": True})
         else:
-            app.logger.error(f"Venice API error: {response.status_code} - {response.text}")
-            # Return fallback models
-            fallback_models = [{
-                'id': 'venice-uncensored',
-                'name': 'Venice Uncensored (Fallback)',
-                'description': 'Default Venice AI model (API unavailable)',
-                'type': 'text',
-                'traits': ['default'],
-                'supportsFunctionCalling': False,
-                'supportsParallelToolCalls': False
-            }]
-            return jsonify({"models": fallback_models, "success": True})
+            # Fallback to local model list if API fails
+            app.logger.warning(f"Venice API returned {response.status_code}, using fallback models")
+            return jsonify({"success": True, "models": AVAILABLE_MODELS})
             
     except Exception as e:
-        app.logger.error(f"Error fetching models: {e}")
-        # Return fallback models on error
-        fallback_models = [{
-            'id': 'venice-uncensored',
-            'name': 'Venice Uncensored (Error Fallback)',
-            'description': 'Default Venice AI model (error occurred)',
-            'type': 'text',
-            'traits': ['default'],
-            'supportsFunctionCalling': False,
-            'supportsParallelToolCalls': False
-        }]
-        return jsonify({"models": fallback_models, "success": True})
+        app.logger.error(f"Error fetching models from Venice API: {e}")
+        # Return fallback models from config
+        return jsonify({"success": True, "models": AVAILABLE_MODELS})
 
 @app.route('/set_model', methods=['POST'])
 def set_model():

@@ -326,24 +326,25 @@ const PlayerManager = (function() {
         debugLog(`Updating Player ${playerNumber} label to ${name}`);
         
         // Reject names that are too short
-        if (!name || name.length < 2) {
+        if (!name || name.trim().length < 2) {
             debugLog(`Rejecting invalid name: "${name}" for Player ${playerNumber} - too short`);
             return false;
         }
-        
+        // Accept multi-word names, trim and collapse spaces
+        const cleanName = name.trim().replace(/\s+/g, ' ');
         const labelElement = document.getElementById(`player${playerNumber}-label`);
         if (labelElement) {
-            labelElement.textContent = `${name}:`;
-            playerNames[playerNumber] = name;
+            labelElement.textContent = `${cleanName}:`;
+            playerNames[playerNumber] = cleanName;
             
             // Always save immediately when updating a name
             savePlayerNames(playerNames);
             savePlayerState();
             
-            debugLog(`Successfully updated Player ${playerNumber} to ${name} and saved to storage`);
+            debugLog(`Successfully updated Player ${playerNumber} to ${cleanName} and saved to storage`);
             
             // Add system message about name change
-            addSystemMessage(`Player ${playerNumber} is now named ${name}.`, false, true, true);
+            addSystemMessage(`Player ${playerNumber} is now named ${cleanName}.`, false, true, true);
             return true;
         }
         return false;
@@ -402,7 +403,8 @@ const PlayerManager = (function() {
         
         // First look for exact pattern: "Player X is now named Y"
         if (/Player \d+ is now named/.test(text)) {
-            const exactNameRegex = /Player (\d+) is (?:now |)named (\w+)/gi;
+            // Accept multi-word names (with spaces)
+            const exactNameRegex = /Player (\d+) is (?:now |)named ([A-Za-z][\w\s'-]{1,50})/gi;
             let match;
             
             debugLog("Found 'Player X is now named' pattern, checking for specific matches...");
@@ -412,7 +414,7 @@ const PlayerManager = (function() {
                 let pName = match[2];
                 
                 // Simple validation for name
-                if (!pName || pName.length < 2) {
+                if (!pName || pName.trim().length < 2) {
                     debugLog(`Rejecting invalid name: "${pName}" for Player ${playerNum} - too short`);
                     continue;
                 }
@@ -440,7 +442,8 @@ const PlayerManager = (function() {
         }
 
         // Look for directly addressed players - try to find "Player X" followed by a name
-        const directAddressRegex = /(?:Player|player) (\d+).*?(?:is|called|name is) (\w+)/i;
+        // Accept multi-word names
+        const directAddressRegex = /(?:Player|player) (\d+).*?(?:is|called|name is) ([A-Za-z][\w\s'-]{1,50})/i;
         let match = text.match(directAddressRegex);
         if (match && match[1] && match[2]) {
             const playerNum = parseInt(match[1]);
@@ -458,7 +461,8 @@ const PlayerManager = (function() {
             debugLog(`Found welcome to Player ${playerNum}`);
             
             // Now look for a name after this welcome message
-            const nameAfterWelcomeRegex = new RegExp(`(?:welcome|hello|greetings|hi),?\\s+(?:Player|player)\\s+${playerNum}[^.!?]*?\\b([A-Z]\\w+)\\b`, 'i');
+            // Accept multi-word names
+            const nameAfterWelcomeRegex = new RegExp(`(?:welcome|hello|greetings|hi),?\\s+(?:Player|player)\\s+${playerNum}[^.!?]*?\\b([A-Za-z][\\w\\s'-]{1,50})\\b`, 'i');
             const nameMatch = text.match(nameAfterWelcomeRegex);
             
             if (nameMatch && nameMatch[1] && Utils.isLikelyName(nameMatch[1])) {
@@ -481,7 +485,8 @@ const PlayerManager = (function() {
             const playerNum = parseInt(unnamedPlayers[0][0]);
             
             // Look for direct statement of name
-            const nameStatementRegex = /(?:so your name is|you are called|you're|welcome|hello|hi) (\w+)[.!?]/i;
+            // Accept multi-word names
+            const nameStatementRegex = /(?:so your name is|you are called|you're|welcome|hello|hi) ([A-Za-z][\w\s'-]{1,50})[.!?]/i;
             match = text.match(nameStatementRegex);
             if (match && match[1] && Utils.isLikelyName(match[1])) {
                 const possibleName = match[1];

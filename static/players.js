@@ -178,17 +178,23 @@ const PlayerManager = (function() {
      * Add a new player to the game
      */
     function addPlayer(onSendMessage) {
-        debugLog("Adding new player UI for player number:", nextPlayerNumber);
-        const newPlayerInput = addPlayerUI(nextPlayerNumber, null, onSendMessage);
-        playerNames[nextPlayerNumber] = null; // Add to playerNames map, initially unnamed
+        // Find the lowest available player number > 1
+        let usedNumbers = Object.keys(playerNames).map(Number).filter(n => n > 1);
+        let newPlayerNum = 2;
+        while (usedNumbers.includes(newPlayerNum)) {
+            newPlayerNum++;
+        }
+        debugLog("Adding new player UI for player number:", newPlayerNum);
+        const newPlayerInput = addPlayerUI(newPlayerNum, null, onSendMessage);
+        playerNames[newPlayerNum] = null; // Add to playerNames map, initially unnamed
         savePlayerNames();
-        savePlayerState(); // Save state including new nextPlayerNumber
-        
+        savePlayerState(); // Save state including new player
+
         // Store the player number we're adding to reference in the system message
-        const joiningPlayerNumber = nextPlayerNumber;
-        
+        const joiningPlayerNumber = newPlayerNum;
+
         addSystemMessage(`Player ${joiningPlayerNumber} has joined the game! What is your name, adventurer?`, false, false, true);
-        
+
         // Notify DM about new player - but don't show this message in chat
         if (currentGameId) {
             // Send invisible system message to DM
@@ -230,10 +236,10 @@ const PlayerManager = (function() {
                 debugLog(`Error notifying DM about Player ${joiningPlayerNumber} joining:`, error);
             });
         }
-        
-        nextPlayerNumber++; // Increment for the next player
+
+        // No need to increment nextPlayerNumber anymore
         if (newPlayerInput) newPlayerInput.focus();
-        
+
         return joiningPlayerNumber;
     }
 
@@ -350,14 +356,14 @@ const PlayerManager = (function() {
         debugLog("Ensuring players exist. Current names:", playerNames);
         // Clear existing dynamic player inputs first to avoid duplication
         additionalPlayersContainer.innerHTML = '';
-        
+
         // Sort player numbers to process them in order
         Object.keys(playerNames)
             .sort((a,b) => parseInt(a) - parseInt(b))
             .forEach(numStr => {
                 const num = parseInt(numStr);
                 const name = playerNames[num];
-                
+
                 if (num === 1) { // Player 1
                     const p1Label = document.getElementById('player1-label');
                     if (p1Label && name) {
@@ -366,7 +372,7 @@ const PlayerManager = (function() {
                     } else if (p1Label) {
                         p1Label.textContent = 'Player 1:';
                     }
-                    
+
                     // Fix Player 1 click handler
                     if (player1Container) {
                         player1Container.onclick = function() {
@@ -378,17 +384,13 @@ const PlayerManager = (function() {
                     addPlayerUI(num, name, onSendMessage);
                 }
             });
-    
-        // Update nextPlayerNumber based on loaded names
-        const playerNumbers = Object.keys(playerNames).map(Number);
-        if (playerNumbers.length > 0) {
-            nextPlayerNumber = Math.max(...playerNumbers) + 1;
-        } else {
-            nextPlayerNumber = 2;
-        }
-        
-        debugLog("Finished ensurePlayersExist. nextPlayerNumber =", nextPlayerNumber);
-        return nextPlayerNumber;
+
+        // No longer update nextPlayerNumber here
+        // Instead, always find the lowest available number when adding
+
+        debugLog("Finished ensurePlayersExist.");
+        // Return nothing or optionally the next available number
+        return null;
     }
     
     /**

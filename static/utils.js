@@ -20,23 +20,24 @@ const Utils = (function() {
             return text; // Already formatted with HTML, return as is
         }
 
-        // Escape HTML first to prevent XSS, but preserve intentional formatting
-        let processedText = text
+        // Handle HTML font tags FIRST (before HTML escaping) since AI models output raw HTML
+        let processedText = text;
+        
+        // Convert <font color="colorname">text</font> to our color format BEFORE escaping
+        processedText = processedText.replace(/<font color=["'](red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)["']>(.*?)<\/font>/gi, 
+            '<span class="color-$1">$2</span>');
+
+        // Escape HTML AFTER handling font tags to prevent XSS, but preserve our color spans
+        processedText = processedText
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+            .replace(/>/g, '&gt;')
+            // But restore our color spans
+            .replace(/&lt;span class="color-(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)"&gt;(.*?)&lt;\/span&gt;/gi, 
+                '<span class="color-$1">$2</span>');
 
-        // Handle reasoning text from AI models FIRST (before other processing)
+        // Handle reasoning text from AI models
         processedText = processReasoningText(processedText);
-
-        // Process HTML font tags BEFORE escaping (since AI models output these)
-        // Convert <font color="colorname">text</font> to our color format
-        processedText = processedText.replace(/&lt;font color=&quot;(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)&quot;&gt;(.*?)&lt;\/font&gt;/gi, 
-            '<span class="color-$1">$2</span>');
-        
-        // Also handle single quotes in font tags
-        processedText = processedText.replace(/&lt;font color=&#x27;(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)&#x27;&gt;(.*?)&lt;\/font&gt;/gi, 
-            '<span class="color-$1">$2</span>');
 
         // Process markdown-like formatting (matching the app.py format)
         processedText = processedText.replace(/`([^`]+)`/g, '<code style="background: #2d2d2d; padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');

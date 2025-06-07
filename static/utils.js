@@ -43,7 +43,7 @@ const Utils = (function() {
             .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
 
         // Process new color tags [color:text]
-        const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal'];
+        const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal', 'brown', 'silver', 'wood'];
         
         for (const color of colorTypes) {
             const regex = new RegExp(`\\[${color}:(.*?)\\]`, 'gi');
@@ -51,7 +51,7 @@ const Utils = (function() {
         }
 
         // Remove any unmatched [color:text] tags that weren't replaced (e.g. if color is misspelled)
-        processedText = processedText.replace(/\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal):(.*?)\]/gi, '');
+        processedText = processedText.replace(/\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):(.*?)\]/gi, '');
 
         return processedText;
     }

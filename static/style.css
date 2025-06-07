@@ -527,9 +527,27 @@ span.teal {
     font-weight: bold;
 }
 
+span.brown {
+    color: #d2691e;
+    text-shadow: 0 0 5px rgba(210, 105, 30, 0.5);
+    font-weight: bold;
+}
+
+span.silver {
+    color: #c0c0c0;
+    text-shadow: 0 0 5px rgba(192, 192, 192, 0.5);
+    font-weight: bold;
+}
+
+span.wood {
+    color: #deb887;
+    text-shadow: 0 0 5px rgba(222, 184, 135, 0.5);
+    font-weight: bold;
+}
+
 /* Add word wrapping to color spans */
 span.red, span.green, span.blue, span.yellow, span.purple, span.orange, 
-span.pink, span.cyan, span.lime, span.teal {
+span.pink, span.cyan, span.lime, span.teal, span.brown, span.silver, span.wood {
     word-wrap: break-word !important;
     overflow-wrap: break-word !important;
 }

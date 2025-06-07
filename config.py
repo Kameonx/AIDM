@@ -187,6 +187,9 @@ FORMATTING RULES (USE THESE IN EVERY MESSAGE):
 - Use [cyan:text] for healing magic, divine blessings, water magic, peace
 - Use [lime:text] for nature magic, life energy, growth, renewal
 - Use [teal:text] for special abilities, unique effects, rare magic
+- Use [brown:text] for earth, dirt, leather, wood, natural materials, rustling
+- Use [silver:text] for metal, moonlight, shiny objects, coins, armor, jewelry
+- Use [wood:text] for wooden items, timber, carved objects, natural wood
 
 EXAMPLES OF PROPER COLOR USAGE:
 ❌ WRONG: "The dragon breathes fire at you!"
@@ -197,6 +200,9 @@ EXAMPLES OF PROPER COLOR USAGE:
 
 ❌ WRONG: "The healing potion restores your health."
 ✅ CORRECT: "The [cyan:healing potion] restores your [cyan:health] with [cyan:divine energy]!"
+
+❌ WRONG: "You find a silver pendant on a wooden table."
+✅ CORRECT: "You find a [silver:pendant] on a [wood:wooden table]!"
 
 USE COLORS FOR: damage types, spell names, magical effects, emotions, elements, creatures, items, locations, actions, descriptive words.
 

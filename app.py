@@ -58,11 +58,11 @@ def format_message_content(content):
         return content
     
     # Don't re-format if content already has HTML formatting tags
-    if re.search(r'<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">', content):
+    if re.search(r'<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">', content):
         return content
     
     # Don't re-format if content already has new color formatting tags
-    if re.search(r'\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal):', content):
+    if re.search(r'\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):', content):
         return content
     
     # Apply color formatting for common D&D terms
@@ -76,7 +76,10 @@ def format_message_content(content):
         "pink": ["charm", "love", "beauty", "fairy", "gentle", "kind", "sweet", "romance", "affection"],
         "cyan": ["heal", "healing", "cure", "bless", "blessing", "divine", "restoration", "recovery", "mend"],
         "lime": ["life", "growth", "renewal", "nature", "alive", "vibrant", "fresh", "spring"],
-        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"]
+        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"],
+        "brown": ["earth", "dirt", "mud", "leather", "wood", "bark", "soil", "rustle", "branch", "trunk"],
+        "silver": ["metal", "metallic", "shiny", "gleaming", "moon", "moonlight", "pendant", "coin", "armor"],
+        "wood": ["wooden", "timber", "oak", "pine", "maple", "carved", "grain", "plank", "beam", "log"]
     }
     
     # Apply color formatting to relevant words

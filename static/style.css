@@ -711,7 +711,7 @@ span.pink, span.cyan, span.lime, span.teal {
     }
     
     .menu-toggle.menu-open {
-        left: 200px; /* Touch the sidebar edge (280px - 15px) */
+        left: 180px; /* Touch the sidebar edge (280px - 15px) */
         transform: translateY(-50%); /* Keep vertical centering only */
     }
     
@@ -771,7 +771,7 @@ span.pink, span.cyan, span.lime, span.teal {
     }
     
     .menu-toggle.menu-open {
-        left: calc(100vw - 100px); /* Touch the dynamic sidebar edge */
+        left: calc(100vw - 120px); /* Touch the dynamic sidebar edge */
         transform: translateY(-50%); /* Keep vertical centering only */
     }
     

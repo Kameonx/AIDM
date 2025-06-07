@@ -275,7 +275,7 @@ body {
 .menu-toggle {
     position: fixed; 
     top: 50%; /* Center vertically */
-    left: 5px; /* Moved further left from 15px to 5px */
+    left: 1px; /* Moved further left from 15px to 5px */
     z-index: 1001;
     width: 20px; /* Reduced from 40px to 20px (50% smaller) */
     height: 40px;

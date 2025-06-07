@@ -694,7 +694,7 @@ span.pink, span.cyan, span.lime, span.teal {
         max-height: calc(60dvh - 40px);
     }
     
-    /* Mobile-specific sidebar adjustments */
+    /* Mobile-specific sidebar adjustments - Use overlay instead of content shifting */
     .side-menu {
         width: 280px;
         transform: translate3d(-280px, 0, 0);
@@ -704,9 +704,10 @@ span.pink, span.cyan, span.lime, span.teal {
         transform: translate3d(0, 0, 0);
     }
     
+    /* IMPORTANT: Don't shift content on mobile - use overlay approach */
     .side-menu.open ~ .app-wrapper {
-        transform: translateX(280px);
-        width: calc(100% - 280px); /* Adjust width for mobile sidebar */
+        transform: none; /* Remove the translateX */
+        width: 100%; /* Keep full width */
     }
     
     .menu-toggle.menu-open {
@@ -763,9 +764,10 @@ span.pink, span.cyan, span.lime, span.teal {
         transform: translate3d(0, 0, 0);
     }
     
+    /* IMPORTANT: Don't shift content on very small screens either */
     .side-menu.open ~ .app-wrapper {
-        transform: translateX(calc(100vw - 60px));
-        width: calc(100% - (100vw - 60px)); /* Dynamic width adjustment for small screens */
+        transform: none; /* Remove the translateX */
+        width: 100%; /* Keep full width */
     }
     
     .menu-toggle.menu-open {

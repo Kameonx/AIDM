@@ -44,40 +44,25 @@
   <div class="app-wrapper">
     <div class="chat-container">
       <div class="chat-window" id="chat-window">
-        <div class="chat-window-header">
-          <button id="chat-search-btn" class="chat-search-btn" title="Search chat"><i class="fas fa-search"></i></button>
-          <!-- Search overlay INSIDE chat-window -->
-          <div id="chat-search-overlay" class="chat-search-overlay hidden">
-            <div class="chat-search-box">
-              <input type="text" id="chat-search-input" placeholder="Search chat history..." autocomplete="off">
-              <button id="chat-search-prev" title="Previous match"><i class="fas fa-chevron-up"></i></button>
-              <button id="chat-search-next" title="Next match"><i class="fas fa-chevron-down"></i></button>
-              <button id="chat-search-close" title="Close search"><i class="fas fa-times"></i></button>
-              <span id="chat-search-count" class="chat-search-count"></span>
-            </div>
-          </div>
-        </div>
-        <!-- Only messages go in chat-messages -->
-        <div class="chat-messages" id="chat-messages">
-            {% if chat_history %}
-                {% for message in chat_history %}
-                    {% if message.role == 'assistant' %}
-                    <div class="message dm-message">
-                        <span class="message-sender">DM: </span>
-                        <span class="message-content">{{ message.content|safe }}</span>
-                    </div>
-                    {% endif %}
-                {% endfor %}
-            {% else %}
-                <!-- Fallback welcome message -->
-                <div class="message dm-message">
-                    <span class="message-sender">DM: </span>
-                    <span class="message-content">Hello adventurer! Let's begin your quest. What is your name?</span>
-                </div>
-            {% endif %}
-        </div>
-        
+          <!-- Messages will go here -->
+          {% if chat_history %}
+              {% for message in chat_history %}
+                  {% if message.role == 'assistant' %}
+                  <div class="message dm-message">
+                      <span class="message-sender">DM: </span>
+                      <span class="message-content">{{ message.content|safe }}</span>
+                  </div>
+                  {% endif %}
+              {% endfor %}
+          {% else %}
+              <!-- Fallback welcome message -->
+              <div class="message dm-message">
+                  <span class="message-sender">DM: </span>
+                  <span class="message-content">Hello adventurer! Let's begin your quest. What is your name?</span>
+              </div>
+          {% endif %}
       </div>
+      
       <div class="player-inputs">
           <div class="player-input" id="player1-container">
               <div class="player-label" id="player1-label">Player 1:</div>

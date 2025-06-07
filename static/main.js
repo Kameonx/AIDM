@@ -41,7 +41,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Get DOM elements once
     const chatWindow = document.getElementById('chat-window');
-    const chatMessages = document.getElementById('chat-messages');
     const userInput = document.getElementById('user-input');
     const newGameBtn = document.getElementById('new-game-btn');
     const sendBtn = document.getElementById('send-btn');
@@ -310,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success && data.game_id) {
                 currentGameId = data.game_id;
                 localStorage.setItem('currentGameId', currentGameId);
-                chatMessages.innerHTML = ''; // Clear chat messages only
+                chatWindow.innerHTML = ''; // Clear chat window
                 playerNames = { 1: null }; // Reset player names
                 nextPlayerNumber = 2;
                 dmName = "DM"; // Reset DM name
@@ -361,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function ensureWelcomeMessage() {
-        if (chatMessages.children.length === 0) {
+        if (chatWindow.children.length === 0) {
             addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, true);
             return true; // Indicates welcome message was added
         }
@@ -389,7 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
         debugLog(`initializeHistory: Loaded ${messageHistory.length} states. Current index: ${historyIndex}`);
         
         // Initial save of current (empty or welcome) state if history is empty
-        if (messageHistory.length === 0 && chatMessages.children.length > 0) {
+        if (messageHistory.length === 0 && chatWindow.children.length > 0) {
             debugLog("initializeHistory: Chat window has children, but history is empty. Saving initial state.");
             setTimeout(saveChatState, 100); // Allow DOM to settle
         } else {
@@ -562,7 +561,7 @@ document.addEventListener('DOMContentLoaded', function() {
             debugLog("Invalid messages array:", messages);
             return;
         }
-        chatMessages.innerHTML = '';
+        chatWindow.innerHTML = '';
         messages.forEach(msg => {
             // Skip invisible messages - don't show them in chat
             if (msg.invisible) {
@@ -598,8 +597,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
-        // Always scroll to top on initial load
-        chatMessages.scrollTop = 0;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
     }
     
     function restoreChatState(index) {
@@ -611,7 +609,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const state = messageHistory[index];
         debugLog(`Restoring chat state from history index ${index}. State contains ${state.length} messages.`);
         
-        chatMessages.innerHTML = ''; // Only clear messages
+        chatWindow.innerHTML = ''; // Clear chat window
         
         state.forEach(msg => {
             if (msg.type === 'system') {
@@ -627,8 +625,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Always scroll to top when restoring history
-        chatMessages.scrollTop = 0;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
     function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
@@ -664,8 +661,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         msgDiv.appendChild(contentSpan);
         
-        chatMessages.appendChild(msgDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
         
         if (!skipHistory) {
             setTimeout(saveChatState, 0);
@@ -693,8 +690,8 @@ document.addEventListener('DOMContentLoaded', function() {
         contentSpan.textContent = text;
         msgDiv.appendChild(contentSpan);
         
-        chatMessages.appendChild(msgDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
         
         if (isTemporary) {
             setTimeout(() => msgDiv.remove(), 8000);
@@ -878,8 +875,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         loadingDiv.appendChild(nameSpan);
         loadingDiv.appendChild(responseText);
-        chatMessages.appendChild(loadingDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatWindow.appendChild(loadingDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
         
         return loadingDiv;
     }
@@ -986,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         responseTextElem.innerHTML = processedFullContent + cursorHTML;
                     }
                     
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
                 }
             } catch (e) {
                 debugLog("Error parsing event data:", e);
@@ -1319,151 +1316,6 @@ document.addEventListener('DOMContentLoaded', function() {
         redoBtn.addEventListener('click', redoChat);
     }
 
-    // --- Chat Search Functionality ---
-    // Get search DOM elements
-    const chatSearchBtn = document.getElementById('chat-search-btn');
-    const chatSearchOverlay = document.getElementById('chat-search-overlay');
-    const chatSearchInput = document.getElementById('chat-search-input');
-    const chatSearchPrev = document.getElementById('chat-search-prev');
-    const chatSearchNext = document.getElementById('chat-search-next');
-    const chatSearchClose = document.getElementById('chat-search-close');
-    const chatSearchCount = document.getElementById('chat-search-count');
-
-    let searchMatches = [];
-    let currentMatchIdx = 0;
-
-    function clearSearchHighlights() {
-        const highlights = chatMessages.querySelectorAll('.chat-search-highlight, .chat-search-current');
-        highlights.forEach(span => {
-            const parent = span.parentNode;
-            if (parent) {
-                parent.replaceChild(document.createTextNode(span.textContent), span);
-                parent.normalize();
-            }
-        });
-    }
-
-    function highlightSearch(term) {
-        clearSearchHighlights();
-        searchMatches = [];
-        if (!term || term.length < 1) {
-            chatSearchCount.textContent = '';
-            return;
-        }
-        const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-        const messages = chatMessages.querySelectorAll('.message-content');
-        messages.forEach(msg => {
-            let html = msg.innerHTML;
-            let tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
-            function walk(node) {
-                if (node.nodeType === 3) {
-                    let text = node.nodeValue;
-                    let frag = document.createDocumentFragment();
-                    let lastIdx = 0;
-                    regex.lastIndex = 0;
-                    let m;
-                    while ((m = regex.exec(text)) !== null) {
-                        if (m.index > lastIdx) {
-                            frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
-                        }
-                        let span = document.createElement('span');
-                        span.className = 'chat-search-highlight';
-                        frag.appendChild(span);
-                        span.textContent = m[0];
-                        searchMatches.push({span, msgElem: msg});
-                        lastIdx = m.index + m[0].length;
-                    }
-                    if (lastIdx < text.length) {
-                        frag.appendChild(document.createTextNode(text.slice(lastIdx)));
-                    }
-                    node.parentNode.replaceChild(frag, node);
-                } else if (node.nodeType === 1 && node.childNodes) {
-                    Array.from(node.childNodes).forEach(walk);
-                }
-            }
-            walk(tempDiv);
-            msg.innerHTML = tempDiv.innerHTML;
-        });
-        // Mark first match and set current
-        if (searchMatches.length > 0) {
-            searchMatches.forEach((m, idx) => {
-                m.span.classList.toggle('first-match', idx === 0);
-            });
-            currentMatchIdx = 0;
-            updateCurrentMatch();
-        } else {
-            chatSearchCount.textContent = '0/0';
-        }
-    }
-
-    function updateCurrentMatch() {
-        // Remove previous current
-        chatMessages.querySelectorAll('.chat-search-current').forEach(span => {
-            span.classList.remove('chat-search-current');
-        });
-        if (searchMatches.length === 0) {
-            chatSearchCount.textContent = '0/0';
-            return;
-        }
-        // Clamp index
-        if (currentMatchIdx < 0) currentMatchIdx = searchMatches.length - 1;
-        if (currentMatchIdx >= searchMatches.length) currentMatchIdx = 0;
-        // Mark .first-match on index 0, .chat-search-current on current
-        searchMatches.forEach((m, idx) => {
-            m.span.classList.toggle('first-match', idx === 0);
-            m.span.classList.toggle('chat-search-current', idx === currentMatchIdx);
-        });
-        // Scroll to current match
-        const {span, msgElem} = searchMatches[currentMatchIdx];
-        span.scrollIntoView({behavior: 'smooth', block: 'center'});
-        chatSearchCount.textContent = `${currentMatchIdx + 1}/${searchMatches.length}`;
-    }
-
-    function closeSearch() {
-        clearSearchHighlights();
-        searchMatches = [];
-        currentMatchIdx = 0;
-        chatSearchOverlay.classList.add('hidden');
-        chatSearchInput.value = '';
-        chatSearchCount.textContent = '';
-    }
-
-    if (chatSearchBtn && chatSearchOverlay && chatSearchInput) {
-        chatSearchBtn.addEventListener('click', function(e) {
-            chatSearchOverlay.classList.remove('hidden');
-            chatSearchInput.focus();
-            chatSearchInput.select();
-        });
-        chatSearchClose.addEventListener('click', closeSearch);
-        chatSearchInput.addEventListener('input', function() {
-            highlightSearch(chatSearchInput.value.trim());
-        });
-        chatSearchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                highlightSearch(chatSearchInput.value.trim());
-                updateCurrentMatch();
-            } else if (e.key === 'Escape') {
-                closeSearch();
-            }
-        });
-        chatSearchPrev.addEventListener('click', function() {
-            if (searchMatches.length > 0) {
-                currentMatchIdx = (currentMatchIdx - 1 + searchMatches.length) % searchMatches.length;
-                updateCurrentMatch();
-            }
-        });
-        chatSearchNext.addEventListener('click', function() {
-            if (searchMatches.length > 0) {
-                currentMatchIdx = (currentMatchIdx + 1) % searchMatches.length;
-                updateCurrentMatch();
-            }
-        });
-        chatSearchOverlay.addEventListener('mousedown', function(e) {
-            if (e.target === chatSearchOverlay) closeSearch();
-        });
-    }
-
     // Initial setup - clean and clear flow
     if (currentGameId) {
         debugLog("Restoring session:", currentGameId);
@@ -1482,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', function() {
         messageHistory = [];
         historyIndex = -1;
         localStorage.removeItem('chatHistory');
-        chatMessages.innerHTML = '';
+        chatWindow.innerHTML = '';
         addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
         
         // Set up PlayerManager with loaded names

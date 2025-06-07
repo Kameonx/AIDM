@@ -773,6 +773,11 @@ span.pink, span.cyan, span.lime, span.teal {
         transform: translateY(-50%); /* Keep vertical centering only */
     }
     
+    .side-menu-donation {
+        margin: 10px 8px;
+        padding: 10px;
+    }
+    
     .side-menu-donation p {
         font-size: 0.6em;
     }

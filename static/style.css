@@ -274,7 +274,7 @@ body {
 /* Side menu styles */
 .menu-toggle {
     position: fixed; 
-    top: 15px; 
+    top: 50%; /* Center vertically */
     left: 15px; 
     z-index: 1001;
     width: 20px; /* Reduced from 40px to 20px (50% smaller) */
@@ -284,14 +284,15 @@ body {
     background: #282a36;
     color: #8be9fd;
     cursor: pointer;
-    transition: transform 0.3s ease; /* Use transform instead of left */
+    transition: transform 0.3s ease, left 0.3s ease; /* Add left transition */
+    transform: translateY(-50%); /* Center the button vertically */
     /* Ensure button is not covered by notch */
-    top: max(15px, env(safe-area-inset-top, 15px));
     left: max(15px, env(safe-area-inset-left, 15px));
 }
 
 .menu-toggle.menu-open {
-    transform: translateX(260px); /* Use transform instead of changing left */
+    left: 260px; /* Position exactly at sidebar edge (no gap) */
+    transform: translateY(-50%); /* Keep vertical centering only */
 }
 
 .side-menu {
@@ -709,7 +710,8 @@ span.pink, span.cyan, span.lime, span.teal {
     }
     
     .menu-toggle.menu-open {
-        transform: translateX(280px);
+        left: 280px; /* Position exactly at mobile sidebar edge (no gap) */
+        transform: translateY(-50%); /* Keep vertical centering only */
     }
     
     .side-menu-donation {
@@ -742,7 +744,7 @@ span.pink, span.cyan, span.lime, span.teal {
     
     /* Fix chat window for mobile */
     .chat-window {
-        padding: 15px;
+        padding: 10px; /* Reduced from 15px to give more space */
         /* Account for address bar and safe areas */
         height: calc(100vh - 200px);
         height: calc(100dvh - 200px);
@@ -767,7 +769,8 @@ span.pink, span.cyan, span.lime, span.teal {
     }
     
     .menu-toggle.menu-open {
-        transform: translateX(calc(100vw - 60px));
+        left: calc(100vw - 60px); /* Position exactly at dynamic sidebar edge (no gap) */
+        transform: translateY(-50%); /* Keep vertical centering only */
     }
     
     .side-menu-donation p {

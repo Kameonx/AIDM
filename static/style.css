@@ -275,7 +275,7 @@ body {
 .menu-toggle {
     position: fixed; 
     top: 50%; /* Center vertically */
-    left: 15px; 
+    left: 5px; /* Moved further left from 15px to 5px */
     z-index: 1001;
     width: 20px; /* Reduced from 40px to 20px (50% smaller) */
     height: 40px;
@@ -287,7 +287,7 @@ body {
     transition: transform 0.3s ease, left 0.3s ease; /* Add left transition */
     transform: translateY(-50%); /* Center the button vertically */
     /* Ensure button is not covered by notch */
-    left: max(15px, env(safe-area-inset-left, 15px));
+    left: max(5px, env(safe-area-inset-left, 5px)); /* Updated to use 5px */
 }
 
 .menu-toggle.menu-open {
@@ -693,8 +693,7 @@ span.pink, span.cyan, span.lime, span.teal {
         max-height: calc(60vh - 40px);
         max-height: calc(60dvh - 40px);
     }
-    
-    /* Mobile-specific sidebar adjustments - Use overlay instead of content shifting */
+      /* Mobile-specific sidebar adjustments - Use overlay instead of content shifting */
     .side-menu {
         width: 280px;
         transform: translate3d(-280px, 0, 0);
@@ -711,7 +710,7 @@ span.pink, span.cyan, span.lime, span.teal {
     }
     
     .menu-toggle.menu-open {
-        left: 190px; /* Touch the sidebar edge (280px - 15px) */
+        left: 185px; /* Updated from 190px to 185px to match new closed position */
         transform: translateY(-50%); /* Keep vertical centering only */
     }
     
@@ -769,9 +768,8 @@ span.pink, span.cyan, span.lime, span.teal {
         transform: none; /* Remove the translateX */
         width: 100%; /* Keep full width */
     }
-    
-    .menu-toggle.menu-open {
-        left: calc(100vw - 110px); /* Touch the dynamic sidebar edge */
+      .menu-toggle.menu-open {
+        left: calc(100vw - 115px); /* Updated from 110px to 115px to account for new closed position */
         transform: translateY(-50%); /* Keep vertical centering only */
     }
     

@@ -780,20 +780,41 @@ span.pink, span.cyan, span.lime, span.teal {
         font-size: 16px; /* Ensure readability */
     }
     
-    /* Better input handling on small screens */
+    /* Keep player input controls on a single line */
     .player-input {
-        flex-direction: column;
-        gap: 8px;
+        flex-direction: row; /* Keep elements in a row */
+        gap: 5px; /* Reduce gap between elements */
+        padding: 5px 8px; /* Reduce padding for more space */
+        align-items: center; /* Ensure vertical alignment */
     }
     
     .player-label {
-        min-width: auto;
-        max-width: none;
+        min-width: 60px; /* Smaller minimum width */
+        max-width: 90px; /* Limit maximum width */
+        font-size: 0.9em; /* Smaller font */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex-shrink: 0; /* Prevent shrinking */
+    }
+    
+    .player-input-field {
+        min-width: 0; /* Allow shrinking */
+        padding: 8px; /* Smaller padding */
+        font-size: 14px; /* Smaller font size */
+    }
+    
+    .action-btn {
+        width: 36px; /* Slightly smaller */
+        height: 36px; /* Slightly smaller */
+        min-width: 36px !important; /* Force minimum width */
+        min-height: 36px !important; /* Force minimum height */
+        padding: 0; /* Remove padding */
+        font-size: 1em; /* Slightly smaller font for icons */
     }
     
     .player-buttons-container {
-        align-self: stretch;
-        justify-content: center;
+        flex-shrink: 0; /* Prevent buttons from shrinking */
+        gap: 3px; /* Tighter spacing between buttons */
     }
 }
 

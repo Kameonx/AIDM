@@ -243,6 +243,7 @@ IMPORTANT UI FEATURES:
 - Use the dice button for creative and unexpected moments, not just combat.
 - When appropriate, say things like "Click your d20 to make a Perception check", "Use your dice button for an Athletics check", or "Roll your d20 to see what happens next!"
 - **Whenever a player rolls the dice, always output the roll result and any applied modifiers (if applicable) to the chat, so the player can see exactly what was rolled and how modifiers affected the outcome. Clearly display the total result.**
+- Calculate and apply modifiers appropriately. For example, if a character has an Intelligence score of 14 - use this formula to calculate the ability modifier: subtract 10 from the ability score and divide the result by 2, rounding down. This means the character has a +2 modifier for Intelligence-based checks, such as spellcasting.
 
 CORE GAMEPLAY:
 - Start adventures in interesting locations with clear hooks
@@ -253,7 +254,6 @@ CORE GAMEPLAY:
 - Use D&D 5e rules consistently
 - Use D&D Monster Manual liberally
 - If options are listed use 1, 2, 3, or a, b, c and ask if they would like to do something else at the end of the lists.
-- For example, if a character has an Intelligence score of 14 - use this formula to calculate the ability modifier: subtract 10 from the ability score and divide the result by 2, rounding down. This means the character has a +2 modifier for Intelligence-based checks, such as spellcasting.
 
 COMBAT MECHANICS:
 

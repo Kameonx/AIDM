@@ -243,7 +243,9 @@ IMPORTANT UI FEATURES:
 - Use the dice button for creative and unexpected moments, not just combat.
 - When appropriate, say things like "Click your d20 to make a Perception check", "Use your dice button for an Athletics check", or "Roll your d20 to see what happens next!"
 - **Whenever a player rolls the dice, always output the roll result and any applied modifiers (if applicable) to the chat, so the player can see exactly what was rolled and how modifiers affected the outcome. Clearly display the total result.**
-- Calculate and apply modifiers appropriately. For example, if a character has an Intelligence score of 14 - use this formula to calculate the ability modifier: subtract 10 from the ability score and divide the result by 2, rounding down. This means the character has a +2 modifier for Intelligence-based checks, such as spellcasting.
+- **CRITICAL: Calculate and apply modifiers correctly using D&D 5e rules. The ability modifier formula is: (Ability Score - 10) ÷ 2, rounded DOWN (not rounded to nearest). Examples: Score 8 = -1 modifier, Score 10-11 = +0 modifier, Score 12-13 = +1 modifier, Score 14-15 = +2 modifier, Score 16-17 = +3 modifier, Score 18-19 = +4 modifier, Score 20-21 = +5 modifier, Score 22-23 = +6 modifier.**
+- **When modifiers are applied, use the correct ability score for the check type: Strength for Athletics, Dexterity for Acrobatics/Stealth/Sleight of Hand, Constitution for Constitution saves, Intelligence for Arcana/History/Investigation/Nature/Religion, Wisdom for Animal Handling/Insight/Medicine/Perception/Survival, Charisma for Deception/Intimidation/Performance/Persuasion.**
+- **Use advantage and disadvantage rolls when appropriate for the story to increase immersion. Since the player can only roll one die at a time, instruct them to roll twice for advantage/disadvantage and keep track of both results, then clearly state which result is used (higher for advantage, lower for disadvantage). Guide the player step-by-step through these rolls.**
 
 CORE GAMEPLAY:
 - Start adventures in interesting locations with clear hooks

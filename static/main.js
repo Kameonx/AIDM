@@ -656,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             // Always process content through formatting - even if it appears to be plain text
             const formattedText = Utils.processFormattedText(text);
-            contentSpan.innerHTML = formattedText; // Use innerHTML to render HTML tags
+            contentSpan.innerHTML = formattedText;
         }
         
         msgDiv.appendChild(contentSpan);
@@ -664,8 +664,10 @@ document.addEventListener('DOMContentLoaded', function() {
         chatWindow.appendChild(msgDiv);
         chatWindow.scrollTop = chatWindow.scrollHeight;
         
+        // CRITICAL FIX: Always save chat state for user messages immediately
         if (!skipHistory) {
-            setTimeout(saveChatState, 0);
+            debugLog(`Triggering saveChatState for message from ${sender}`);
+            setTimeout(saveChatState, 100); // Small delay to ensure DOM is updated
         }
         return true;
     }
@@ -1058,20 +1060,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 const contentEl = msg.querySelector('.message-content');
                 
                 // Skip if essential elements are missing (e.g. loading indicators not fully formed)
-                if (!senderEl || !contentEl) return null;
+                if (!senderEl || !contentEl) {
+                    debugLog("Skipping message with missing elements:", msg.outerHTML.substring(0, 100));
+                    return null;
+                }
 
                 const senderText = senderEl.textContent.replace(':', '').trim();
                 // Use innerHTML to preserve HTML formatting instead of textContent
                 const contentHTML = contentEl.innerHTML.trim();
                 const contentText = contentEl.textContent.trim();
                 
-                // Skip empty messages or malformed ones
-                if (!contentText && !(msg.classList.contains('dm-message') && msg.querySelector('.typing'))) return null;
+                // CRITICAL FIX: Don't skip messages with content, even if they have typing class
+                // Only skip completely empty messages or pure loading indicators
+                if (!contentText && !contentHTML) {
+                    debugLog("Skipping empty message:", msg.outerHTML.substring(0, 100));
+                    return null;
+                }
+                
+                // Skip pure loading indicators (typing with no actual content)
+                if (msg.querySelector('.typing') && contentEl.querySelector('.cursor') && !contentText.replace(/\s/g, '')) {
+                    debugLog("Skipping pure loading indicator:", msg.outerHTML.substring(0, 100));
+                    return null;
+                }
 
                 const isSystem = msg.classList.contains('system-message');
                 // Determine if DM by checking sender text against current dmName or if it's a DM loading message
                 const isDM = senderText === dmName || (msg.classList.contains('dm-message') && senderText === "DM");
 
+                debugLog(`Saving message from ${senderText}: ${contentText.substring(0, 30)}...`);
 
                 return {
                     sender: senderText,
@@ -1081,9 +1097,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
             }).filter(msg => msg !== null); 
 
-        if (messages.length === 0 && chatWindow.children.length > 0 && !Array.from(chatWindow.children).every(child => child.classList.contains('temporary-message') || child.querySelector('.typing'))) {
-            debugLog("No valid messages to save, but chat window has non-transient children. This might be an issue. Current children:", chatWindow.innerHTML.substring(0,100));
-            // return; // Potentially skip saving if it seems like an invalid state
+        // CRITICAL FIX: Always save if we have ANY valid messages, even if chat window has other elements
+        if (messages.length === 0) {
+            debugLog("No valid messages to save. Chat window children:", chatWindow.children.length);
+            // Only return early if chat window is truly empty or only has temporary/loading content
+            const hasAnyRealContent = Array.from(chatWindow.children).some(child => 
+                !child.classList.contains('temporary-message') && 
+                !child.querySelector('.typing') &&
+                child.textContent.trim()
+            );
+            
+            if (!hasAnyRealContent) {
+                debugLog("No real content in chat window, skipping save");
+                return;
+            }
         }
         
         // If historyIndex is behind the end of messageHistory, it means we undid and then performed a new action.
@@ -1098,16 +1125,17 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (messageHistory.length > MAX_HISTORY_SIZE) {
             messageHistory.shift();
-            historyIndex--; // Adjust index because an element was removed from the beginning
+            historyIndex--;
         }
         
         try {
             localStorage.setItem('chatHistory', JSON.stringify(messageHistory)); 
+            debugLog(`Chat state saved successfully. New history size: ${messageHistory.length}, New Index: ${historyIndex}`);
         } catch (e) {
             debugLog("Error saving chatHistory to localStorage:", e);
         }
         updateUndoRedoButtons();
-        debugLog(`Chat state saved. New history size: ${messageHistory.length}, New Index: ${historyIndex}. Last saved state:`, messages.map(m => m.content.substring(0,20)).join(" | "));
+        debugLog(`Chat state saved. Messages in this state: ${messages.length}. Last saved messages:`, messages.map(m => `${m.sender}: ${m.content.substring(0,20)}`));
     }
     
     function undoChat() {

@@ -65,28 +65,63 @@ def format_message_content(content):
     if re.search(r'\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):', content):
         return content
     
-    # Apply color formatting for common D&D terms
+    # Apply color formatting for common D&D terms - EXPANDED MAPPINGS
     color_mappings = {
-        "red": ["fire", "flame", "burn", "hot", "dragon", "blood", "anger", "rage", "demon", "devil", "heat", "scorch", "blaze", "inferno"],
-        "blue": ["ice", "cold", "frost", "freeze", "water", "ocean", "sea", "calm", "peace", "sad", "tears", "chill"],
-        "yellow": ["lightning", "light", "bright", "gold", "golden", "divine", "holy", "sacred", "sun", "solar", "electric", "shock"],
-        "green": ["poison", "venom", "toxic", "nature", "forest", "plant", "tree", "sick", "disease", "goblin", "orc"],
-        "purple": ["magic", "magical", "mystic", "mysterious", "enchant", "spell", "arcane", "psychic", "royal", "noble"],
-        "orange": ["explosion", "explode", "adventure", "treasure", "excitement", "energy", "enthusiastic", "warm"],
-        "pink": ["charm", "love", "beauty", "fairy", "gentle", "kind", "sweet", "romance", "affection"],
-        "cyan": ["heal", "healing", "cure", "bless", "blessing", "divine", "restoration", "recovery", "mend"],
-        "lime": ["life", "growth", "renewal", "nature", "alive", "vibrant", "fresh", "spring"],
-        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power"],
-        "brown": ["earth", "dirt", "mud", "leather", "wood", "bark", "soil", "rustle", "branch", "trunk"],
-        "silver": ["metal", "metallic", "shiny", "gleaming", "moon", "moonlight", "pendant", "coin", "armor"],
-        "wood": ["wooden", "timber", "oak", "pine", "maple", "carved", "grain", "plank", "beam", "log"]
+        "red": ["fire", "flame", "burn", "burning", "hot", "dragon", "blood", "bloody", "anger", "rage", "demon", "devil", "heat", "scorch", "blaze", "inferno", "crimson", "damage", "hurt", "wound", "injured", "pain", "strike", "attack", "weapon", "sword", "axe", "combat", "battle", "war", "fight", "aggressive", "fierce", "danger", "dangerous", "threat", "enemy", "foe", "evil", "sinister", "wrath"],
+        "blue": ["ice", "cold", "frost", "freeze", "freezing", "water", "ocean", "sea", "calm", "peace", "peaceful", "sad", "tears", "chill", "chilly", "frozen", "snow", "winter", "arctic", "crystal", "clear", "serene", "tranquil", "cool", "cooling", "wisdom", "knowledge", "intelligent", "smart", "mind", "thought", "think"],
+        "yellow": ["lightning", "light", "bright", "gold", "golden", "divine", "holy", "sacred", "sun", "solar", "electric", "shock", "thunder", "brilliant", "shining", "glow", "glowing", "radiant", "luminous", "dazzling", "gleaming", "sparkling", "energy", "power", "charged", "blessed", "celestial", "heavenly"],
+        "green": ["poison", "venom", "venomous", "toxic", "nature", "forest", "plant", "tree", "sick", "disease", "goblin", "orc", "natural", "wild", "wilderness", "grove", "jungle", "growth", "alive", "living", "life", "heal", "healthy", "cure", "remedy", "herb", "potion", "earth", "ground", "grass", "leaf", "branch"],
+        "purple": ["magic", "magical", "mystic", "mysterious", "enchant", "enchanted", "spell", "arcane", "psychic", "royal", "noble", "regal", "majestic", "power", "powerful", "ancient", "mystical", "sorcery", "wizard", "mage", "witch", "curse", "cursed", "forbidden", "secret", "hidden", "prophecy", "fate", "destiny", "test", "challenge", "steps", "fulfill", "other", "challenges", "tests", "undertake", "accompany", "patrols", "learn", "defenses", "next"],
+        "orange": ["explosion", "explode", "exploding", "adventure", "treasure", "excitement", "energy", "enthusiastic", "warm", "warming", "bright", "vibrant", "lively", "bold", "confident", "brave", "courage", "heroic", "quest", "journey", "explore", "discovery", "find", "search", "hunt", "seek"],
+        "pink": ["charm", "charming", "love", "beauty", "beautiful", "fairy", "gentle", "kind", "sweet", "romance", "affection", "care", "caring", "tender", "soft", "delicate", "graceful", "elegant", "pretty", "lovely", "attractive", "enchanting"],
+        "cyan": ["heal", "healing", "cure", "curing", "bless", "blessing", "divine", "restoration", "recovery", "mend", "mending", "repair", "restore", "health", "healthy", "medicine", "remedy", "salvation", "pure", "clean", "cleanse", "purify"],
+        "lime": ["life", "growth", "renewal", "nature", "alive", "vibrant", "fresh", "spring", "new", "young", "vitality", "vigor", "strength", "strong", "robust", "flourish", "thrive", "bloom", "blossom"],
+        "teal": ["special", "unique", "rare", "unusual", "extraordinary", "magic", "ability", "power", "skill", "talent", "gift", "blessing", "wonder", "marvel", "amazing", "incredible", "remarkable", "exceptional"],
+        "brown": ["earth", "dirt", "mud", "leather", "wood", "wooden", "bark", "soil", "rustle", "branch", "trunk", "stone", "rock", "cave", "mountain", "ground", "dusty", "rough", "rugged", "natural", "organic"],
+        "silver": ["metal", "metallic", "shiny", "gleaming", "moon", "moonlight", "pendant", "coin", "armor", "shield", "blade", "steel", "iron", "chrome", "reflective", "mirror", "bright", "polished", "jewelry", "ring", "necklace"],
+        "wood": ["wooden", "timber", "oak", "pine", "maple", "carved", "grain", "plank", "beam", "log", "staff", "wand", "bow", "club", "handle", "furniture", "table", "chair", "door", "box", "chest"]
     }
     
-    # Apply color formatting to relevant words
+    # Apply color formatting to relevant words - IMPROVED PATTERN MATCHING
     for color, keywords in color_mappings.items():
         for keyword in keywords:
-            # Use word boundaries and case-insensitive matching
-            pattern = r'\b(' + re.escape(keyword) + r'(?:s|ing|ed|er|est)?)\b'
+            # Use more flexible word boundaries and case-insensitive matching
+            # Include common word endings and variations
+            pattern = r'\b(' + re.escape(keyword) + r'(?:s|es|ing|ed|er|est|ly|tion|ness|ment|al|ive|ous|able|ful)?)\b'
+            replacement = f'[{color}:\\1]'
+            content = re.sub(pattern, replacement, content, flags=re.IGNORECASE)
+    
+    # Additional patterns for common D&D phrases and actions
+    additional_patterns = {
+        "purple": [
+            r'\b(saving throw(?:s)?)\b',
+            r'\b(constitution (?:modifier|score))\b',
+            r'\b(total result)\b',
+            r'\b(passes? (?:the )?test)\b',
+            r'\b(guardian of (?:the )?forest)\b',
+            r'\b(voice steady)\b',
+            r'\b(stands firm)\b',
+            r'\b(beam of energy)\b'
+        ],
+        "yellow": [
+            r'\b(rolled? (?:a )?(?:\d+))\b',
+            r'\b(modifier)\b',
+            r'\b(outcome)\b'
+        ],
+        "green": [
+            r'\b(grimaces?)\b',
+            r'\b(strikes? (?:it|him|her))\b',
+            r'\b(forest)\b'
+        ],
+        "cyan": [
+            r'\b(forgiveness?)\b',
+            r'\b(apologize)\b'
+        ]
+    }
+    
+    # Apply additional patterns
+    for color, patterns in additional_patterns.items():
+        for pattern in patterns:
             replacement = f'[{color}:\\1]'
             content = re.sub(pattern, replacement, content, flags=re.IGNORECASE)
     

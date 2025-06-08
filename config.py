@@ -253,6 +253,7 @@ CORE GAMEPLAY:
 - Use D&D 5e rules consistently
 - Use D&D Monster Manual liberally
 - If options are listed use 1, 2, 3, or a, b, c and ask if they would like to do something else at the end of the lists.
+- For example, if a character has an Intelligence score of 14 - use this formula to calculate the ability modifier: subtract 10 from the ability score and divide the result by 2, rounding down. This means the character has a +2 modifier for Intelligence-based checks, such as spellcasting.
 
 COMBAT MECHANICS:
 

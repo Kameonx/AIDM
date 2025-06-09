@@ -319,21 +319,33 @@ body {
 }
 
 .side-menu-header { 
-    padding: 20px; 
+    padding: 16px 10px 12px 10px;
     text-align: center; 
     border-bottom: 1px solid #44475a; 
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    font-size: 1.15em;
+    font-weight: bold;
+    color: #8be9fd;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    display: block;
 }
 
 .side-menu-content { 
-    flex: 1; 
+    flex-shrink: 0;
     padding: 20px; 
     display: flex;
     flex-direction: column; 
     gap: 10px; 
-    overflow-y: auto; /* Enable vertical scrolling for content */
-    overflow-x: hidden;
-    min-height: 0; /* Allow flexbox to shrink for scrolling */
-    max-height: 100vh; /* Prevent overflow beyond viewport */
+    overflow: visible;
+    min-height: auto;
+    max-height: none;
 }
 
 .side-menu-btn {
@@ -373,43 +385,35 @@ body {
 
 /* Improve donation section styling - removing the container */
 .side-menu-donation {
-    margin: 18px 10px;
-    padding: 16px 16px;
+    margin: 12px auto 0 auto;
+    padding: 8px 10px;
     background: #23242b; /* Darker gray for better contrast */
     border-radius: 10px;
     color: #5fa8d3; /* Brighter blue for note text */
     font-style: italic;
     line-height: 1.5;
     box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-    max-height: none;
-    overflow: visible;
-    font-size: 0.95em;
+    font-size: 0.80em; /* Smaller but readable */
     border: 1.5px solid #23242b;
     word-break: break-word;
     display: block;
+    max-width: 92%;
+    flex-shrink: 1;
+    flex-grow: 1;
+    max-height: 90px;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 0;
 }
 
 .side-menu-donation p {
     margin: 0 0 10px 0;
-    font-size: 1em;
+    font-size: 0.90em; /* Smaller but readable */
     color: #5fa8d3; /* Brighter blue for paragraphs */
     word-break: break-word;
     overflow-wrap: break-word;
 }
 
-.side-menu-donation a {
-    color: #5fa8d3; /* Match note color for donate button */
-    text-decoration: underline;
-    font-weight: bold;
-    transition: color 0.2s;
-}
-
-.side-menu-donation a:hover {
-    color: #8be9fd;
-    text-decoration: underline;
-}
-
-/* Sidebar footer styling */
 .side-menu-footer {
     padding: 12px 0 10px 0;
     text-align: center;
@@ -423,40 +427,41 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    margin-top: 0;
 }
 
-/* Responsive adjustments for sidebar note */
+/* Make sure donation and footer are always at the bottom */
+
 @media (max-width: 1024px) {
-    .side-menu-donation {
-        margin: 10px 4px;
+    .side-menu-content {
         padding: 12px 8px;
-        font-size: 0.95em;
     }
-    .side-menu-donation p {
-        font-size: 0.95em;
-    }
+    /* ...existing code... */
 }
 
 @media (max-width: 768px) {
-    .side-menu-donation {
-        margin: 8px 2px;
+    .side-menu-content {
         padding: 10px 4px;
-        font-size: 0.93em;
     }
-    .side-menu-donation p {
-        font-size: 0.93em;
+    .side-menu-donation {
+        font-size: 0.70em;
+        max-height: 60px;
+        padding: 6px 4px;
     }
+    /* ...existing code... */
 }
 
 @media (max-width: 480px) {
-    .side-menu-donation {
-        margin: 6px 1px;
+    .side-menu-content {
         padding: 8px 2px;
-        font-size: 0.90em;
     }
-    .side-menu-donation p {
-        font-size: 0.90em;
+    .side-menu-donation {
+        font-size: 0.65em;
+        max-height: 40px;
+        padding: 4px 2px;
     }
+    /* ...existing code... */
 }
 
 /* Utility classes */
@@ -516,33 +521,24 @@ body {
 .side-menu-donation {
     scrollbar-width: thin;
     scrollbar-color: #61afef #2c2e32;
+    scrollbar-gutter: stable both-edges;
+    overflow-y: overlay;
 }
 
 .side-menu::-webkit-scrollbar,
 .side-menu-content::-webkit-scrollbar,
 .side-menu-donation::-webkit-scrollbar {
     width: 8px;
+    display: none; /* Hide by default */
 }
 
-.side-menu::-webkit-scrollbar-track,
-.side-menu-content::-webkit-scrollbar-track,
-.side-menu-donation::-webkit-scrollbar-track {
-    background: #2c2e32;
-    border-radius: 4px;
-}
-
-.side-menu::-webkit-scrollbar-thumb,
-.side-menu-content::-webkit-scrollbar-thumb,
-.side-menu-donation::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, #61afef, #8be9fd);
-    border-radius: 4px;
-    border: 2px solid #2c2e32;
-}
-
-.side-menu::-webkit-scrollbar-thumb:hover,
-.side-menu-content::-webkit-scrollbar-thumb:hover,
-.side-menu-donation::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(to bottom, #8be9fd, #bd93f9);
+.side-menu:hover::-webkit-scrollbar,
+.side-menu:focus-within::-webkit-scrollbar,
+.side-menu-content:hover::-webkit-scrollbar,
+.side-menu-content:focus-within::-webkit-scrollbar,
+.side-menu-donation:hover::-webkit-scrollbar,
+.side-menu-donation:focus-within::-webkit-scrollbar {
+    display: block; /* Show on hover/focus */
 }
 
 /* Message content formatting with increased font size */

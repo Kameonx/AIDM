@@ -365,32 +365,32 @@ body {
 
 /* Improve donation section styling - removing the container */
 .side-menu-donation {
-    margin: 18px 14px;
-    padding: 16px 18px;
-    background: rgba(68, 71, 90, 0.95); /* Match sidebar color, slightly lighter */
+    margin: 18px 10px;
+    padding: 16px 16px;
+    background: #23242b; /* Darker gray for better contrast */
     border-radius: 10px;
-    color: #f8f8f2;
+    color: #3b5a7a; /* Muted blue for text */
     font-style: italic;
     line-height: 1.5;
     box-shadow: 0 2px 8px rgba(0,0,0,0.10);
     max-height: none;
     overflow: visible;
     font-size: 0.95em;
-    border: 1.5px solid #44475a;
+    border: 1.5px solid #23242b;
     word-break: break-word;
-    /* Ensure it always shows all content */
     display: block;
 }
 
 .side-menu-donation p {
     margin: 0 0 10px 0;
     font-size: 1em;
+    color: #3b5a7a; /* Ensure paragraphs use the same blue */
     word-break: break-word;
     overflow-wrap: break-word;
 }
 
 .side-menu-donation a {
-    color: #bd93f9;
+    color: #8be9fd;
     text-decoration: underline;
     font-weight: bold;
 }
@@ -401,10 +401,10 @@ body {
 }
 
 /* Responsive adjustments for sidebar note */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .side-menu-donation {
-        margin: 10px 6px;
-        padding: 12px 10px;
+        margin: 10px 4px;
+        padding: 12px 8px;
         font-size: 0.95em;
     }
     .side-menu-donation p {
@@ -412,14 +412,25 @@ body {
     }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
     .side-menu-donation {
-        margin: 6px 2px;
-        padding: 8px 4px;
-        font-size: 0.92em;
+        margin: 8px 2px;
+        padding: 10px 4px;
+        font-size: 0.93em;
     }
     .side-menu-donation p {
-        font-size: 0.92em;
+        font-size: 0.93em;
+    }
+}
+
+@media (max-width: 480px) {
+    .side-menu-donation {
+        margin: 6px 1px;
+        padding: 8px 2px;
+        font-size: 0.90em;
+    }
+    .side-menu-donation p {
+        font-size: 0.90em;
     }
 }
 

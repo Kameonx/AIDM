@@ -337,14 +337,15 @@ body {
     display: block;
 }
 
+/* Sidebar content should fill available space and push donation/footer to bottom */
 .side-menu-content { 
-    flex-shrink: 0;
-    padding: 20px; 
+    flex: 1 1 auto;
+    padding: 20px;
     display: flex;
-    flex-direction: column; 
-    gap: 10px; 
+    flex-direction: column;
+    gap: 10px;
     overflow: visible;
-    min-height: auto;
+    min-height: 0;
     max-height: none;
 }
 
@@ -401,32 +402,31 @@ body {
     margin-right: 8px; 
 }
 
-/* Improve donation section styling - removing the container */
+/* Donation section always at the bottom, with space before footer */
 .side-menu-donation {
-    margin: 0 8px 0 8px;
+    margin: 15px 8px 0 8px; /* Top margin for spacing from content */
     padding: 8px 10px;
-    background: #23242b; /* Darker gray for better contrast */
+    background: #23242b;
     border-radius: 10px;
-    color: #5fa8d3; /* Brighter blue for note text */
+    color: #5fa8d3;
     font-style: italic;
     line-height: 1.5;
     box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-    font-size: 0.80em; /* Smaller but readable */
+    font-size: 0.80em;
     border: 1.5px solid #23242b;
     word-break: break-word;
     display: block;
     max-width: 92%;
     min-height: 0;
     overflow-y: auto;
-    margin-bottom: 0;
-    /* Stick to bottom above footer */
-    margin-top: auto;
+    margin-bottom: 12px; /* Add space before footer */
+    flex-shrink: 0;
 }
 
 .side-menu-donation p {
     margin: 0 0 10px 0;
-    font-size: 0.90em; /* Smaller but readable */
-    color: #5fa8d3; /* Brighter blue for paragraphs */
+    font-size: 0.90em;
+    color: #5fa8d3;
     word-break: break-word;
     overflow-wrap: break-word;
 }
@@ -435,7 +435,7 @@ body {
     padding: 12px 0 10px 0;
     text-align: center;
     font-size: .95em;
-    color: #5fa8d3; /* Match note color */
+    color: #5fa8d3;
     border-top: 1px solid #23242b;
     background: transparent;
     white-space: normal;
@@ -449,56 +449,70 @@ body {
 }
 
 /* Make sure donation and footer are always at the bottom */
+.side-menu {
+    display: flex;
+    flex-direction: column;
+}
 
+.side-menu-content {
+    flex: 1 1 auto;
+}
+
+.side-menu-donation,
+.side-menu-footer {
+    flex-shrink: 0;
+}
+
+/* Responsive adjustments */
 @media (max-width: 1024px) {
     .side-menu-content {
+        flex: 1 1 auto;
         padding: 12px 8px;
     }
     .side-menu-btn {
-        width: 100%; /* Keep full width */
-        margin: 0;   /* Remove margins */
+        width: 100%;
+        margin: 0;
     }
     .side-menu-donation {
         max-width: 96%;
-        margin: 0 2px 0 2px;
+        margin: 15px 2px 12px 2px;
     }
-    /* ...existing code... */
 }
 
 @media (max-width: 768px) {
     .side-menu-content {
+        flex: 1 1 auto;
         padding: 10px 4px;
     }
     .side-menu-btn {
-        width: 100%; /* Keep full width */
-        margin: 0;   /* Remove margins */
+        width: 100%;
+        margin: 0;
     }
     .side-menu-donation {
         font-size: 0.70em;
-        max-height: 60px;
+        max-height: none;
         padding: 6px 4px;
         max-width: 98%;
-        margin: 0 1px 0 1px;
+        margin: 15px 1px 12px 1px;
     }
-    /* ...existing code... */
 }
 
 @media (max-width: 480px) {
     .side-menu-content {
+        flex: 1 1 auto;
         padding: 8px 2px;
     }
     .side-menu-btn {
-        width: 100%; /* Keep full width */
-        margin: 0;   /* Remove margins */
+        width: 100%;
+        margin: 0;
     }
     .side-menu-donation {
         font-size: 0.65em;
-        max-height: 40px;
+        max-height: none;
         padding: 4px 2px;
         max-width: 99%;
-        margin: 0;
+        margin: 15px 0 12px 0;
     }
-    /* ...existing code... */
 }
 
 /* Utility classes */

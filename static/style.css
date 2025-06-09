@@ -369,7 +369,7 @@ body {
     padding: 16px 16px;
     background: #23242b; /* Darker gray for better contrast */
     border-radius: 10px;
-    color: #3b5a7a; /* Muted blue for text */
+    color: #5fa8d3; /* Brighter blue for note text */
     font-style: italic;
     line-height: 1.5;
     box-shadow: 0 2px 8px rgba(0,0,0,0.10);
@@ -384,20 +384,37 @@ body {
 .side-menu-donation p {
     margin: 0 0 10px 0;
     font-size: 1em;
-    color: #3b5a7a; /* Ensure paragraphs use the same blue */
+    color: #5fa8d3; /* Brighter blue for paragraphs */
     word-break: break-word;
     overflow-wrap: break-word;
 }
 
 .side-menu-donation a {
-    color: #8be9fd;
+    color: #5fa8d3; /* Match note color for donate button */
     text-decoration: underline;
     font-weight: bold;
+    transition: color 0.2s;
 }
 
 .side-menu-donation a:hover {
-    color: #ffb86c;
+    color: #8be9fd;
     text-decoration: underline;
+}
+
+/* Sidebar footer styling */
+.side-menu-footer {
+    padding: 12px 0 10px 0;
+    text-align: center;
+    font-size: .95em;
+    color: #5fa8d3; /* Match note color */
+    border-top: 1px solid #23242b;
+    background: transparent;
+    white-space: normal;
+    line-height: 1.4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Responsive adjustments for sidebar note */
@@ -482,6 +499,41 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom, #8be9fd, #bd93f9);
+}
+
+/* Match sidebar scrollbar to chat window */
+.side-menu,
+.side-menu-content,
+.side-menu-donation {
+    scrollbar-width: thin;
+    scrollbar-color: #61afef #2c2e32;
+}
+
+.side-menu::-webkit-scrollbar,
+.side-menu-content::-webkit-scrollbar,
+.side-menu-donation::-webkit-scrollbar {
+    width: 8px;
+}
+
+.side-menu::-webkit-scrollbar-track,
+.side-menu-content::-webkit-scrollbar-track,
+.side-menu-donation::-webkit-scrollbar-track {
+    background: #2c2e32;
+    border-radius: 4px;
+}
+
+.side-menu::-webkit-scrollbar-thumb,
+.side-menu-content::-webkit-scrollbar-thumb,
+.side-menu-donation::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, #61afef, #8be9fd);
+    border-radius: 4px;
+    border: 2px solid #2c2e32;
+}
+
+.side-menu::-webkit-scrollbar-thumb:hover,
+.side-menu-content::-webkit-scrollbar-thumb:hover,
+.side-menu-donation::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(to bottom, #8be9fd, #bd93f9);
 }
 

@@ -365,42 +365,62 @@ body {
 
 /* Improve donation section styling - removing the container */
 .side-menu-donation {
-    margin: 15px 10px;
-    padding: 12px;
+    margin: 18px 14px;
+    padding: 16px 18px;
+    background: rgba(68, 71, 90, 0.95); /* Match sidebar color, slightly lighter */
+    border-radius: 10px;
+    color: #f8f8f2;
     font-style: italic;
-    color: #999999;
-    line-height: 1.4;
-    overflow: hidden; /* Remove scrollbar */
-    max-height: none; /* Allow content to expand */
-    /* Removed background-color and border */
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    max-height: none;
+    overflow: visible;
+    font-size: 0.95em;
+    border: 1.5px solid #44475a;
+    word-break: break-word;
+    /* Ensure it always shows all content */
+    display: block;
 }
 
 .side-menu-donation p {
     margin: 0 0 10px 0;
-    font-size: 0.7em; /* Reduced from 0.75em to 0.7em for better mobile fit */
-    word-wrap: break-word; /* Add word wrapping for long words */
-    overflow-wrap: break-word; /* Modern browsers */
-    /* Removed hyphens: auto to prevent hyphenation */
+    font-size: 1em;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .side-menu-donation a {
     color: #bd93f9;
-    text-decoration: none;
+    text-decoration: underline;
     font-weight: bold;
 }
 
 .side-menu-donation a:hover {
+    color: #ffb86c;
     text-decoration: underline;
 }
 
-.side-menu-footer {
-    padding: 10px;
-    text-align: center;
-    font-size: .75em; /* Reduced from .8em to .75em for better fit */
-    color: #6272a4;
-    border-top: 1px solid #44475a;
-    white-space: nowrap; /* Prevent text wrapping */
-    overflow: hidden; /* Hide overflow if text is still too long */
+/* Responsive adjustments for sidebar note */
+@media (max-width: 768px) {
+    .side-menu-donation {
+        margin: 10px 6px;
+        padding: 12px 10px;
+        font-size: 0.95em;
+    }
+    .side-menu-donation p {
+        font-size: 0.95em;
+    }
+}
+
+@media (max-width: 480px) {
+    .side-menu-donation {
+        margin: 6px 2px;
+        padding: 8px 4px;
+        font-size: 0.92em;
+    }
+    .side-menu-donation p {
+        font-size: 0.92em;
+    }
 }
 
 /* Utility classes */

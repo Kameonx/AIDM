@@ -76,6 +76,8 @@ body {
     /* Prevent content from being cut off by address bar */
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+    overflow-y: auto; /* Enable vertical scrolling */
+    overflow-x: hidden;
 }
 
 .side-menu.open { 
@@ -307,6 +309,8 @@ body {
     z-index: 1000;
     display: flex;
     flex-direction: column;
+    overflow-y: auto; /* Enable vertical scrolling */
+    overflow-x: hidden;
 }
 
 .side-menu.open { 
@@ -326,6 +330,10 @@ body {
     display: flex;
     flex-direction: column; 
     gap: 10px; 
+    overflow-y: auto; /* Enable vertical scrolling for content */
+    overflow-x: hidden;
+    min-height: 0; /* Allow flexbox to shrink for scrolling */
+    max-height: 100vh; /* Prevent overflow beyond viewport */
 }
 
 .side-menu-btn {

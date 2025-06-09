@@ -348,6 +348,7 @@ body {
     max-height: none;
 }
 
+/* Make sidebar buttons fill width with small gap */
 .side-menu-btn {
     background: #44475a;
     color: #fff;
@@ -358,6 +359,23 @@ body {
     border-radius: 4px;
     font-family: Consolas, monospace;
     transition: all 0.2s ease;
+    width: 100%; /* Fill full width */
+    margin: 0;    /* Remove margins to fill container */
+    box-sizing: border-box;
+}
+
+/* Undo/Redo container for side-by-side layout */
+.undo-redo-container {
+    display: flex;
+    gap: 6px; /* Small gap between undo and redo buttons */
+    width: 100%;
+}
+
+/* Undo/Redo buttons - half width each */
+.undo-redo-btn {
+    flex: 1; /* Each button takes half the container width */
+    width: auto !important; /* Override the default width */
+    margin: 0 !important; /* Remove any margins */
 }
 
 /* Add color to sidebar buttons */
@@ -385,7 +403,7 @@ body {
 
 /* Improve donation section styling - removing the container */
 .side-menu-donation {
-    margin: 12px auto 0 auto;
+    margin: 0 8px 0 8px;
     padding: 8px 10px;
     background: #23242b; /* Darker gray for better contrast */
     border-radius: 10px;
@@ -398,12 +416,11 @@ body {
     word-break: break-word;
     display: block;
     max-width: 92%;
-    flex-shrink: 1;
-    flex-grow: 1;
-    max-height: 90px;
     min-height: 0;
     overflow-y: auto;
     margin-bottom: 0;
+    /* Stick to bottom above footer */
+    margin-top: auto;
 }
 
 .side-menu-donation p {
@@ -437,6 +454,14 @@ body {
     .side-menu-content {
         padding: 12px 8px;
     }
+    .side-menu-btn {
+        width: 100%; /* Keep full width */
+        margin: 0;   /* Remove margins */
+    }
+    .side-menu-donation {
+        max-width: 96%;
+        margin: 0 2px 0 2px;
+    }
     /* ...existing code... */
 }
 
@@ -444,10 +469,16 @@ body {
     .side-menu-content {
         padding: 10px 4px;
     }
+    .side-menu-btn {
+        width: 100%; /* Keep full width */
+        margin: 0;   /* Remove margins */
+    }
     .side-menu-donation {
         font-size: 0.70em;
         max-height: 60px;
         padding: 6px 4px;
+        max-width: 98%;
+        margin: 0 1px 0 1px;
     }
     /* ...existing code... */
 }
@@ -456,10 +487,16 @@ body {
     .side-menu-content {
         padding: 8px 2px;
     }
+    .side-menu-btn {
+        width: 100%; /* Keep full width */
+        margin: 0;   /* Remove margins */
+    }
     .side-menu-donation {
         font-size: 0.65em;
         max-height: 40px;
         padding: 4px 2px;
+        max-width: 99%;
+        margin: 0;
     }
     /* ...existing code... */
 }

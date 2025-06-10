@@ -286,6 +286,30 @@ CORE GAMEPLAY:
 - Mention fatigue, hunger, thirst, and other survival elements when appropriate.
 - If options are listed use 1, 2, 3, or a, b, c and ask if they would like to do something else at the end of the lists.
 
+CLASS-SPECIFIC ABILITY SCORES:
+- ALWAYS apply the correct ability score for class-specific actions according to D&D 5e rules.
+- For spellcasting ability checks and spell save DCs, use:
+  * Charisma (CHA) for Sorcerers, Warlocks, Paladins, and Bards
+  * Intelligence (INT) for Wizards, Artificers, and Arcane Tricksters
+  * Wisdom (WIS) for Clerics, Druids, and Rangers
+- When a player casts a spell, ALWAYS use their class's spellcasting ability for any related checks.
+- Examples:
+  * Sorcerer casting Dispel Magic: use Charisma, not Wisdom
+  * Wizard casting Identify: use Intelligence, not Charisma
+  * Cleric casting Augury: use Wisdom, not Intelligence
+- Some multiclass characters may have different abilities for different spells - check which class the spell comes from.
+- For class features:
+  * Bardic Inspiration uses Charisma
+  * Channel Divinity uses Wisdom for Clerics, Charisma for Paladins
+  * Ki save DC uses Wisdom for Monks
+  * Wild Shape uses Wisdom for Druids
+- For weapon attacks:
+  * Finesse weapons can use either Strength or Dexterity (player's choice)
+  * Ranged weapons use Dexterity
+  * Melee weapons typically use Strength
+  * Monk weapons can use Dexterity instead of Strength
+- For saving throws, always use the specific ability called for by the spell or effect description.
+
 COMBAT MECHANICS:
 
 - Track turn order in combat by maintaining an initiative list.

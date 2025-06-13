@@ -1140,146 +1140,47 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function undoChat() {
         debugLog(`Undo requested. historyIndex: ${historyIndex}, isGenerating: ${isGenerating}`);
-        if (historyIndex <= 0 || isGenerating) {
-            if(isGenerating) addSystemMessage("Please wait for the current action to complete before undoing.",false,true,true);
+        if (isGenerating) {
+            addSystemMessage("Please wait for the current action to complete before undoing.", false, true, true);
             return;
         }
-        
-        // Store the last player message from the current state for redo
-        const currentState = messageHistory[historyIndex];
-        let undonePlayerMessage = '';
-        let undonePlayerName = '';
-        
-        if (currentState && currentState.length > 0) {
-            // Find the last player message in the current state
-            for (let i = currentState.length - 1; i >= 0; i--) {
-                if (currentState[i].type === 'player') {
-                    // Found a player message, save its details
-                    lastUndoneMessage = currentState[i].content;
-                    undonePlayerMessage = currentState[i].content;
-                    undonePlayerName = currentState[i].sender;
-                    
-                    // Try to determine which player sent this message
-                    const playerMatch = undonePlayerName.match(/Player (\d+)/i);
-                    if (playerMatch && playerMatch[1]) {
-                        lastUndonePlayerNumber = parseInt(playerMatch[1]);
-                    } else {
-                        // Look for the player number in stored playerNames
-                        for (const [num, name] of Object.entries(playerNames)) {
-                            if (name === undonePlayerName) {
-                                lastUndonePlayerNumber = parseInt(num);
-                                break;
-                            }
-                        }
-                        // If still not found, default to player 1
-                        if (!lastUndonePlayerNumber) lastUndonePlayerNumber = 1;
-                    }
-                    
-                    debugLog(`Stored last player message for redo: "${lastUndoneMessage}" from player ${lastUndonePlayerNumber}`);
-                    break;
+
+        if (!currentGameId) {
+            addSystemMessage("No game session found for undo.", false, true, true);
+            return;
+        }
+
+        fetch('/undo_messages', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ game_id: currentGameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                debugLog(`Successfully removed ${data.messages_removed} messages from server history`);
+                // Use updated_history from server to update chat window
+                if (data.updated_history) {
+                    displayMessages(data.updated_history);
+                    // Save the new state to history
+                    setTimeout(saveChatState, 100);
+                    updateUndoRedoButtons();
                 }
+                // Restore the last undone user message to the input box for editing/resending
+                if (data.last_undone_user_message && userInput) {
+                    userInput.value = data.last_undone_user_message;
+                    userInput.focus();
+                }
+                addSystemMessage(`✓ Undid last message (server synchronized)`, false, true, true);
+            } else {
+                addSystemMessage(`Error undoing message: ${data.error}`, false, true, true);
+                debugLog("Server-side undo failed:", data.error);
             }
-        }
-        
-        // CRITICAL FIX: Actually remove messages from server-side chat history
-        if (currentGameId && undonePlayerMessage) {
-            fetch('/undo_messages', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    game_id: currentGameId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    debugLog(`Successfully removed ${data.messages_removed} messages from server history`);
-                    
-                    // IMPROVED CLIENT-SIDE UPDATE: Reload from server to ensure sync
-                    // Instead of just going back one state, reload the actual server state
-                    fetch('/load_history', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ game_id: currentGameId })
-                    })
-                    .then(response => response.json())
-                    .then(historyData => {
-                        if (historyData.history) {
-                            // Clear and reload the chat window with server state
-                            displayMessages(historyData.history);
-                            
-                            // Update client-side history to match server
-                            // Go back one step from current position
-                            if (historyIndex > 0) {
-                                historyIndex--;
-                            }
-                            
-                            // Save the new state to history
-                            setTimeout(saveChatState, 100);
-                            updateUndoRedoButtons();
-                            
-                            // Add visual confirmation
-                            addSystemMessage(`✓ Undid last message (server synchronized)`, false, true, true);
-                        }
-                    })
-                    .catch(error => {
-                        debugLog("Error reloading history after undo:", error);
-                        // Fallback to client-side undo
-                        historyIndex--;
-                        restoreChatState(historyIndex);
-                        updateUndoRedoButtons();
-                        addSystemMessage(`✓ Undid last message (client-side fallback)`, false, true, true);
-                    });
-                    
-                    // Send detailed invisible notification to DM about what was undone
-                    fetch('/chat', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            message: `[SYSTEM OVERRIDE: UNDO OPERATION - SERVER HISTORY UPDATED]
-                            
-Player "${undonePlayerName}" used the UNDO button to permanently remove their previous message: "${undonePlayerMessage}"
-
-CRITICAL INSTRUCTIONS:
-1. This message has been PERMANENTLY DELETED from the conversation history
-2. The message "${undonePlayerMessage.substring(0, 40)}${undonePlayerMessage.length > 40 ? '...' : ''}" NO LONGER EXISTS
-3. Continue the story from BEFORE this deleted message was sent
-4. Do NOT mention or acknowledge the deleted message in any way
-5. Treat the deleted message as if it was NEVER sent
-
-The conversation history has been updated on the server. Please continue as if the deleted message never happened.`,
-                            game_id: currentGameId,
-                            player_number: 'system',
-                            is_system: true,
-                            invisible_to_players: true
-                        })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data && data.message_id) {
-                            debugLog("Detailed undo notification sent to DM - server history updated");
-                        }
-                    }).catch(error => {
-                        debugLog("Error sending undo notification:", error);
-                    });
-                    
-                } else {
-                    addSystemMessage(`Error undoing message: ${data.error}`, false, true, true);
-                    debugLog("Server-side undo failed:", data.error);
-                }
-            })
-            .catch(error => {
-                debugLog("Error calling server undo:", error);
-                addSystemMessage("Error undoing message on server", false, true, true);
-            });
-        } else {
-            // Fallback to client-side only undo if no server context
-            historyIndex--;
-            debugLog(`Undo: historyIndex changed to ${historyIndex}`);
-            restoreChatState(historyIndex);
-            updateUndoRedoButtons();
-            addSystemMessage(`✓ Undid last message (client-side only)`, false, true, true);
-        }
+        })
+        .catch(error => {
+            debugLog("Error calling server undo:", error);
+            addSystemMessage("Error undoing message on server", false, true, true);
+        });
     }
     
     function redoChat() {

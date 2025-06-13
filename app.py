@@ -582,5 +582,54 @@ def set_model():
     
     return jsonify({"success": True, "model_id": model_id})
 
+@app.route('/undo_messages', methods=['POST'])
+def undo_messages():
+    """Remove the last player message and subsequent DM response from server history"""
+    try:
+        user_id = get_user_id()
+        data = request.get_json()
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({"success": False, "error": "No game ID provided"})
+        
+        # Load current chat history
+        chat_history = load_chat_history(user_id, game_id)
+        
+        if len(chat_history) <= 1:  # Don't undo if only welcome message exists
+            return jsonify({"success": False, "error": "Nothing to undo"})
+        
+        # Find and remove the last player message and any subsequent DM responses
+        undone_messages = []
+        original_length = len(chat_history)
+        
+        # Work backwards to find the last player message
+        for i in range(len(chat_history) - 1, -1, -1):
+            message = chat_history[i]
+            
+            # If we find a player message, remove it and everything after it
+            if message.get("role") == "user" and not message.get("is_system", False):
+                # Store what we're removing for the response
+                undone_messages = chat_history[i:]
+                # Remove everything from this player message onwards
+                chat_history = chat_history[:i]
+                break
+        
+        # Save the updated chat history
+        save_chat_history(user_id, chat_history, game_id)
+        
+        app.logger.debug(f"Undo operation: Removed {len(undone_messages)} messages from server history")
+        
+        return jsonify({
+            "success": True,
+            "messages_removed": len(undone_messages),
+            "undone_messages": undone_messages,
+            "new_history_length": len(chat_history)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in /undo_messages: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

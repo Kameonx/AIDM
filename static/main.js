@@ -114,8 +114,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (model.id === selectedModel) {
                 modelItem.classList.add('selected');
             }
-            
-            const traits = model.traits.map(trait => {
+
+            // Remove 'default' trait for llama-3.3-70b only
+            let traits = model.traits;
+            if (model.id === 'llama-3.3-70b') {
+                traits = traits.filter(trait => trait !== 'default');
+            }
+            traits = traits.map(trait => {
                 const traitNames = {
                     'default': 'Default',
                     'most_intelligent': 'Most Intelligent',
@@ -128,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 return traitNames[trait] || trait;
             });
-            
+
             modelItem.innerHTML = `
                 <div class="model-name">${model.name}</div>
                 <div class="model-description">${model.description}</div>

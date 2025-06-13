@@ -54,8 +54,8 @@ body {
 
 /* When sidebar is open, shift the app-wrapper using transform instead of margin */
 .side-menu.open ~ .app-wrapper {
-    transform: translateX(260px); /* Use transform instead of margin-left */
-    width: calc(100% - 260px); /* Reduce width to prevent overflow */
+    transform: translateX(clamp(180px, 28vw, 340px));
+    width: calc(100% - clamp(180px, 28vw, 340px));
 }
 
 /* Improve sidebar for mobile browsers */
@@ -292,30 +292,32 @@ body {
     left: max(5px, env(safe-area-inset-left, 5px)); /* Updated to use 5px */
 }
 
-.menu-toggle.menu-open {
-    left: 260px; /* Position exactly at sidebar edge (no gap) */
-    transform: translateY(-50%); /* Keep vertical centering only */
-}
-
 .side-menu {
     position: fixed; 
     top: 0; 
     left: 0; 
-    width: 260px; 
+    width: 28vw;
+    min-width: 180px;
+    max-width: 340px;
     height: 100%;
     background: #1d1f21; 
-    transform: translateX(-260px);
+    transform: translateX(calc(-28vw));
     transition: transform .3s ease; 
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    overflow-y: auto; /* Enable vertical scrolling */
+    overflow-y: auto; /* Only the main sidebar scrolls */
     overflow-x: hidden;
 }
 
 .side-menu.open { 
     transform: translateX(0);
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3); /* Add shadow for better visibility */
+}
+
+.menu-toggle.menu-open {
+    left: clamp(175px, calc(28vw - 5px), 335px); /* Constrain to match sidebar min/max width */
+    transform: translateY(-50%); /* Keep vertical centering only */
 }
 
 .side-menu-header { 
@@ -344,9 +346,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    overflow: visible;
-    min-height: 0;
+    overflow: visible !important;
+    min-height: 300px; /* Ensure minimum space for buttons */
     max-height: none;
+    flex-shrink: 1; /* Allow shrinking when space is limited */
 }
 
 /* Make sidebar buttons fill width with small gap */
@@ -418,9 +421,11 @@ body {
     display: block;
     max-width: 92%;
     min-height: 0;
-    overflow-y: auto;
+    overflow: visible !important;
     margin-bottom: 12px; /* Add space before footer */
     flex-shrink: 0;
+    position: relative; /* Ensure proper stacking */
+    z-index: 1;
 }
 
 .side-menu-donation p {
@@ -446,6 +451,8 @@ body {
     justify-content: center;
     flex-shrink: 0;
     margin-top: 0;
+    position: relative; /* Ensure proper stacking */
+    z-index: 1;
 }
 
 /* Make sure donation and footer are always at the bottom */
@@ -461,6 +468,39 @@ body {
 .side-menu-donation,
 .side-menu-footer {
     flex-shrink: 0;
+}
+
+/* Mobile-specific responsive rules */
+@media (max-width: 768px) {
+    .side-menu {
+        width: 80vw;
+        min-width: 180px;
+        max-width: 98vw;
+        transform: translateX(calc(-80vw));
+    }
+    .side-menu.open ~ .app-wrapper {
+        transform: none;
+        width: 100%;
+    }
+    .menu-toggle.menu-open {
+        left: calc(80vw - 5px);
+    }
+}
+
+@media (max-width: 480px) {
+    .side-menu {
+        width: 96vw;
+        min-width: 120px;
+        max-width: 99vw;
+        transform: translateX(calc(-96vw));
+    }
+    .side-menu.open ~ .app-wrapper {
+        transform: none;
+        width: 100%;
+    }
+    .menu-toggle.menu-open {
+        left: calc(96vw - 5px);
+    }
 }
 
 /* Responsive adjustments */
@@ -515,6 +555,7 @@ body {
     }
 }
 
+
 /* Utility classes */
 .hidden {
     display: none;
@@ -566,30 +607,21 @@ body {
     background: linear-gradient(to bottom, #8be9fd, #bd93f9);
 }
 
-/* Match sidebar scrollbar to chat window */
-.side-menu,
+/* Hide scrollbars completely for sidebar */
+.side-menu {
+    scrollbar-width: none !important; /* Firefox */
+    -ms-overflow-style: none !important; /* IE/Edge */
+}
+
+.side-menu::-webkit-scrollbar {
+    width: 0 !important;
+    display: none !important;
+}
+
+/* Ensure child elements don't create their own scroll areas */
 .side-menu-content,
 .side-menu-donation {
-    scrollbar-width: thin;
-    scrollbar-color: #61afef #2c2e32;
-    scrollbar-gutter: stable both-edges;
-    overflow-y: overlay;
-}
-
-.side-menu::-webkit-scrollbar,
-.side-menu-content::-webkit-scrollbar,
-.side-menu-donation::-webkit-scrollbar {
-    width: 8px;
-    display: none; /* Hide by default */
-}
-
-.side-menu:hover::-webkit-scrollbar,
-.side-menu:focus-within::-webkit-scrollbar,
-.side-menu-content:hover::-webkit-scrollbar,
-.side-menu-content:focus-within::-webkit-scrollbar,
-.side-menu-donation:hover::-webkit-scrollbar,
-.side-menu-donation:focus-within::-webkit-scrollbar {
-    display: block; /* Show on hover/focus */
+    overflow: visible !important;
 }
 
 /* Message content formatting with increased font size */

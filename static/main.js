@@ -15,10 +15,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let lastSentMessage = "";
     let selectedPlayerElement = null;
     let selectedPlayerNum = null;
-    
-    // Add tracking for last undone message
-    let lastUndoneMessage = null;
-    let lastUndonePlayerNumber = 1;
+      // Add tracking for last undone message - restore from localStorage
+    let lastUndoneMessage = localStorage.getItem('lastUndoneMessage') || null;
+    let lastUndonePlayerNumber = parseInt(localStorage.getItem('lastUndonePlayerNumber')) || 1;
     
     // Add message history tracking for undo/redo
     let messageHistory = [];
@@ -320,11 +319,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 dmName = "DM"; // Reset DM name
                 savePlayerNames();
                 savePlayerState(); // Save reset state
-                
-                // Clear and reset history for the new game
+                  // Clear and reset history for the new game
                 messageHistory = [];
                 historyIndex = -1;
                 localStorage.removeItem('chatHistory'); // Remove old history from storage
+                
+                // Clear undo/redo state for new game
+                clearUndoRedoState();
 
                 // Directly add the welcome message for a new game
                 // skipHistory = false so it becomes the first state in the new history
@@ -558,6 +559,26 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.PlayerManager) {
             window.PlayerManager.playerNames = playerNames;
         }
+    }
+
+    // Undo/Redo persistence functions
+    function saveUndoRedoState() {
+        if (lastUndoneMessage) {
+            localStorage.setItem('lastUndoneMessage', lastUndoneMessage);
+            localStorage.setItem('lastUndonePlayerNumber', lastUndonePlayerNumber.toString());
+        } else {
+            localStorage.removeItem('lastUndoneMessage');
+            localStorage.removeItem('lastUndonePlayerNumber');
+        }
+        debugLog("Undo/Redo state saved:", { lastUndoneMessage, lastUndonePlayerNumber });
+    }
+
+    function clearUndoRedoState() {
+        lastUndoneMessage = null;
+        lastUndonePlayerNumber = 1;
+        localStorage.removeItem('lastUndoneMessage');
+        localStorage.removeItem('lastUndonePlayerNumber');
+        debugLog("Undo/Redo state cleared");
     }
 
     // --- Chat message handling functions ---
@@ -1190,12 +1211,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                     }
                                 }
                             }
-                        }
-                    }
+                        }                    }
                     if (!lastUndonePlayerNumber) lastUndonePlayerNumber = 1; // Default to player 1
                     debugLog(`Stored message for redo: "${lastUndoneMessage}" from player ${lastUndonePlayerNumber}`);
+                    // Save undo/redo state to localStorage
+                    saveUndoRedoState();
                 } else {
                     lastUndoneMessage = null;
+                    // Clear undo/redo state from localStorage
+                    clearUndoRedoState();
                 }
                 addSystemMessage(`✓ Undid last message (server synchronized)`, false, true, true);
             } else {
@@ -1229,13 +1253,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add a system message to explain what's happening
         addSystemMessage(`Redoing your previous action...`, false, false, true);
-        
-        // Send the message using the stored player number
+          // Send the message using the stored player number
         sendMessage(tempInput, lastUndonePlayerNumber || 1);
         
         // Clear the lastUndoneMessage since we've used it
-        lastUndoneMessage = null;
-        lastUndonePlayerNumber = 1;
+        clearUndoRedoState();
         
         // Update the undo/redo buttons
         updateUndoRedoButtons();

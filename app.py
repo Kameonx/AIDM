@@ -584,49 +584,58 @@ def set_model():
 
 @app.route('/undo_messages', methods=['POST'])
 def undo_messages():
-    """Remove the last player message and subsequent DM response from server history"""
+    """Remove the last user message and its following DM response from server history, and return updated chat history."""
     try:
         user_id = get_user_id()
         data = request.get_json()
         game_id = data.get('game_id')
-        
+
         if not game_id:
             return jsonify({"success": False, "error": "No game ID provided"})
-        
+
         # Load current chat history
         chat_history = load_chat_history(user_id, game_id)
-        
+
         if len(chat_history) <= 1:  # Don't undo if only welcome message exists
             return jsonify({"success": False, "error": "Nothing to undo"})
-        
-        # Find and remove the last player message and any subsequent DM responses
-        undone_messages = []
-        original_length = len(chat_history)
-        
-        # Work backwards to find the last player message
+
+        # Work backwards to find the last user message
+        last_user_idx = None
         for i in range(len(chat_history) - 1, -1, -1):
             message = chat_history[i]
-            
-            # If we find a player message, remove it and everything after it
             if message.get("role") == "user" and not message.get("is_system", False):
-                # Store what we're removing for the response
-                undone_messages = chat_history[i:]
-                # Remove everything from this player message onwards
-                chat_history = chat_history[:i]
+                last_user_idx = i
                 break
-        
+
+        if last_user_idx is None:
+            return jsonify({"success": False, "error": "No user message to undo"})
+
+        undone_messages = [chat_history[last_user_idx]]
+        # Remove the user message
+        del chat_history[last_user_idx]
+
+        # If the next message (at the same index, since we just deleted) is an assistant, remove it too
+        if last_user_idx < len(chat_history):
+            next_msg = chat_history[last_user_idx]
+            if next_msg.get("role") == "assistant":
+                undone_messages.append(next_msg)
+                del chat_history[last_user_idx]
+
         # Save the updated chat history
         save_chat_history(user_id, chat_history, game_id)
-        
+
         app.logger.debug(f"Undo operation: Removed {len(undone_messages)} messages from server history")
-        
+
+        # Return the updated chat history and the undone user message for client to restore in input
+        last_undone_user_message = undone_messages[0]["content"] if undone_messages else None
         return jsonify({
             "success": True,
             "messages_removed": len(undone_messages),
             "undone_messages": undone_messages,
-            "new_history_length": len(chat_history)
+            "new_history_length": len(chat_history),
+            "updated_history": chat_history,
+            "last_undone_user_message": last_undone_user_message
         })
-        
     except Exception as e:
         app.logger.error(f"Error in /undo_messages: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500

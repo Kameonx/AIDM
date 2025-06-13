@@ -1,1055 +1,1575 @@
-/* Reset and base styles with mobile fixes */
-* {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-}
-
-html {
-    height: 100%;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    /* Fix for mobile browsers */
-    position: fixed;
-    overflow: hidden;
-    /* Support for notch/safe areas */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-}
-
-body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100vh;
-    /* Use dynamic viewport height for mobile */
-    height: 100dvh;
-    background: #1d1f21;
-    color: #ffffff;
-    font-family: 'Consolas', monospace;
-    display: flex;
-    overflow: hidden;
-    position: fixed;
-    /* Prevent iOS Safari bounce */
-    -webkit-overflow-scrolling: touch;
-    /* Prevent zoom on input focus */
-    -webkit-text-size-adjust: 100%;
-}
-
-/* New structured layout with central content */
-.app-wrapper {
-    width: 100%;
-    height: 100vh;
-    height: 100dvh; /* Dynamic viewport height for mobile */
-    display: flex;
-    justify-content: center;
-    background: #282a36;
-    overflow: hidden;
-    transition: transform 0.3s ease, width 0.3s ease; /* Add width to transition */
-    position: relative;
-    z-index: 1;
-}
-
-/* When sidebar is open, shift the app-wrapper using transform instead of margin */
-.side-menu.open ~ .app-wrapper {
-    transform: translateX(clamp(180px, 28vw, 340px));
-    width: calc(100% - clamp(180px, 28vw, 340px));
-}
-
-/* Improve sidebar for mobile browsers */
-.side-menu {
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    width: 260px; 
-    height: 100vh;
-    height: 100dvh; /* Dynamic viewport height */
-    background: #1d1f21; 
-    /* Use translate3d for hardware acceleration on mobile */
-    transform: translate3d(-260px, 0, 0);
-    transition: transform 0.3s ease;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    /* Prevent content from being cut off by address bar */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    overflow-y: auto; /* Enable vertical scrolling */
-    overflow-x: hidden;
-}
-
-.side-menu.open { 
-    transform: translate3d(0, 0, 0);
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-}
-
-/* Chat container styling */
-.chat-container {
-    width: 100%;
-    max-width: 1600px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    box-sizing: border-box;
-    /* Ensure container doesn't get cut off by address bar */
-    padding-top: max(20px, env(safe-area-inset-top));
-    padding-bottom: max(20px, env(safe-area-inset-bottom));
-    transition: width 0.3s ease, max-width 0.3s ease; /* Smooth transitions for width changes */
-}
-
-/* Chat window styling */
-.chat-window {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden; /* Prevent horizontal overflow */
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start; /* Left-align messages */
-    padding: 20px;
-    margin-bottom: 15px;
-    border: 2px solid #61afef;
-    border-radius: 8px;
-    background: rgba(30, 31, 40, 0.8);
-    word-wrap: break-word; /* Add word wrapping to chat window */
-    transition: width 0.3s ease; /* Add smooth transition for width changes */
-}
-
-/* Improve alignment between chat window and player inputs */
-.chat-window,
-.player-inputs {
-    width: 100%;
-    max-width: 1600px;
-    margin: 0 auto; /* Centers both elements horizontally */
-    box-sizing: border-box; /* Ensure consistent box model */
-}
-
-.player-input {
-    /* Remove width:100% which was causing overflow */
-    box-sizing: border-box;
-    margin: 0 auto;
-    border-radius: 8px;
-    background: rgba(40, 42, 54, 0.5);
-    padding: 8px;
-    max-width: 1600px; /* Match the chat container width */
-}
-
-.player-inputs {
-    padding: 0 22px; /* Adjust horizontal padding to align with chat-window content (20px padding + 2px border) */
-}
-
-/* Message styling */
-.message {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 12px;
-    text-align: left;
-    border-radius: 8px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    max-width: 1400px; /* Give messages some breathing room */
-    margin: 12px auto; /* Center messages horizontally */
-    word-wrap: break-word; /* Add word wrapping */
-    overflow-wrap: break-word; /* Modern browsers */
-    hyphens: auto; /* Enable hyphenation */
-    box-sizing: border-box; /* Include padding in width calculation */
-}
-
-.message-sender {
-    font-weight: bold;
-    margin-right: 5px;
-    font-size: 18px; /* Increased from default (likely around 13-14px) */
-}
-
-.dm-message {
-    background: #333545;
-    color: #bd93f9;
-    max-width: 90%;
-    align-self: flex-start;
-}
-
-.player-message {
-    background: #2b3933;
-    color: #50fa7b;
-    max-width: 90%;
-    align-self: flex-end;
-    margin-left: auto;
-}
-
-.system-message {
-    background: transparent;
-    border: none;
-    color: #6272a4;
-    font-style: italic;
-    padding: 5px 0;
-    box-shadow: none;
-}
-
-/* Input area styling */
-.player-inputs {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.player-input {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    width: 100%;
-    border-radius: 8px;
-    background: rgba(40, 42, 54, 0.5);
-    padding: 8px;
-    max-width: 1200px; /* Increased from 600px to 1200px */
-    cursor: pointer; /* Added for visual feedback */
-}
-
-.player-label {
-    width: auto;               /* Allow label to grow as needed */
-    min-width: 80px;           /* Minimum width for short names */
-    max-width: 220px;          /* Prevent label from being too wide */
-    white-space: nowrap;       /* Prevent wrapping */
-    overflow: hidden;          /* Hide overflowed text */
-    text-overflow: ellipsis;   /* Show ellipsis if too long */
-    display: block;            /* Use block to avoid flex shrinking issues */
-    font-weight: bold;
-    color: #50fa7b;
-    /* Remove flex properties that cause shrinking/cropping */
-}
-
-.player-input-field {
-    flex: 1;
-    min-width: 0;
-    padding: 10px;
-    background: #2c2e32;
-    border: 2px solid #44475a;
-    color: #ffffff;
-    border-radius: 4px;
-    max-width: 800px; /* Doubled from 400px */
-}
-
-/* Buttons styling */
-.player-buttons-container {
-    display: flex;
-    gap: 5px;
-    flex-shrink: 0;
-}
-
-.action-btn {
-    padding: 10px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    color: white;
-    transition: all 0.2s ease;
-}
-
-.send-btn {
-    background-color: #61afef;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2em;
-}
-
-.dice-btn {
-    background-color: #bd93f9;
-    color: #282a36;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2em;
-}
-
-.dice-btn:hover, .send-btn:hover {
-    filter: brightness(1.1);
-    transform: scale(1.05);
-}
-
-/* Side menu styles */
-.menu-toggle {
-    position: fixed; 
-    top: 50%; /* Center vertically */
-    left: 1px; /* Moved further left from 15px to 5px */
-    z-index: 1001;
-    width: 20px; /* Reduced from 40px to 20px (50% smaller) */
-    height: 40px;
-    border: none;
-    border-radius: 4px;
-    background: #282a36;
-    color: #8be9fd;
-    cursor: pointer;
-    transition: transform 0.3s ease, left 0.3s ease; /* Add left transition */
-    transform: translateY(-50%); /* Center the button vertically */
-    /* Ensure button is not covered by notch */
-    left: max(5px, env(safe-area-inset-left, 5px)); /* Updated to use 5px */
-}
-
-.side-menu {
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    width: 28vw;
-    min-width: 180px;
-    max-width: 340px;
-    height: 100%;
-    background: #1d1f21; 
-    transform: translateX(calc(-28vw));
-    transition: transform .3s ease; 
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto; /* Only the main sidebar scrolls */
-    overflow-x: hidden;
-}
-
-.side-menu.open { 
-    transform: translateX(0);
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3); /* Add shadow for better visibility */
-}
-
-.menu-toggle.menu-open {
-    left: clamp(175px, calc(28vw - 5px), 335px); /* Constrain to match sidebar min/max width */
-    transform: translateY(-50%); /* Keep vertical centering only */
-}
-
-.side-menu-header { 
-    padding: 16px 10px 12px 10px;
-    text-align: center; 
-    border-bottom: 1px solid #44475a; 
-    flex-shrink: 0;
-}
-
-.sidebar-title {
-    font-size: 1.15em;
-    font-weight: bold;
-    color: #8be9fd;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    letter-spacing: 0.01em;
-    line-height: 1.2;
-    display: block;
-}
-
-/* Sidebar content should fill available space and push donation/footer to bottom */
-.side-menu-content { 
-    flex: 1 1 auto;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    overflow: visible !important;
-    min-height: 300px; /* Ensure minimum space for buttons */
-    max-height: none;
-    flex-shrink: 1; /* Allow shrinking when space is limited */
-}
-
-/* Make sidebar buttons fill width with small gap */
-.side-menu-btn {
-    background: #44475a;
-    color: #fff;
-    border: none;
-    padding: 10px;
-    text-align: left;
-    cursor: pointer;
-    border-radius: 4px;
-    font-family: Consolas, monospace;
-    transition: all 0.2s ease;
-    width: 100%; /* Fill full width */
-    margin: 0;    /* Remove margins to fill container */
-    box-sizing: border-box;
-}
-
-/* Undo/Redo container for side-by-side layout */
-.undo-redo-container {
-    display: flex;
-    gap: 6px; /* Small gap between undo and redo buttons */
-    width: 100%;
-}
-
-/* Undo/Redo buttons - half width each */
-.undo-redo-btn {
-    flex: 1; /* Each button takes half the container width */
-    width: auto !important; /* Override the default width */
-    margin: 0 !important; /* Remove any margins */
-}
-
-/* Add color to sidebar buttons */
-#new-game-btn { background-color: #50fa7b; color: #282a36; }
-#copy-chat-btn { background-color: #8be9fd; color: #282a36; }
-#add-player-btn { background-color: #bd93f9; color: #282a36; }
-#remove-player-btn { background-color: #ff5555; color: #f8f8f2; }
-#undoBtn { background-color: #ff79c6; color: #282a36; }
-#redoBtn { background-color: #ffb86c; color: #282a36; }
-#ai-models-btn { background-color: #8be9fd; color: #282a36; }
-
-.side-menu-btn:hover {
-    transform: translateY(-2px);
-    filter: brightness(1.1);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-.side-menu-btn:active {
-    transform: translateY(1px);
-}
-
-.side-menu-btn i { 
-    margin-right: 8px; 
-}
-
-/* Donation section always at the bottom, with space before footer */
-.side-menu-donation {
-    margin: 15px 8px 0 8px; /* Top margin for spacing from content */
-    padding: 8px 10px;
-    background: #23242b;
-    border-radius: 10px;
-    color: #5fa8d3;
-    font-style: italic;
-    line-height: 1.5;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-    font-size: 0.80em;
-    border: 1.5px solid #23242b;
-    word-break: break-word;
-    display: block;
-    max-width: 92%;
-    min-height: 0;
-    overflow: visible !important;
-    margin-bottom: 12px; /* Add space before footer */
-    flex-shrink: 0;
-    position: relative; /* Ensure proper stacking */
-    z-index: 1;
-}
-
-.side-menu-donation p {
-    margin: 0 0 10px 0;
-    font-size: 0.90em;
-    color: #5fa8d3;
-    word-break: break-word;
-    overflow-wrap: break-word;
-}
-
-.side-menu-footer {
-    padding: 12px 0 10px 0;
-    text-align: center;
-    font-size: .95em;
-    color: #5fa8d3;
-    border-top: 1px solid #23242b;
-    background: transparent;
-    white-space: normal;
-    line-height: 1.4;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    margin-top: 0;
-    position: relative; /* Ensure proper stacking */
-    z-index: 1;
-}
-
-/* Make sure donation and footer are always at the bottom */
-.side-menu {
-    display: flex;
-    flex-direction: column;
-}
-
-.side-menu-content {
-    flex: 1 1 auto;
-}
-
-.side-menu-donation,
-.side-menu-footer {
-    flex-shrink: 0;
-}
-
-/* Mobile-specific responsive rules */
-@media (max-width: 768px) {
-    .side-menu {
-        width: 80vw;
-        min-width: 180px;
-        max-width: 98vw;
-        transform: translateX(calc(-80vw));
-    }
-    .side-menu.open ~ .app-wrapper {
-        transform: none;
-        width: 100%;
-    }
-    .menu-toggle.menu-open {
-        left: calc(80vw - 5px);
-    }
-}
-
-@media (max-width: 480px) {
-    .side-menu {
-        width: 96vw;
-        min-width: 120px;
-        max-width: 99vw;
-        transform: translateX(calc(-96vw));
-    }
-    .side-menu.open ~ .app-wrapper {
-        transform: none;
-        width: 100%;
-    }
-    .menu-toggle.menu-open {
-        left: calc(96vw - 5px);
-    }
-}
-
-/* Responsive adjustments */
-@media (max-width: 1024px) {
-    .side-menu-content {
-        flex: 1 1 auto;
-        padding: 12px 8px;
-    }
-    .side-menu-btn {
-        width: 100%;
-        margin: 0;
-    }
-    .side-menu-donation {
-        max-width: 96%;
-        margin: 15px 2px 12px 2px;
-    }
-}
-
-@media (max-width: 768px) {
-    .side-menu-content {
-        flex: 1 1 auto;
-        padding: 10px 4px;
-    }
-    .side-menu-btn {
-        width: 100%;
-        margin: 0;
-    }
-    .side-menu-donation {
-        font-size: 0.70em;
-        max-height: none;
-        padding: 6px 4px;
-        max-width: 98%;
-        margin: 15px 1px 12px 1px;
-    }
-}
-
-@media (max-width: 480px) {
-    .side-menu-content {
-        flex: 1 1 auto;
-        padding: 8px 2px;
-    }
-    .side-menu-btn {
-        width: 100%;
-        margin: 0;
-    }
-    .side-menu-donation {
-        font-size: 0.65em;
-        max-height: none;
-        padding: 4px 2px;
-        max-width: 99%;
-        margin: 15px 0 12px 0;
-    }
-}
-
-
-/* Utility classes */
-.hidden {
-    display: none;
-}
-
-.selected {
-    border-left: 4px solid #ff79c6;
-    background-color: rgba(255, 121, 198, 0.1);
-}
-
-.typing {
-    font-style: italic;
-    opacity: 0.7;
-}
-
-.cursor {
-    display: inline-block;
-    width: 8px;
-    height: 16px;
-    background-color: #bd93f9;
-    animation: blink 1s infinite;
-    margin-left: 2px;
-    vertical-align: middle;
-}
-
-/* Animations */
-@keyframes blink {
-    0%, 100% { opacity: 0; }
-    50% { opacity: 1; }
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #2c2e32;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, #61afef, #8be9fd);
-    border-radius: 4px;
-    border: 2px solid #2c2e32;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(to bottom, #8be9fd, #bd93f9);
-}
-
-/* Hide scrollbars completely for sidebar */
-.side-menu {
-    scrollbar-width: none !important; /* Firefox */
-    -ms-overflow-style: none !important; /* IE/Edge */
-}
-
-.side-menu::-webkit-scrollbar {
-    width: 0 !important;
-    display: none !important;
-}
-
-/* Ensure child elements don't create their own scroll areas */
-.side-menu-content,
-.side-menu-donation {
-    overflow: visible !important;
-}
-
-/* Message content formatting with increased font size */
-.message-content {
-    white-space: pre-wrap;
-    line-height: 1.5;
-    font-size: 18px; /* Increased from default (likely around 13-14px) */
-    word-wrap: break-word; /* Ensure long words break */
-    overflow-wrap: break-word; /* Modern browsers */
-    max-width: 100%; /* Ensure content doesn't exceed container */
-    display: inline-block; /* Allow proper width calculation */
-    width: calc(100% - 10px); /* Account for any margins */
-}
-
-/* Color formatting styles - Replace old spell effect styling */
-span.red {
-    color: #ff5555;
-    text-shadow: 0 0 5px rgba(255, 85, 85, 0.5);
-    font-weight: bold;
-}
-
-span.green {
-    color: #50fa7b;
-    text-shadow: 0 0 5px rgba(80, 250, 123, 0.5);
-    font-weight: bold;
-}
-
-span.blue {
-    color: #8be9fd;
-    text-shadow: 0 0 5px rgba(139, 233, 253, 0.5);
-    font-weight: bold;
-}
-
-span.yellow {
-    color: #f1fa8c;
-    text-shadow: 0 0 5px rgba(241, 250, 140, 0.5);
-    font-weight: bold;
-}
-
-span.purple {
-    color: #bd93f9;
-    text-shadow: 0 0 5px rgba(189, 147, 249, 0.5);
-    font-weight: bold;
-}
-
-span.orange {
-    color: #ffb86c;
-    text-shadow: 0 0 5px rgba(255, 184, 108, 0.5);
-    font-weight: bold;
-}
-
-span.pink {
-    color: #ff79c6;
-    text-shadow: 0 0 5px rgba(255, 121, 198, 0.5);
-    font-weight: bold;
-}
-
-span.cyan {
-    color: #8be9fd;
-    text-shadow: 0 0 5px rgba(139, 233, 253, 0.5);
-    font-weight: bold;
-}
-
-span.lime {
-    color: #50fa7b;
-    text-shadow: 0 0 8px rgba(80, 250, 123, 0.7);
-    font-weight: bold;
-}
-
-span.teal {
-    color: #44ffff;
-    text-shadow: 0 0 5px rgba(68, 255, 255, 0.5);
-    font-weight: bold;
-}
-
-span.brown {
-    color: #d2691e;
-    text-shadow: 0 0 5px rgba(210, 105, 30, 0.5);
-    font-weight: bold;
-}
-
-span.silver {
-    color: #c0c0c0;
-    text-shadow: 0 0 5px rgba(192, 192, 192, 0.5);
-    font-weight: bold;
-}
-
-span.wood {
-    color: #deb887;
-    text-shadow: 0 0 5px rgba(222, 184, 135, 0.5);
-    font-weight: bold;
-}
-
-/* Add word wrapping to color spans */
-span.red, span.green, span.blue, span.yellow, span.purple, span.orange, 
-span.pink, span.cyan, span.lime, span.teal, span.brown, span.silver, span.wood {
-    word-wrap: break-word !important;
-    overflow-wrap: break-word !important;
-}
-
-/* Modal styles */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 2000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.modal.hidden {
-    display: none;
-}
-
-.modal-content {
-    background: #282a36;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
-    overflow: hidden;
-    border: 2px solid #44475a;
-}
-
-.modal-header {
-    padding: 20px;
-    border-bottom: 1px solid #44475a;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-header h3 {
-    margin: 0;
-    color: #f8f8f2;
-}
-
-.close-btn {
-    background: none;
-    border: none;
-    color: #f8f8f2;
-    font-size: 24px;
-    cursor: pointer;
-    padding: 0;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.close-btn:hover {
-    color: #ff5555;
-}
-
-.modal-body {
-    padding: 20px;
-    max-height: 60vh;
-    overflow-y: auto;
-}
-
-.current-model {
-    margin-bottom: 20px;
-    padding: 15px;
-    background: #44475a;
-    border-radius: 4px;
-    color: #f8f8f2;
-}
-
-.current-model strong {
-    color: #50fa7b;
-}
-
-#current-model-name {
-    color: #8be9fd;
-    font-weight: bold;
-}
-
-.model-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.model-item {
-    padding: 15px;
-    background: #44475a;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: 2px solid transparent;
-}
-
-.model-item:hover {
-    background: #6272a4;
-    transform: translateY(-1px);
-}
-
-.model-item.selected {
-    border-color: #50fa7b;
-    background: rgba(80, 250, 123, 0.1);
-}
-
-.model-name {
-    font-weight: bold;
-    color: #f8f8f2;
-    margin-bottom: 5px;
-}
-
-.model-description {
-    font-size: 0.9em;
-    color: #6272a4;
-    margin-bottom: 8px;
-}
-
-.model-pricing {
-    font-size: 0.8em;
-    color: #ffb86c;
-}
-
-.model-traits {
-    margin-top: 8px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-}
-
-.trait-tag {
-    background: #bd93f9;
-    color: #282a36;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.7em;
-    font-weight: bold;
-}
-
-/* Mobile adjustments for modal */
-@media (max-width: 768px) {
-    .modal-content {
-        width: 95%;
-        margin: 10px;
-        /* Ensure modal is not covered by address bar */
-        max-height: calc(100vh - 40px);
-        max-height: calc(100dvh - 40px);
+document.addEventListener('DOMContentLoaded', function() {
+    // Debug setup
+    const DEBUG = true;
+    function debugLog(...args) {
+        if (DEBUG) console.log(...args);
     }
     
-    .modal-header {
-        padding: 15px;
+    debugLog("=== TOP-LEVEL DOMCONTENTLOADED STARTED ===");
+    
+    // Core variables
+    let isGenerating = false;
+    let seenMessages = new Set();
+    let dmName = "DM"; 
+    let isMultiplayerActive = false;
+    let lastSentMessage = "";
+    let selectedPlayerElement = null;
+    let selectedPlayerNum = null;
+    
+    // Add tracking for last undone message
+    let lastUndoneMessage = null;
+    let lastUndonePlayerNumber = 1;
+    
+    // Add message history tracking for undo/redo
+    let messageHistory = [];
+    let historyIndex = -1;
+    const MAX_HISTORY_SIZE = 50;
+    
+    // Session data - ensure we get from localStorage first
+    let currentGameId = localStorage.getItem('currentGameId');
+    debugLog("Initial gameId from localStorage:", currentGameId);
+    
+    // Player tracking - IMPORTANT: Use let instead of const to allow reassignment
+    let playerNames = Utils.loadPlayerNames();
+    debugLog("Loaded player names from localStorage:", playerNames);
+    
+    // Track processed messages to avoid duplicates
+    const processedMessageIds = new Set();
+    
+    // Keep track of last message from each player to avoid duplicates
+    const lastPlayerMessages = {};
+    
+    // Get DOM elements once
+    const chatWindow = document.getElementById('chat-window');
+    const userInput = document.getElementById('user-input');
+    const newGameBtn = document.getElementById('new-game-btn');
+    const sendBtn = document.getElementById('send-btn');
+    const diceBtn = document.getElementById('dice-player1-btn');
+    const copyChatBtn = document.getElementById('copy-chat-btn');
+    const addPlayerBtn = document.getElementById('add-player-btn');
+    const removePlayerBtn = document.getElementById('remove-player-btn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const additionalPlayersContainer = document.getElementById('additional-players');
+    const menuToggleBtn = document.getElementById('menu-toggle');
+    const sideMenu = document.getElementById('side-menu');
+    const player1Container = document.getElementById('player1-container');
+    const aiModelsBtn = document.getElementById('ai-models-btn');
+    const aiModelsModal = document.getElementById('ai-models-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modelList = document.getElementById('model-list');
+    const currentModelName = document.getElementById('current-model-name');
+
+    // AI Models functionality - Fix model persistence
+    let availableModels = [];
+    // Load selected model from localStorage first, then fall back to default
+    let selectedModel = localStorage.getItem('selectedModel') || 'venice-uncensored';
+
+    function loadAvailableModels() {
+        fetch('/get_models')
+        .then(response => response.json())
+        .then(data => {
+            if (data.models) {
+                availableModels = data.models;
+                populateModelList();
+                updateCurrentModelDisplay();
+                
+                // IMPORTANT: Set the model on the server after loading models
+                // This ensures the server knows which model to use on page refresh
+                setServerModel(selectedModel);
+            }
+        })
+        .catch(error => {
+            debugLog("Error loading models:", error);
+            addSystemMessage("Error loading AI models.", false, false, true);
+        });
+    }
+
+    function setServerModel(modelId) {
+        // Set the model on the server without showing UI feedback
+        fetch('/set_model', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({model_id: modelId})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                debugLog("Server model set to:", modelId);
+            } else {
+                debugLog("Error setting server model:", data.error);
+            }
+        })
+        .catch(error => {
+            debugLog("Error setting server model:", error);
+        });
+    }
+
+    function populateModelList() {
+        modelList.innerHTML = '';
+        
+        availableModels.forEach(model => {
+            const modelItem = document.createElement('div');
+            modelItem.className = 'model-item';
+            if (model.id === selectedModel) {
+                modelItem.classList.add('selected');
+            }
+
+            // Remove 'default' trait for llama-3.3-70b only
+            let traits = model.traits;
+            if (model.id === 'llama-3.3-70b') {
+                traits = traits.filter(trait => trait !== 'default');
+            }
+            traits = traits.map(trait => {
+                const traitNames = {
+                    'default': 'Default',
+                    'most_intelligent': 'Most Intelligent',
+                    'most_uncensored': 'Uncensored',
+                    'fastest': 'Fastest',
+                    'default_reasoning': 'Reasoning',
+                    'default_code': 'Code Expert',
+                    'default_vision': 'Vision',
+                    'function_calling_default': 'Function Calling'
+                };
+                return traitNames[trait] || trait;
+            });
+
+            modelItem.innerHTML = `
+                <div class="model-name">${model.name}</div>
+                <div class="model-description">${model.description}</div>
+                ${traits.length > 0 ? `<div class="model-traits">${traits.map(trait => `<span class="trait-tag">${trait}</span>`).join('')}</div>` : ''}
+            `;
+            
+            modelItem.addEventListener('click', () => selectModel(model.id));
+            modelList.appendChild(modelItem);
+        });
+    }
+
+    function selectModel(modelId) {
+        selectedModel = modelId;
+        localStorage.setItem('selectedModel', modelId);
+        
+        // Update server
+        fetch('/set_model', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({model_id: modelId})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                debugLog("Model changed to:", modelId);
+                updateCurrentModelDisplay();
+                populateModelList(); // Refresh to show new selection
+                
+                // Add system message about model change
+                const modelName = availableModels.find(m => m.id === modelId)?.name || modelId;
+                addSystemMessage(`🤖 AI Model changed to: ${modelName}`, false, false, true);
+                
+                // Close modal
+                aiModelsModal.classList.add('hidden');
+            } else {
+                addSystemMessage("Error changing AI model: " + (data.error || "Unknown error"), false, false, true);
+                debugLog("Server error changing model:", data);
+            }
+        })
+        .catch(error => {
+            debugLog("Error setting model:", error);
+            addSystemMessage("Error changing AI model: " + error.message, false, false, true);
+        });
+    }
+
+    function updateCurrentModelDisplay() {
+        const model = availableModels.find(m => m.id === selectedModel);
+        if (model && currentModelName) {
+            currentModelName.textContent = model.name;
+        }
+    }
+
+    // Initialize the PlayerManager module
+    const playerResult = PlayerManager.setup({
+        playerNames: playerNames,
+        nextPlayerNumber: 2,
+        additionalPlayersContainer: additionalPlayersContainer,
+        removePlayerBtn: removePlayerBtn,
+        currentGameId: currentGameId,
+        debugLog: debugLog,
+        addSystemMessage: addSystemMessage,
+        createLoadingDivForDM: createLoadingDivForDM, 
+        sendStreamRequest: sendStreamRequest,
+        savePlayerNames: savePlayerNames,
+        savePlayerState: savePlayerState
+    });
+    
+    // Set the nextPlayerNumber from the PlayerManager result
+    let nextPlayerNumber = playerResult.nextPlayerNumber;
+    playerNames = playerResult.playerNames;
+
+    // Listen for player events
+    window.addEventListener('player-generation-started', function() {
+        isGenerating = true;
+    });
+    
+    window.addEventListener('player-generation-complete', function() {
+        isGenerating = false;
+    });
+    
+    window.addEventListener('player-roll-dice', function(e) {
+        const { playerNumber, playerName } = e.detail;
+        addMessage(playerName, "rolls 1d20...");
+        const diceCommandInput = { value: "/roll 1d20" };
+        sendMessage(diceCommandInput, playerNumber);
+    });
+
+    // ==============================================
+    // PLAYER SELECTION AND REMOVAL FUNCTIONS 
+    // ==============================================
+    
+    function selectPlayer(playerElement, playerNum) {
+        debugLog(`selectPlayer called for playerNum: ${playerNum}, element:`, playerElement);
+        
+        if (!playerElement) {
+            debugLog("ERROR: playerElement is null or undefined");
+            return;
+        }
+        
+        // Add visual feedback immediately
+        playerElement.style.outline = "2px solid #ff79c6";
+        setTimeout(() => {
+            playerElement.style.outline = "";
+        }, 150);
+        
+        // First, remove selection from previously selected player
+        if (selectedPlayerElement) {
+            selectedPlayerElement.classList.remove('selected');
+        }
+        
+        // If clicking the same player that's already selected, toggle it off
+        if (selectedPlayerElement === playerElement) {
+            debugLog(`Deselecting player ${playerNum}`);
+            selectedPlayerElement = null;
+            selectedPlayerNum = null;
+            removePlayerBtn.classList.add('hidden');
+        } else {
+            // Select new player
+            debugLog(`Selecting player ${playerNum}`);
+            selectedPlayerElement = playerElement;
+            selectedPlayerNum = playerNum;
+            selectedPlayerElement.classList.add('selected');
+            
+            // Only show remove button for players other than Player 1
+            if (playerNum > 1) {
+                removePlayerBtn.classList.remove('hidden');
+            } else {
+                removePlayerBtn.classList.add('hidden');
+            }
+        }
+        
+        debugLog(`Selection complete. selectedPlayerNum: ${selectedPlayerNum}, selectedPlayerElement:`, selectedPlayerElement);
     }
     
-    .modal-body {
-        padding: 15px;
-        max-height: calc(60vh - 40px);
-        max-height: calc(60dvh - 40px);
+    // Expose the selectPlayer function globally for PlayerManager
+    window.updatePlayerSelection = function(element, num) {
+        selectedPlayerElement = element;
+        selectedPlayerNum = num;
+    };
+    
+    // Fix the removePlayerBtn click handler
+    if (removePlayerBtn) {
+        removePlayerBtn.addEventListener('click', function() {
+            debugLog("Remove player button clicked");
+            debugLog("Current selectedPlayerNum:", selectedPlayerNum);
+            debugLog("Current selectedPlayerElement:", selectedPlayerElement);
+            debugLog("PlayerNames:", playerNames);
+            
+            if (selectedPlayerNum && selectedPlayerNum > 1) {
+                debugLog(`Attempting to remove Player ${selectedPlayerNum}`);
+                // Use PlayerManager.removePlayer instead of local function
+                const removedName = PlayerManager.removePlayer(selectedPlayerNum);
+                
+                // Update local playerNames object after removal
+                delete playerNames[selectedPlayerNum];
+                savePlayerNames();
+                savePlayerState();
+                
+                // Reset local selection state after removal
+                selectedPlayerElement = null;
+                selectedPlayerNum = null;
+                removePlayerBtn.classList.add('hidden');
+                debugLog(`Successfully removed player. Remaining players:`, playerNames);
+            } else {
+                debugLog("Invalid removal attempt - selectedPlayerNum:", selectedPlayerNum);
+                addSystemMessage("Please select a player other than Player 1 to remove", false, false, true);
+            }
+        });
     }
-      /* Mobile-specific sidebar adjustments - Use overlay instead of content shifting */
-    .side-menu {
-        width: 280px;
-        transform: translate3d(-280px, 0, 0);
+
+    // --- Functions for initializing and saving state ---
+    
+    function createNewGame() {
+        debugLog("Creating new game...");
+        fetch('/new_game', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.game_id) {
+                currentGameId = data.game_id;
+                localStorage.setItem('currentGameId', currentGameId);
+                chatWindow.innerHTML = ''; // Clear chat window
+                playerNames = { 1: null }; // Reset player names
+                nextPlayerNumber = 2;
+                dmName = "DM"; // Reset DM name
+                savePlayerNames();
+                savePlayerState(); // Save reset state
+                
+                // Clear and reset history for the new game
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Remove old history from storage
+
+                // Directly add the welcome message for a new game
+                // skipHistory = false so it becomes the first state in the new history
+                addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false); 
+                
+                // Remove additional player inputs
+                additionalPlayersContainer.innerHTML = '';
+                // Reset Player 1 label and input
+                const p1Label = document.getElementById('player1-label');
+                if (p1Label) p1Label.textContent = 'Player 1:';
+                if (userInput) userInput.value = '';
+
+                // Reinitialize PlayerManager with new game data
+                PlayerManager.setup({
+                    playerNames: playerNames,
+                    nextPlayerNumber: nextPlayerNumber,
+                    additionalPlayersContainer: additionalPlayersContainer,
+                    removePlayerBtn: removePlayerBtn,
+                    currentGameId: currentGameId,
+                    debugLog: debugLog,
+                    addSystemMessage: addSystemMessage,
+                    createLoadingDivForDM: createLoadingDivForDM, 
+                    sendStreamRequest: sendStreamRequest,
+                    savePlayerNames: savePlayerNames,
+                    savePlayerState: savePlayerState
+                });
+
+                addSystemMessage("✨ New game started! Adventure awaits... ✨", false, false, true); // This will also save state
+                updateUndoRedoButtons(); // Explicitly update buttons after history reset
+            } else {
+                addSystemMessage("Error starting new game.", false, false, true);
+            }
+        })
+        .catch(error => {
+            debugLog("Error creating new game:", error);
+            addSystemMessage("Error connecting to server to start new game.", false, false, true);
+        });
+    }
+
+    function ensureWelcomeMessage() {
+        if (chatWindow.children.length === 0) {
+            addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, true);
+            return true; // Indicates welcome message was added
+        }
+        return false; // Indicates messages already existed
+    }
+
+    function initializeHistory() {
+        // Load history from localStorage or start fresh
+        const savedHistory = localStorage.getItem('chatHistory');
+        if (savedHistory) {
+            try {
+                messageHistory = JSON.parse(savedHistory);
+                historyIndex = messageHistory.length - 1;
+            } catch (e) {
+                debugLog("Error parsing chatHistory from localStorage:", e);
+                messageHistory = [];
+                historyIndex = -1;
+                localStorage.removeItem('chatHistory'); // Clear corrupted history
+            }
+        } else {
+            messageHistory = [];
+            historyIndex = -1;
+        }
+        
+        debugLog(`initializeHistory: Loaded ${messageHistory.length} states. Current index: ${historyIndex}`);
+        
+        // Initial save of current (empty or welcome) state if history is empty
+        if (messageHistory.length === 0 && chatWindow.children.length > 0) {
+            debugLog("initializeHistory: Chat window has children, but history is empty. Saving initial state.");
+            setTimeout(saveChatState, 100); // Allow DOM to settle
+        } else {
+            updateUndoRedoButtons();
+        }
+    }
+
+    function initialize() {
+        debugLog("Initializing application state...");
+        
+        // CRITICAL: Load player names FIRST before anything else
+        const loadedState = Utils.loadPlayerState();
+        if (loadedState && loadedState.names) {
+            playerNames = loadedState.names;
+            debugLog("Restored player names from playerState:", playerNames);
+        } else {
+            // Fallback to just player names if state is corrupted
+            playerNames = Utils.loadPlayerNames();
+            debugLog("Fallback: loaded player names directly:", playerNames);
+        }
+        
+        // Restore DM name if saved
+        if (loadedState && loadedState.dmName) {
+            dmName = loadedState.dmName;
+            document.querySelectorAll('.dm-message .message-sender').forEach(span => {
+                span.textContent = `${dmName}: `;
+            });
+        }
+
+        // Load chat history for the current game
+        fetch('/load_history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: currentGameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.history && data.history.length > 0) {
+                displayMessages(data.history);
+            } else {
+                ensureWelcomeMessage();
+            }
+            
+            initializeHistory();
+            
+            // CRITICAL: Pass the loaded playerNames to PlayerManager setup
+            const playerResult = PlayerManager.setup({
+                playerNames: playerNames, // Use our loaded names
+                nextPlayerNumber: 2,
+                additionalPlayersContainer: additionalPlayersContainer,
+                removePlayerBtn: removePlayerBtn,
+                currentGameId: currentGameId,
+                debugLog: debugLog,
+                addSystemMessage: addSystemMessage,
+                createLoadingDivForDM: createLoadingDivForDM,
+                sendStreamRequest: sendStreamRequest,
+                savePlayerNames: savePlayerNames,
+                savePlayerState: savePlayerState
+            });
+            
+            // Update our variables with PlayerManager results but preserve our loaded names
+            nextPlayerNumber = playerResult.nextPlayerNumber;
+            // Don't overwrite playerNames here - keep our loaded ones
+            
+            // Create UI for all existing players using our loaded names
+            nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
+            
+            // ALWAYS update labels after everything is set up
+            updatePlayerLabels();
+            updateUndoRedoButtons();
+            
+            syncPlayerNamesWithServer();
+        })
+        .catch(error => {
+            debugLog("Error loading chat history:", error);
+            ensureWelcomeMessage();
+            initializeHistory();
+            
+            // Even on error, set up PlayerManager with our loaded names
+            PlayerManager.setup({
+                playerNames: playerNames,
+                nextPlayerNumber: 2,
+                additionalPlayersContainer: additionalPlayersContainer,
+                removePlayerBtn: removePlayerBtn,
+                currentGameId: currentGameId,
+                debugLog: debugLog,
+                addSystemMessage: addSystemMessage,
+                createLoadingDivForDM: createLoadingDivForDM,
+                sendStreamRequest: sendStreamRequest,
+                savePlayerNames: savePlayerNames,
+                savePlayerState: savePlayerState
+            });
+            
+            nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
+            updatePlayerLabels();
+            updateUndoRedoButtons();
+            syncPlayerNamesWithServer();
+        });
     }
     
-    .side-menu.open {
-        transform: translate3d(0, 0, 0);
+    /**
+     * Sync player names between client and server
+     * This ensures the server has the correct names after a page refresh
+     */
+    function syncPlayerNamesWithServer() {
+        if (!currentGameId) return;
+        
+        // Only sync if we have player names stored
+        const hasPlayerNames = Object.values(playerNames).some(name => name !== null);
+        if (!hasPlayerNames) return;
+        
+        debugLog("Syncing player names with server:", playerNames);
+        
+        // For each named player, send a system message to the server
+        Object.entries(playerNames).forEach(([num, name]) => {
+            if (name) {
+                // Let the server know about this player name
+                fetch('/set_player_name', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        game_id: currentGameId,
+                        player_number: num,
+                        new_name: name
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        debugLog(`Successfully synced Player ${num} name (${name}) with server`);
+                    }
+                })
+                .catch(error => {
+                    debugLog(`Error syncing Player ${num} name with server:`, error);
+                });
+            }
+        });
+    }
+
+    // --- Storage utility functions ---
+    
+    // Use Utils for saving/loading player names
+    function savePlayerNames() {
+        Utils.savePlayerNames(playerNames);
+        debugLog("Player names saved:", playerNames);
+        // Also update PlayerManager's playerNames reference
+        if (window.PlayerManager) {
+            window.PlayerManager.playerNames = playerNames;
+        }
     }
     
-    /* IMPORTANT: Don't shift content on mobile - use overlay approach */
-    .side-menu.open ~ .app-wrapper {
-        transform: none; /* Remove the translateX */
-        width: 100%; /* Keep full width */
+    function savePlayerState() {
+        const state = {
+            names: playerNames,
+            nextPlayerNumber: nextPlayerNumber,
+            isMultiplayerActive: isMultiplayerActive,
+            dmName: dmName
+        };
+        Utils.savePlayerState(state);
+        debugLog("Player state saved:", state);
+        // Also update PlayerManager's playerNames reference
+        if (window.PlayerManager) {
+            window.PlayerManager.playerNames = playerNames;
+        }
+    }
+
+    // --- Chat message handling functions ---
+    function displayMessages(messages) {
+        if (!Array.isArray(messages)) {
+            debugLog("Invalid messages array:", messages);
+            return;
+        }
+        chatWindow.innerHTML = '';
+        messages.forEach(msg => {
+            // Skip invisible messages - don't show them in chat
+            if (msg.invisible) {
+                return;
+            }
+            
+            if (msg.role === "assistant" || msg.type === "dm") {
+                // ALWAYS process the content through formatting to ensure proper display
+                const processedContent = Utils.processFormattedText(msg.content);
+                addMessage(dmName, processedContent, false, true, true, true);
+            } else if (msg.role === "user" || msg.type === "player") {
+                // Always use playerNames mapping for sender label
+                let senderName = msg.sender;
+                if (!senderName && msg.player) {
+                    // If msg.player is a name (after renaming), use it directly
+                    if (playerNames[msg.player.replace('player','')]) {
+                        senderName = playerNames[msg.player.replace('player','')];
+                    } else if (/^\d+$/.test(msg.player.replace('player',''))) {
+                        // If still a number, fallback to Player X
+                        senderName = `Player ${msg.player.replace('player','')}`;
+                    } else {
+                        // If msg.player is a name string, use it
+                        senderName = msg.player;
+                    }
+                }
+                // Process player messages through formatting as well
+                const processedContent = Utils.processFormattedText(msg.content);
+                addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
+            } else if (msg.role === "system" || msg.type === "system") {
+                // Only show system messages that aren't marked as invisible
+                if (!msg.invisible) {
+                    addSystemMessage(msg.content, true, true);
+                }
+            }
+        });
+        chatWindow.scrollTop = chatWindow.scrollHeight;
     }
     
-    .menu-toggle.menu-open {
-        left: 185px; /* Updated from 190px to 185px to match new closed position */
-        transform: translateY(-50%); /* Keep vertical centering only */
+    function restoreChatState(index) {
+        if (index < 0 || index >= messageHistory.length) {
+            debugLog(`Invalid history index for restore: ${index}. History length: ${messageHistory.length}`);
+            return;
+        }
+        
+        const state = messageHistory[index];
+        debugLog(`Restoring chat state from history index ${index}. State contains ${state.length} messages.`);
+        
+        chatWindow.innerHTML = ''; // Clear chat window
+        
+        state.forEach(msg => {
+            if (msg.type === 'system') {
+                addSystemMessage(msg.content, true, true); // fromUpdate = true, skipHistory = true
+            } else if (msg.type === 'dm') {
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(dmName, content, false, true, true, true); // Added parameter to indicate HTML content
+            } else { // player message
+                // Use the HTML content if available, otherwise fall back to plain text
+                const content = msg.contentHTML || msg.content;
+                addMessage(msg.sender, content, false, true, true, true); // Added parameter to indicate HTML content
+            }
+        });
+        
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
+        const role = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm') ? 'assistant' : 'user';
+        if (!fromUpdate && messageExists(role, text)) {
+            debugLog("Skipping duplicate message:", text.substring(0, 20) + "...");
+            return false;
+        }
+        
+        lastPlayerMessages[sender] = text;
+        debugLog("Adding message from", sender, ":", text.substring(0, 30) + (text.length > 30 ? "..." : ""));
+        
+        const msgDiv = document.createElement('div');
+        const isDMMessage = (sender.toLowerCase() === dmName.toLowerCase() || sender.toLowerCase() === 'dm');
+        msgDiv.className = `message ${isDMMessage ? 'dm-message' : 'player-message'}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${sender}: `;
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        
+        if (isHTML) {
+            // If content is already HTML, use it directly
+            contentSpan.innerHTML = text;
+        } else {
+            // Always process content through formatting - even if it appears to be plain text
+            const formattedText = Utils.processFormattedText(text);
+            contentSpan.innerHTML = formattedText;
+        }
+        
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        // CRITICAL FIX: Always save chat state for user messages immediately
+        if (!skipHistory) {
+            debugLog(`Triggering saveChatState for message from ${sender}`);
+            setTimeout(saveChatState, 100); // Small delay to ensure DOM is updated
+        }
+        return true;
+    }
+
+    function addSystemMessage(text, fromUpdate = false, skipHistory = false, isTemporary = false) {
+        if (!fromUpdate && messageExists('system', text)) {
+            debugLog("Skipping duplicate system message");
+            return;
+        }
+        
+        debugLog("Adding system message:", text);
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system-message' + (isTemporary ? ' temporary-message' : '');
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = "SYSTEM: ";
+        nameSpan.className = 'message-sender';
+        msgDiv.appendChild(nameSpan);
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        contentSpan.textContent = text;
+        msgDiv.appendChild(contentSpan);
+        
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        if (isTemporary) {
+            setTimeout(() => msgDiv.remove(), 8000);
+        }
+        
+        if (!skipHistory) {
+            setTimeout(saveChatState, 0);
+        }
     }
     
-    .side-menu-donation {
-        margin: 10px 8px;
-        padding: 10px;
+    function messageExists(role, content) {
+        return Utils.messageExists(processedMessageIds, role, content);
     }
     
-    .side-menu-donation p {
-        font-size: 0.65em;
-        line-height: 1.3;
+    function sendMessage(inputElement, playerNumber) {
+        const userMessage = inputElement.value.trim();
+        debugLog(`Attempting to send message: "${userMessage}" from player ${playerNumber}. isGenerating: ${isGenerating}`);
+        
+        if (!userMessage) return;
+        
+        // DM rename flow (secret, only when DM asks)
+        if (window.awaitingDMRename) {
+            dmName = userMessage;
+            window.awaitingDMRename = false;
+            inputElement.value = '';
+            document.querySelectorAll('.dm-message .message-sender').forEach(span => {
+                span.textContent = `${dmName}: `;
+            });
+            addSystemMessage(`The Dungeon Master will now be called "${dmName}". 🎭`, false, false, true);
+            savePlayerState();
+            return;
+        }
+        
+        lastSentMessage = userMessage;
+        
+        if (isGenerating) {
+            debugLog("sendMessage blocked: isGenerating is true.");
+            return;
+        }
+        
+        // Validate game session
+        if (!currentGameId) {
+            addSystemMessage("No active game session. Creating a new one...");
+            const pendingMessage = userMessage;
+            const pendingPlayer = playerNumber;
+            inputElement.value = '';
+            
+            debugLog("Setting isGenerating = true (sendMessage - new game flow)");
+            isGenerating = true;
+            createNewGame();
+            
+            const checkGameReadyInterval = setInterval(() => {
+                if (currentGameId && !isGenerating) {
+                    clearInterval(checkGameReadyInterval);
+                    const targetInput = playerNumber === 1 ? userInput : document.getElementById(`player${playerNumber}-input`);
+                    if (targetInput) {
+                        targetInput.value = pendingMessage;
+                        debugLog("Setting isGenerating = false (sendMessage - before recursive call after new game)");
+                        isGenerating = false;
+                        sendMessage(targetInput, pendingPlayer);
+                    }
+                }
+            }, 300);
+            return;
+        }
+        
+        debugLog("Setting isGenerating = true (sendMessage - main flow)");
+        isGenerating = true;
+        
+        // First message from this player: check if it contains a name
+        const isFirstMessage = !hasPlayerSentAnyMessage(playerNumber);
+        if (isFirstMessage) {
+            debugLog(`Processing first message from Player ${playerNumber}`);
+            const extractedPlayerName = Utils.extractName(userMessage);
+            if (extractedPlayerName && (!playerNames[playerNumber] || playerNames[playerNumber] === `Player ${playerNumber}`)) {
+                PlayerManager.updatePlayerLabel(playerNumber, extractedPlayerName);
+            }
+        }
+        
+        const sender = playerNames[playerNumber] || `Player ${playerNumber}`;
+        addMessage(sender, userMessage);
+        
+        inputElement.value = '';
+        
+        // Create loading indicator
+        const loadingId = `typing-indicator-${Date.now()}`;
+        const textId = `response-text-${Date.now()}`;
+        const loadingDiv = createLoadingDivForDM(loadingId, textId);
+        
+        // Prepare player context
+        const playerContext = {};
+        Object.entries(playerNames).forEach(([num, name]) => {
+            if (name) playerContext[num] = name;
+        });
+        
+        fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: userMessage,
+                game_id: currentGameId,
+                player_number: playerNumber,
+                player_names: playerContext
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.message_id) {
+                sendStreamRequest(data.message_id, loadingDiv);
+            } else {
+                throw new Error("Invalid response data from /chat");
+            }
+        })
+        .catch(error => {
+            debugLog("Error in sendMessage fetch /chat:", error);
+            if (loadingDiv && loadingDiv.parentNode) {
+                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                if (responseTextElem) {
+                    responseTextElem.textContent = "Error: " + error.message;
+                    loadingDiv.classList.add('error-message');
+                    const cursor = responseTextElem.querySelector('.cursor');
+                    if (cursor) cursor.remove();
+                } else {
+                    loadingDiv.remove();
+                    addSystemMessage("Error: " + error.message);
+                }
+            } else {
+                addSystemMessage("Error: Failed to send message. " + error.message);
+            }
+            debugLog("Setting isGenerating = false (sendMessage - catch)");
+            isGenerating = false;
+        });
+        
+        inputElement.focus();
     }
     
-    .side-menu-footer {
-        font-size: 0.7em;
-        padding: 8px;
-        /* Ensure footer is visible above safe area */
-        padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
+    /**
+     * Check if a player has sent any messages
+     * @param {number} playerNumber - The player number to check
+     * @returns {boolean} - Whether the player has sent any messages
+     */
+    function hasPlayerSentAnyMessage(playerNumber) {
+        const messages = Array.from(chatWindow.querySelectorAll('.player-message'));
+        const playerPrefix = `Player ${playerNumber}:`;
+        const namedPrefix = playerNames[playerNumber] ? `${playerNames[playerNumber]}:` : null;
+        
+        for (const msg of messages) {
+            const senderElement = msg.querySelector('.message-sender');
+            if (senderElement) {
+                const sender = senderElement.textContent;
+                if (sender.startsWith(playerPrefix) || (namedPrefix && sender.startsWith(namedPrefix))) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
+    function createLoadingDivForDM(id, textId) {
+        debugLog("Creating loading div:", id, textId);
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message dm-message';
+        loadingDiv.id = id;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'message-sender'; 
+        nameSpan.textContent = `${dmName}: `;
+        
+        const responseText = document.createElement('span');
+        responseText.id = textId || 'response-text';
+        responseText.className = 'typing message-content';
+        responseText.textContent = '';
+        
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        responseText.appendChild(cursor);
+        
+        loadingDiv.appendChild(nameSpan);
+        loadingDiv.appendChild(responseText);
+        chatWindow.appendChild(loadingDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        
+        return loadingDiv;
     }
     
-    /* Improve chat input for mobile */
-    .player-input-field {
-        font-size: 16px; /* Prevent zoom on iOS */
-        padding: 12px; /* Larger touch targets */
+    function sendStreamRequest(messageId, loadingDiv) {
+        debugLog("Starting stream request for message ID:", messageId, ". Current isGenerating:", isGenerating);
+
+        const eventSourceUrl = new URL('/stream', window.location.href);
+        eventSourceUrl.searchParams.append('t', Date.now());
+        eventSourceUrl.searchParams.append('game_id', currentGameId || '');
+        eventSourceUrl.searchParams.append('message_id', messageId || '');
+        // Always send the selected model as a query param
+        eventSourceUrl.searchParams.append('model_id', selectedModel);
+
+        debugLog("Stream URL:", eventSourceUrl.toString());
+
+        const eventSource = new EventSource(eventSourceUrl.toString());
+        
+        let responseTimeout = setTimeout(() => {
+            debugLog("Response timeout - closing connection for messageId:", messageId);
+            if (eventSource) eventSource.close(); 
+            const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+            if (responseTextElem) {
+                responseTextElem.classList.remove('typing');
+                const oldCursor = responseTextElem.querySelector('.cursor');
+                if (oldCursor) oldCursor.remove();
+                
+                if (!responseTextElem.textContent.trim()) {
+                    responseTextElem.textContent = "Response timeout. Please try again.";
+                    loadingDiv.classList.add('error-message');
+                }
+            }
+            debugLog("Setting isGenerating = false (sendStreamRequest - timeout)");
+            isGenerating = false;
+        }, 30000); // 30 seconds timeout
+        
+        eventSource.onopen = function(e) {
+            debugLog("EventSource connection opened for messageId:", messageId);
+        };
+        
+        let fullResponseText = ""; // Accumulate full response for checkForPlayerNames
+
+        eventSource.onmessage = function(event) {
+            try {
+                clearTimeout(responseTimeout);
+                responseTimeout = setTimeout(() => {
+                    debugLog("Response timeout during streaming for messageId:", messageId);
+                    eventSource.close();
+                    const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                    if (responseTextElem) {
+                        const oldCursor = responseTextElem.querySelector('.cursor');
+                        if (oldCursor) oldCursor.remove();
+                        responseTextElem.classList.remove('typing');
+                        
+                        if (!responseTextElem.textContent.trim()) {
+                            responseTextElem.textContent = "Response timeout. Please try again.";
+                            loadingDiv.classList.add('error-message');
+                        }
+                    }
+                    isGenerating = false;
+                }, 30000);
+
+                debugLog("Received message chunk for messageId:", messageId, "Data:", event.data.substring(0, 50) + "...");
+                const data = JSON.parse(event.data);
+                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                
+                if (responseTextElem) {
+                    // Handle line breaks properly
+                    const formattedContent = data.content.replace(/\\n/g, '\n');
+                    
+                    if (data.error === true) {
+                        loadingDiv.classList.add('error-message');
+                    }
+                    
+                    if (responseTextElem.classList.contains('typing')) {
+                        responseTextElem.classList.remove('typing');
+                        const oldCursor = responseTextElem.querySelector('.cursor');
+                        if (oldCursor) oldCursor.remove();
+                    }
+                    
+                    // Build the full accumulated text with proper formatting
+                    fullResponseText += formattedContent;
+                    
+                    // Check if we're currently generating reasoning content
+                    const isGeneratingReasoning = fullResponseText.includes('<think>') || 
+                                                  fullResponseText.includes('<thinking>') || 
+                                                  fullResponseText.includes('<analysis>');
+                    
+                    // Check if reasoning is complete (has closing tags)
+                    const hasCompleteReasoning = (fullResponseText.includes('<think>') && fullResponseText.includes('</think>')) ||
+                                                 (fullResponseText.includes('<thinking>') && fullResponseText.includes('</thinking>')) ||
+                                                 (fullResponseText.includes('<analysis>') && fullResponseText.includes('</analysis>'));
+                    
+                    // Process the FULL accumulated text (not just the chunk) with formatting
+                    const processedFullContent = Utils.processFormattedText(fullResponseText);
+                    
+                    // If we're generating reasoning but it's not complete, show "Thinking..." with caret
+                    if (isGeneratingReasoning && !hasCompleteReasoning && !processedFullContent.trim()) {
+                        const cursorHTML = '<span class="cursor"></span>';
+                        responseTextElem.innerHTML = '<em style="color: #6272a4; font-style: italic;">🤔 Thinking...</em>' + cursorHTML;
+                    } else {
+                        // Update with fully formatted content and add cursor back
+                        const cursorHTML = '<span class="cursor"></span>';
+                        responseTextElem.innerHTML = processedFullContent + cursorHTML;
+                    }
+                    
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                }
+            } catch (e) {
+                debugLog("Error parsing event data:", e);
+            }
+        };
+        
+        eventSource.addEventListener('done', function(event) {
+            debugLog("Stream complete for messageId:", messageId, "Event data:", event.data);
+            clearTimeout(responseTimeout);
+            
+            const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+            if (responseTextElem) {
+                const oldCursor = responseTextElem.querySelector('.cursor');
+                if (oldCursor) oldCursor.remove();
+                
+                if (fullResponseText) {
+                    PlayerManager.checkForPlayerNames(fullResponseText);
+                }
+            }
+            
+            eventSource.close();
+            debugLog("Setting isGenerating = false (sendStreamRequest - done)");
+            isGenerating = false;
+            saveChatState(); // Save chat state after DM response is fully received
+        });
+        
+        eventSource.onerror = function(e) {
+            debugLog("EventSource error for messageId:", messageId, e);
+            clearTimeout(responseTimeout);
+            
+            try {
+                const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
+                if (responseTextElem) {
+                    const oldCursor = responseTextElem.querySelector('.cursor');
+                    if (oldCursor) oldCursor.remove();
+                    responseTextElem.classList.remove('typing');
+                    
+                    if (!responseTextElem.textContent.trim()) {
+                        loadingDiv.classList.add('error-message');
+                        responseTextElem.textContent = "Connection error. Please try again.";
+                    }
+                }
+                eventSource.close();
+            } catch (err) {
+                debugLog("Error handling EventSource error for messageId:", messageId, err);
+            } finally {
+                debugLog("Setting isGenerating = false (sendStreamRequest - onerror)");
+                isGenerating = false;
+            }
+        };
     }
     
-    .action-btn {
-        min-width: 44px; /* Ensure touch targets are large enough */
-        min-height: 44px;
+    function updateUndoRedoButtons() {
+        if (undoBtn && redoBtn) {
+            // Undo is available if we have history to go back to
+            undoBtn.disabled = historyIndex <= 0;
+            
+            // Redo is available if we have an undone message to resend
+            redoBtn.disabled = !lastUndoneMessage;
+            
+            // Update styles
+            undoBtn.style.opacity = undoBtn.disabled ? '0.5' : '1';
+            redoBtn.style.opacity = redoBtn.disabled ? '0.5' : '1';
+        }
     }
     
-    /* Fix chat window for mobile */
-    .chat-window {
-        padding: 10px; /* Reduced from 15px to give more space */
-        /* Account for address bar and safe areas */
-        height: calc(100vh - 200px);
-        height: calc(100dvh - 200px);
+    function saveChatState() {
+        debugLog(`Attempting to save chat state. Current historyIndex: ${historyIndex}, History length: ${messageHistory.length}`);
+        const messages = Array.from(chatWindow.querySelectorAll('.message:not(.temporary-message)')) 
+            .map(msg => {
+                const senderEl = msg.querySelector('.message-sender');
+                const contentEl = msg.querySelector('.message-content');
+                
+                // Skip if essential elements are missing (e.g. loading indicators not fully formed)
+                if (!senderEl || !contentEl) {
+                    debugLog("Skipping message with missing elements:", msg.outerHTML.substring(0, 100));
+                    return null;
+                }
+
+                const senderText = senderEl.textContent.replace(':', '').trim();
+                // Use innerHTML to preserve HTML formatting instead of textContent
+                const contentHTML = contentEl.innerHTML.trim();
+                const contentText = contentEl.textContent.trim();
+                
+                // Skip empty messages
+                if (!contentText && !contentHTML) {
+                    debugLog("Skipping empty message:", msg.outerHTML.substring(0, 100));
+                    return null;
+                }
+                
+                // Skip pure loading indicators (typing with no actual content)
+                if (msg.querySelector('.typing') && contentEl.querySelector('.cursor') && !contentText.replace(/\s/g, '')) {
+                    debugLog("Skipping pure loading indicator:", msg.outerHTML.substring(0, 100));
+                    return null;
+                }
+
+                const isSystem = msg.classList.contains('system-message');
+                // Determine if DM by checking sender text against current dmName or if it's a DM loading message
+                const isDM = senderText === dmName || (msg.classList.contains('dm-message') && senderText === "DM");
+
+                // Store the timestamp to help with identifying message sequences
+                const timestamp = new Date().getTime();
+
+                return {
+                    sender: senderText,
+                    content: contentText,
+                    contentHTML: contentHTML,
+                    type: isSystem ? 'system' : (isDM ? 'dm' : 'player'),
+                    timestamp: timestamp
+                };
+            }).filter(msg => msg !== null); 
+
+    // CRITICAL FIX: Always save if we have ANY valid messages
+    if (messages.length === 0) {
+        debugLog("No valid messages to save. Chat window children:", chatWindow.children.length);
+        // Only return early if chat window is truly empty or only has temporary/loading content
+        const hasAnyRealContent = Array.from(chatWindow.children).some(child => 
+            !child.classList.contains('temporary-message') && 
+            !child.querySelector('.typing') &&
+            child.textContent.trim()
+        );
+        
+        if (!hasAnyRealContent) {
+            debugLog("No real content in chat window, skipping save");
+            return;
+        }
+    }
+    
+    // If historyIndex is behind the end of messageHistory, truncate the "future" states that were undone
+    if (historyIndex < messageHistory.length - 1) {
+        debugLog(`History divergence: historyIndex (${historyIndex}) < messageHistory.length - 1 (${messageHistory.length - 1}). Slicing history.`);
+        messageHistory = messageHistory.slice(0, historyIndex + 1);
+    }
+    
+    messageHistory.push(messages);
+    historyIndex = messageHistory.length - 1; // Point to the newly added state
+    
+    if (messageHistory.length > MAX_HISTORY_SIZE) {
+        messageHistory.shift();
+        historyIndex--;
+    }
+    
+    try {
+        localStorage.setItem('chatHistory', JSON.stringify(messageHistory)); 
+        debugLog(`Chat state saved successfully. New history size: ${messageHistory.length}, New Index: ${historyIndex}`);
+    } catch (e) {
+        debugLog("Error saving chatHistory to localStorage:", e);
+    }
+    updateUndoRedoButtons();
+    debugLog(`Chat state saved. Messages in this state: ${messages.length}. Last saved messages:`, messages.map(m => `${m.sender}: ${m.content.substring(0,20)}`));
+    }
+      function undoChat() {
+        debugLog(`Undo requested. historyIndex: ${historyIndex}, isGenerating: ${isGenerating}`);
+        if (isGenerating) {
+            addSystemMessage("Please wait for the current action to complete before undoing.", false, true, true);
+            return;
+        }
+
+        if (!currentGameId) {
+            addSystemMessage("No game session found for undo.", false, true, true);
+            return;
+        }
+
+        fetch('/undo_messages', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ game_id: currentGameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                debugLog(`Successfully removed ${data.messages_removed} messages from server history`);
+                // Use updated_history from server to update chat window
+                if (data.updated_history) {
+                    displayMessages(data.updated_history);
+                    // Save the new state to history
+                    setTimeout(saveChatState, 100);
+                    updateUndoRedoButtons();
+                }
+                // Store the undone message for redo (DON'T put it in input box)
+                if (data.last_undone_user_message) {
+                    lastUndoneMessage = data.last_undone_user_message;
+                    // Try to determine which player sent this message from the undone messages
+                    if (data.undone_messages && data.undone_messages.length > 0) {
+                        const userMessage = data.undone_messages[0];
+                        if (userMessage.player) {
+                            // Extract player number from player field (e.g., "player1" -> 1)
+                            const playerMatch = userMessage.player.match(/player(\d+)/);
+                            if (playerMatch) {
+                                lastUndonePlayerNumber = parseInt(playerMatch[1]);
+                            } else {
+                                // If it's a named player, find the corresponding number
+                                for (const [num, name] of Object.entries(playerNames)) {
+                                    if (name === userMessage.player) {
+                                        lastUndonePlayerNumber = parseInt(num);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!lastUndonePlayerNumber) lastUndonePlayerNumber = 1; // Default to player 1
+                    debugLog(`Stored message for redo: "${lastUndoneMessage}" from player ${lastUndonePlayerNumber}`);
+                } else {
+                    lastUndoneMessage = null;
+                }
+                addSystemMessage(`✓ Undid last message (server synchronized)`, false, true, true);
+            } else {
+                addSystemMessage(`Error undoing message: ${data.error}`, false, true, true);
+                debugLog("Server-side undo failed:", data.error);
+            }
+        })
+        .catch(error => {
+            debugLog("Error calling server undo:", error);
+            addSystemMessage("Error undoing message on server", false, true, true);
+        });
+    }
+      function redoChat() {
+        debugLog(`Redo requested. lastUndoneMessage: ${lastUndoneMessage}, isGenerating: ${isGenerating}`);
+        
+        // Block if we're already generating or if there's no undone message to resend
+        if (isGenerating || !lastUndoneMessage) {
+            if (isGenerating) {
+                addSystemMessage("Please wait for the current action to complete before redoing.", false, true, true);
+            } else if (!lastUndoneMessage) {
+                addSystemMessage("Nothing to redo.", false, true, true);
+            }
+            return;
+        }
+        
+        // Create a temporary input element to hold the last undone message
+        const tempInput = { value: lastUndoneMessage };
+        
+        // Send the last undone message directly
+        debugLog(`Redoing by resending message: "${lastUndoneMessage}" from player ${lastUndonePlayerNumber}`);
+        
+        // Add a system message to explain what's happening
+        addSystemMessage(`Redoing your previous action...`, false, false, true);
+        
+        // Send the message using the stored player number
+        sendMessage(tempInput, lastUndonePlayerNumber || 1);
+        
+        // Clear the lastUndoneMessage since we've used it
+        lastUndoneMessage = null;
+        lastUndonePlayerNumber = 1;
+        
+        // Update the undo/redo buttons
+        updateUndoRedoButtons();
+    }
+    
+    // Event Listeners
+    if (userInput && sendBtn) {
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !isGenerating) {
+                e.preventDefault();
+                sendMessage(userInput, 1);
+            }
+        });
+        sendBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (!isGenerating) sendMessage(userInput, 1);
+        });
+    }
+
+    // Set up click handler for Player 1's container
+    if (player1Container) {
+        player1Container.addEventListener('click', function() {
+            debugLog('Player 1 container clicked');
+            selectPlayer(player1Container, 1);
+        });
+    }
+
+    // Setup remaining event listeners
+    if (newGameBtn) newGameBtn.addEventListener('click', createNewGame);
+    
+    if (addPlayerBtn) {
+        addPlayerBtn.addEventListener('click', function() {
+            PlayerManager.addPlayer(sendMessage);
+        });
+    }
+    
+    // AI Models event listeners
+    if (aiModelsBtn) {
+        aiModelsBtn.addEventListener('click', function() {
+            aiModelsModal.classList.remove('hidden');
+        });
+    }
+    
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', function() {
+            aiModelsModal.classList.add('hidden');
+        });
+    }
+    
+    if (aiModelsModal) {
+        aiModelsModal.addEventListener('click', function(e) {
+            if (e.target === aiModelsModal) {
+                aiModelsModal.classList.add('hidden');
+            }
+        });
+    }    // REMOVED: Close sidebar when clicking outside - this was causing issues
+    // The sidebar will now only open/close via the menu button
+
+    // Copy chat functionality
+    if (copyChatBtn) {
+        copyChatBtn.addEventListener('click', function() {
+            const messages = Array.from(chatWindow.querySelectorAll('.message:not(.temporary-message)'));
+            const chatText = messages.map(msg => {
+                const sender = msg.querySelector('.message-sender')?.textContent || '';
+                const content = msg.querySelector('.message-content')?.textContent || '';
+                return `${sender} ${content}`;
+            }).join('\n\n');
+            
+            navigator.clipboard.writeText(chatText).then(() => {
+                addSystemMessage('Chat copied to clipboard!', false, false, true);
+            }).catch(err => {
+                debugLog('Error copying to clipboard:', err);
+                addSystemMessage('Error copying chat to clipboard.', false, false, true);
+            });
+        });
+    }
+
+    // Dice button for Player 1
+    if (diceBtn) {
+        diceBtn.addEventListener('click', function() {
+            if (!isGenerating) {
+                const playerName = playerNames[1] || 'Player 1';
+                addMessage(playerName, 'rolls 1d20...');
+                const diceCommandInput = { value: '/roll 1d20' };
+                sendMessage(diceCommandInput, 1);
+            }
+        });
+    }
+
+    // Undo/Redo functionality
+    if (undoBtn) {
+        undoBtn.addEventListener('click', undoChat);
+    }
+    
+    if (redoBtn) {
+        redoBtn.addEventListener('click', redoChat);
+    }
+
+    // Initial setup - clean and clear flow
+    if (currentGameId) {
+        debugLog("Restoring session:", currentGameId);
+        initialize();
+        loadAvailableModels(); // Load models after initialization
+    } else {
+        debugLog("No previous gameId. Setting up for a new game implicitly.");
+        
+        // CRITICAL: Load player names even for new games
+        const loadedState = Utils.loadPlayerState();
+        if (loadedState && loadedState.names) {
+            playerNames = loadedState.names;
+            debugLog("Restored player names for new game:", playerNames);
+        }
+        
+        messageHistory = [];
+        historyIndex = -1;
+        localStorage.removeItem('chatHistory');
+        chatWindow.innerHTML = '';
+        addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
+        
+        // Set up PlayerManager with loaded names
+        PlayerManager.setup({
+            playerNames: playerNames,
+            nextPlayerNumber: 2,
+            additionalPlayersContainer: additionalPlayersContainer,
+            removePlayerBtn: removePlayerBtn,
+            currentGameId: currentGameId,
+            debugLog: debugLog,
+            addSystemMessage: addSystemMessage,
+            createLoadingDivForDM: createLoadingDivForDM,
+            sendStreamRequest: sendStreamRequest,
+            savePlayerNames: savePlayerNames,
+            savePlayerState: savePlayerState
+        });
+        
+        nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
+        updatePlayerLabels(); // Apply saved names to UI
+        updateUndoRedoButtons();
+        loadAvailableModels(); // Load models for new games too
+    }
+
+    window.sendMessage = sendMessage;
+
+    debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
+});
+
+// IMPORTANT: REMOVE ANY FUNCTIONS DEFINED OUTSIDE THE DOM CONTENT LOADED EVENT
+// The selectPlayer and removePlayer functions were incorrectly defined here earlier
+
+// Global function for reasoning toggle (called from HTML)
+function toggleReasoning(reasoningId) {
+    const reasoningContent = document.getElementById(reasoningId);
+    if (!reasoningContent) return;
+    
+    // Find the toggle button (should be the previous sibling)
+    const toggleButton = reasoningContent.previousElementSibling;
+    
+    if (reasoningContent.style.display === 'none') {
+        reasoningContent.style.display = 'block';
+        if (toggleButton) toggleButton.classList.add('expanded');
+    } else {
+        reasoningContent.style.display = 'none';
+        if (toggleButton) toggleButton.classList.remove('expanded');
     }
 }
 
-/* Additional mobile adjustments for very small screens */
-@media (max-width: 480px) {
-    .side-menu {
-        width: calc(100vw - 60px); /* Leave some space for the toggle button */
-        max-width: 320px;
-        transform: translate3d(calc(-100vw + 60px), 0, 0);
+// Make the function globally available
+window.toggleReasoning = toggleReasoning;
+
+// Add mobile-specific fixes
+function initMobileFixes() {
+    // Fix for mobile viewport issues
+    function setViewportHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
     }
     
-    .side-menu.open {
-        transform: translate3d(0, 0, 0);
+    // Set initial viewport height
+    setViewportHeight();
+    
+    // Update on resize (address bar show/hide)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(setViewportHeight, 100);
+    });
+    
+    // Fix for iOS Safari address bar
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setViewportHeight, 500);
+    });
+    
+    // Prevent zoom on input focus for iOS
+    const inputs = document.querySelectorAll('input[type="text"]');
+    inputs.forEach(input => {
+        input.addEventListener('focus', (e) => {
+            // Temporarily disable zoom
+            const viewport = document.querySelector('meta[name="viewport"]');
+            if (viewport) {
+                const originalContent = viewport.content;
+                viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+                
+                // Restore after blur
+                input.addEventListener('blur', () => {
+                    viewport.content = originalContent;
+                }, { once: true });
+            }
+        });
+    });
+    
+    // Fix for mobile browser back button
+    window.addEventListener('popstate', (e) => {
+        // Close sidebar if open when back button is pressed
+        if (sideMenu && sideMenu.classList.contains('open')) {
+            sideMenu.classList.remove('open');
+            menuToggleBtn.classList.remove('menu-open');
+            e.preventDefault();
+        }
+    });
+    
+    // Improve touch handling for mobile
+    let touchStartY = 0;
+    let touchEndY = 0;
+    
+    document.addEventListener('touchstart', (e) => {
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+    
+    document.addEventListener('touchend', (e) => {
+        touchEndY = e.changedTouches[0].screenY;
+        
+        // Prevent pull-to-refresh if at top of chat
+        if (chatWindow && chatWindow.scrollTop === 0 && touchEndY > touchStartY) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    // Fix for virtual keyboard on mobile
+    if ('visualViewport' in window) {
+        window.visualViewport.addEventListener('resize', () => {
+            const keyboardHeight = window.innerHeight - window.visualViewport.height;
+            if (keyboardHeight > 0) {
+                // Keyboard is open
+                document.body.style.paddingBottom = `${keyboardHeight}px`;
+            } else {
+                // Keyboard is closed
+                document.body.style.paddingBottom = '0px';
+            }
+        });
     }
     
-    /* IMPORTANT: Don't shift content on very small screens either */
-    .side-menu.open ~ .app-wrapper {
-        transform: none; /* Remove the translateX */
-        width: 100%; /* Keep full width */
-    }
-      .menu-toggle.menu-open {
-        left: calc(100vw - 115px); /* Updated from 110px to 115px to account for new closed position */
-        transform: translateY(-50%); /* Keep vertical centering only */
-    }
-    
-    .side-menu-donation {
-        margin: 10px 8px;
-        padding: 10px;
-    }
-    
-    .side-menu-donation p {
-        font-size: 0.6em;
-    }
-    
-    /* Improve text sizing for very small screens */
-    .message-content,
-    .message-sender {
-        font-size: 16px; /* Ensure readability */
-    }
-    
-    /* Keep player input controls on a single line */
-    .player-input {
-        flex-direction: row; /* Keep elements in a row */
-        gap: 5px; /* Reduce gap between elements */
-        padding: 5px 8px; /* Reduce padding for more space */
-        align-items: center; /* Ensure vertical alignment */
-    }
-    
-    .player-label {
-        min-width: 60px; /* Smaller minimum width */
-        max-width: 90px; /* Limit maximum width */
-        font-size: 0.9em; /* Smaller font */
-        overflow: hidden;
-        text-overflow: ellipsis;
-        flex-shrink: 0; /* Prevent shrinking */
-    }
-    
-    .player-input-field {
-        min-width: 0; /* Allow shrinking */
-        padding: 8px; /* Smaller padding */
-        font-size: 14px; /* Smaller font size */
-    }
-    
-    .action-btn {
-        width: 36px; /* Slightly smaller */
-        height: 36px; /* Slightly smaller */
-        min-width: 36px !important; /* Force minimum width */
-        min-height: 36px !important; /* Force minimum height */
-        padding: 0; /* Remove padding */
-        font-size: 1em; /* Slightly smaller font for icons */
-    }
-    
-    .player-buttons-container {
-        flex-shrink: 0; /* Prevent buttons from shrinking */
-        gap: 3px; /* Tighter spacing between buttons */
-    }
+    debugLog("Mobile fixes initialized");
 }
 
-/* Specific fixes for iOS Safari */
-@supports (-webkit-touch-callout: none) {
-    body {
-        /* Additional iOS-specific fixes */
-        -webkit-user-select: none;
-        user-select: none;
-        -webkit-touch-callout: none;
-    }
-    
-    .player-input-field {
-        -webkit-user-select: text;
-        user-select: text;
-        -webkit-touch-callout: default;
-    }
-    
-    /* Fix for iOS address bar behavior */
-    .chat-container {
-        min-height: -webkit-fill-available;
-    }
-    
-    .chat-window {
-        height: calc(100vh - 180px);
-        height: calc(-webkit-fill-available - 180px);
-    }
-}
+// Initialize mobile fixes
+initMobileFixes();
 
-/* Fix for Chrome mobile address bar */
-@media screen and (max-width: 768px) {
-    .chat-container {
-        height: calc(100vh - env(keyboard-inset-height, 0px));
-        height: calc(100dvh - env(keyboard-inset-height, 0px));
-    }
-}
-
-/* Prevent horizontal scrolling on mobile */
-body, html, .app-wrapper, .chat-container {
-    overflow-x: hidden;
-    max-width: 100vw;
+// Update menu toggle functionality for better mobile support
+if (menuToggleBtn && sideMenu) {
+    menuToggleBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const isOpen = sideMenu.classList.contains('open');
+        debugLog('Menu toggle clicked, current state:', isOpen ? 'open' : 'closed');
+        
+        if (isOpen) {
+            sideMenu.classList.remove('open');
+            menuToggleBtn.classList.remove('menu-open');
+            // Re-enable scrolling on body
+            document.body.style.overflow = '';
+            debugLog('Menu closed');
+        } else {
+            sideMenu.classList.add('open');
+            menuToggleBtn.classList.add('menu-open');
+            // Prevent background scrolling on mobile
+            if (window.innerWidth <= 768) {
+                document.body.style.overflow = 'hidden';
+            }
+            debugLog('Menu opened');
+        }
+    });
+    
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', function(e) {
+        if (window.innerWidth <= 768 && 
+            sideMenu.classList.contains('open') && 
+            !sideMenu.contains(e.target) && 
+            !menuToggleBtn.contains(e.target)) {
+            sideMenu.classList.remove('open');
+            menuToggleBtn.classList.remove('menu-open');
+            document.body.style.overflow = '';
+        }
+    });
+    
+    // Handle touch gestures for sidebar
+    let startX = 0;
+    let currentX = 0;
+    let isSwipeGesture = false;
+    
+    document.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        isSwipeGesture = false;
+    }, { passive: true });
+    
+    document.addEventListener('touchmove', (e) => {
+        if (!startX) return;
+        currentX = e.touches[0].clientX;
+        const diffX = currentX - startX;
+        
+        // Detect swipe gesture
+        if (Math.abs(diffX) > 50) {
+            isSwipeGesture = true;
+            
+            // Swipe right to open sidebar (from left edge)
+            if (diffX > 0 && startX < 50 && !sideMenu.classList.contains('open')) {
+                sideMenu.classList.add('open');
+                menuToggleBtn.classList.add('menu-open');
+                if (window.innerWidth <= 768) {
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+            
+            // Swipe left to close sidebar
+            if (diffX < 0 && sideMenu.classList.contains('open')) {
+                sideMenu.classList.remove('open');
+                menuToggleBtn.classList.remove('menu-open');
+                document.body.style.overflow = '';
+            }
+        }
+    }, { passive: true });
+    
+    document.addEventListener('touchend', () => {
+        startX = 0;
+        currentX = 0;
+        isSwipeGesture = false;
+    }, { passive: true });
 }

@@ -1291,7 +1291,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 aiModelsModal.classList.add('hidden');
             }
         });
-    }    // REMOVED: Close sidebar when clicking outside - this was causing issues
+    }
+
+    // Sidebar toggle functionality - ONLY use button to toggle
+    if (menuToggleBtn && sideMenu) {
+        menuToggleBtn.addEventListener('click', function() {
+            debugLog('Menu toggle clicked');
+            sideMenu.classList.toggle('open');
+            menuToggleBtn.classList.toggle('menu-open');
+        });
+    }
+
+    // REMOVED: Close sidebar when clicking outside - this was causing issues
     // The sidebar will now only open/close via the menu button
 
     // Copy chat functionality
@@ -1494,19 +1505,14 @@ initMobileFixes();
 
 // Update menu toggle functionality for better mobile support
 if (menuToggleBtn && sideMenu) {
-    menuToggleBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
+    menuToggleBtn.addEventListener('click', function() {
         const isOpen = sideMenu.classList.contains('open');
-        debugLog('Menu toggle clicked, current state:', isOpen ? 'open' : 'closed');
         
         if (isOpen) {
             sideMenu.classList.remove('open');
             menuToggleBtn.classList.remove('menu-open');
             // Re-enable scrolling on body
             document.body.style.overflow = '';
-            debugLog('Menu closed');
         } else {
             sideMenu.classList.add('open');
             menuToggleBtn.classList.add('menu-open');
@@ -1514,7 +1520,6 @@ if (menuToggleBtn && sideMenu) {
             if (window.innerWidth <= 768) {
                 document.body.style.overflow = 'hidden';
             }
-            debugLog('Menu opened');
         }
     });
     

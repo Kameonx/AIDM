@@ -336,9 +336,7 @@ def stream_response():
                 })
           # Get selected model from session, default to DEFAULT_MODEL_ID
         selected_model = get_valid_model(session.get('selected_model', DEFAULT_MODEL_ID))
-        app.logger.debug(f"Using Venice model: {selected_model}")
-        
-        # Get model capabilities to determine which parameters to include
+        app.logger.debug(f"Using Venice model: {selected_model}")          # Get model capabilities to determine which parameters to include
         capabilities = get_model_capabilities(selected_model)
         app.logger.debug(f"Model capabilities: {capabilities}")
         
@@ -346,7 +344,7 @@ def stream_response():
             "venice_parameters": {"include_venice_system_prompt": False},
             "model": selected_model,
             "messages": api_messages,
-            "temperature": 1.1,
+            "temperature": 0.9,
             "top_p": 0.95,
             "n": 1,
             "stream": True,

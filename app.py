@@ -331,12 +331,14 @@ def stream_response():
             else:
                 # Assistant (DM) messages
                 api_messages.append({
-                    "role": msg.get("role", "assistant"),
-                    "content": msg.get("content", "")
+                    "role": msg.get("role", "assistant"),                    "content": msg.get("content", "")
                 })
-          # Get selected model from session, default to DEFAULT_MODEL_ID
+        
+        # Get selected model from session, default to DEFAULT_MODEL_ID
         selected_model = get_valid_model(session.get('selected_model', DEFAULT_MODEL_ID))
-        app.logger.debug(f"Using Venice model: {selected_model}")          # Get model capabilities to determine which parameters to include
+        app.logger.debug(f"Using Venice model: {selected_model}")
+        
+        # Get model capabilities to determine which parameters to include
         capabilities = get_model_capabilities(selected_model)
         app.logger.debug(f"Model capabilities: {capabilities}")
         
@@ -344,11 +346,11 @@ def stream_response():
             "venice_parameters": {"include_venice_system_prompt": False},
             "model": selected_model,
             "messages": api_messages,
-            "temperature": 0.9,
+            "temperature": 1.0,
             "top_p": 0.95,
             "n": 1,
             "stream": True,
-            "presence_penalty": 0.1,
+            "presence_penalty": 0.2,
             "frequency_penalty": 0.1
         }
         

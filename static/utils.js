@@ -11,14 +11,16 @@ const Utils = (function() {
 
     /**
      * Process formatted text with spell tags, emphasis, etc.
-     */
-    function processFormattedText(text) {
+     */    function processFormattedText(text) {
         if (!text) return '';
         
         // Check if the text already contains proper HTML formatting
         if (/<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)">/.test(text)) {
             return text; // Already formatted with HTML, return as is
         }
+
+        // Preserve non-color brackets before processing
+        text = preserveNonColorBrackets(text);
 
         // Convert <font color="...">...</font> to <span class="...">...</span>
         text = text.replace(/<font\s+color=["']?(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal)["']?>((?:.|\n)*?)<\/font>/gi, function(_, color, inner) {
@@ -44,14 +46,44 @@ const Utils = (function() {
 
         // Process new color tags [color:text]
         const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal', 'brown', 'silver', 'wood'];
-        
-        for (const color of colorTypes) {
+          for (const color of colorTypes) {
             const regex = new RegExp(`\\[${color}:(.*?)\\]`, 'gi');
             processedText = processedText.replace(regex, `<span class="${color}">$1</span>`);
         }
-
-        // Remove any unmatched [color:text] tags that weren't replaced (e.g. if color is misspelled)
-        processedText = processedText.replace(/\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):(.*?)\]/gi, '');
+          // IMPORTANT: Don't remove unmatched [color:text] tags - preserve them as regular text
+        // This was causing brackets to disappear from the text
+        // processedText = processedText.replace(/\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):(.*?)\]/gi, '');
+        
+        // Handle line breaks and spacing (preserve existing line breaks and paragraphs)
+        // Only process if the text doesn't already have HTML formatting AND doesn't look like it was already processed
+        const hasExistingFormatting = /<br\s*\/?>|<p\s*>|<\/p>/.test(processedText);
+        const appearsToBeRawText = !hasExistingFormatting && /\n/.test(processedText);
+        
+        if (appearsToBeRawText) {
+            // Convert double newlines to paragraph breaks
+            processedText = processedText.replace(/\n\s*\n/g, '</p><p>');
+            
+            // Convert single newlines to line breaks
+            processedText = processedText.replace(/\n/g, '<br>');
+            
+            // Wrap in paragraph tags if we have content and it's not already wrapped
+            if (processedText.trim() && !processedText.includes('<p>') && !processedText.includes('</p>')) {
+                processedText = '<p>' + processedText + '</p>';
+            }
+        } else if (!hasExistingFormatting) {
+            // If no line breaks but also no existing formatting, still preserve multiple spaces
+            //and add minimal paragraph structure for better display
+            if (processedText.trim() && !processedText.includes('<p>')) {
+                processedText = '<p>' + processedText + '</p>';
+            }
+        }
+        
+        // Preserve multiple spaces (but not if already converted to &nbsp;)
+        if (!processedText.includes('&nbsp;')) {
+            processedText = processedText.replace(/  +/g, function(match) {
+                return '&nbsp;'.repeat(match.length);
+            });
+        }
 
         return processedText;
     }
@@ -283,6 +315,33 @@ const Utils = (function() {
         return false;
     }
 
+    /**
+     * Preserve brackets that aren't color formatting tags
+     */
+    function preserveNonColorBrackets(text) {
+        if (!text) return text;
+        
+        // Find all bracket patterns that are NOT color tags
+        const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal', 'brown', 'silver', 'wood'];
+        const colorPattern = new RegExp(`\\[(${colorTypes.join('|')}):[^\\]]*\\]`, 'gi');
+        
+        // Temporarily replace color tags with placeholders
+        const colorTags = [];
+        let tempText = text.replace(colorPattern, (match) => {
+            const placeholder = `__COLOR_TAG_${colorTags.length}__`;
+            colorTags.push(match);
+            return placeholder;
+        });
+        
+        // Now tempText has all non-color brackets preserved and color tags as placeholders
+        // Restore color tag placeholders
+        tempText = tempText.replace(/__COLOR_TAG_(\d+)__/g, (match, index) => {
+            return colorTags[parseInt(index)];
+        });
+        
+        return tempText;
+    }
+
     // Expose public methods
     return {
         processFormattedText,
@@ -293,9 +352,97 @@ const Utils = (function() {
         savePlayerState,
         loadPlayerState,
         messageExists,
-        debugLog
+        debugLog,
+        // Add new chat history functions
+        saveChatHistory,
+        loadChatHistory,
+        clearChatHistory,
+        saveGameData,
+        loadGameData
     };
 })();
 
-// Make Utils available globally
-window.Utils = Utils;
+/**
+ * Save chat history to localStorage
+ */
+function saveChatHistory(gameId, chatHistory) {
+    try {
+        const key = `chatHistory_${gameId}`;
+        console.log("Utils.saveChatHistory - key:", key, "messages:", chatHistory.length);
+        localStorage.setItem(key, JSON.stringify(chatHistory));
+        console.log("Utils.saveChatHistory - SUCCESS");
+        Utils.debugLog("Chat history saved to localStorage:", key, chatHistory.length, "messages");
+    } catch (e) {
+        console.log("Utils.saveChatHistory - ERROR:", e);
+        Utils.debugLog("Error saving chat history:", e);
+    }
+}
+
+/**
+ * Load chat history from localStorage
+ */
+function loadChatHistory(gameId) {
+    try {
+        const key = `chatHistory_${gameId}`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            const history = JSON.parse(saved);
+            Utils.debugLog("Chat history loaded from localStorage:", key, history.length, "messages");
+            return history;
+        }
+    } catch (e) {
+        Utils.debugLog("Error loading chat history:", e);
+    }
+    return [];
+}
+
+/**
+ * Clear chat history for a specific game
+ */
+function clearChatHistory(gameId) {
+    try {
+        const key = `chatHistory_${gameId}`;
+        localStorage.removeItem(key);
+        Utils.debugLog("Chat history cleared for game:", gameId);
+    } catch (e) {
+        Utils.debugLog("Error clearing chat history:", e);
+    }
+}
+
+/**
+ * Save game data (metadata like current model, etc.)
+ */
+function saveGameData(gameId, gameData) {
+    try {
+        const key = `gameData_${gameId}`;
+        localStorage.setItem(key, JSON.stringify(gameData));
+        Utils.debugLog("Game data saved:", key, gameData);
+    } catch (e) {
+        Utils.debugLog("Error saving game data:", e);
+    }
+}
+
+/**
+ * Load game data from localStorage
+ */
+function loadGameData(gameId) {
+    try {
+        const key = `gameData_${gameId}`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            const data = JSON.parse(saved);
+            Utils.debugLog("Game data loaded:", key, data);
+            return data;
+        }
+    } catch (e) {
+        Utils.debugLog("Error loading game data:", e);
+    }
+    return {};
+}
+
+// Add new functions to Utils object
+Utils.saveChatHistory = saveChatHistory;
+Utils.loadChatHistory = loadChatHistory;
+Utils.clearChatHistory = clearChatHistory;
+Utils.saveGameData = saveGameData;
+Utils.loadGameData = loadGameData;

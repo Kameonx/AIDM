@@ -26,32 +26,41 @@
       <button id="new-game-btn" class="side-menu-btn"><i class="fas fa-plus"></i> New Game</button>
       <button id="copy-chat-btn" class="side-menu-btn"><i class="fas fa-copy"></i> Copy Chat</button>
       <button id="add-player-btn" class="side-menu-btn"><i class="fas fa-user-plus"></i> Add Player</button>
-      <button id="remove-player-btn" class="side-menu-btn hidden"><i class="fas fa-user-minus"></i> Remove Player</button>
-      <div class="undo-redo-container">
+      <button id="remove-player-btn" class="side-menu-btn hidden"><i class="fas fa-user-minus"></i> Remove Player</button>      <div class="undo-redo-container">
         <button id="undoBtn" class="side-menu-btn undo-redo-btn" disabled><i class="fas fa-undo"></i> Undo</button>
         <button id="redoBtn" class="side-menu-btn undo-redo-btn" disabled>Redo <i class="fas fa-redo"></i></button>
       </div>
       <button id="ai-models-btn" class="side-menu-btn"><i class="fas fa-robot"></i> AI Models</button>
+      <button id="image-models-btn" class="side-menu-btn"><i class="fas fa-image"></i> Image Models</button>
     </div>
     <div class="side-menu-donation">
-      <p>Note: Private and uncensored. Chats may get reset each time there are updates to the app, so please use the 'Copy Chat' function to save in your notes. This app does not require payment and has no ads. A donation would mean a lot! Here is a secure Stripe link to donate directly to me, which would support and validate my work:</p>
+      <p>Note: Private and uncensored. This app does not require payment, has no ads, and is funded directly by the developer. A donation would mean a lot! Here is a secure Stripe link to donate directly to me, which would support and validate my work:</p>
       <p><a href="https://donate.stripe.com/3cs8zU2CPecAfw4eUU" target="_blank">Donate</a></p>
       <p>Thank you,<br>-Kameon</p>    </div>
     <div class="side-menu-footer">
-      <div>Kameon</div>
-      <div>Powered by Venice</div>
+      <div>🧙‍♂️</div>
+      <div>Powered by Kameon</div>
     </div>
   </div>
 
   <div class="app-wrapper">
     <div class="chat-container">
       <div class="chat-window" id="chat-window">
-          <!-- Messages will go here -->
-          {% if chat_history %}
+          <!-- Messages will go here -->          {% if chat_history %}
               {% for message in chat_history %}
-                  {% if message.role == 'assistant' %}
+                  {% if message.message_type == 'image' %}
                   <div class="message dm-message">
                       <span class="message-sender">DM: </span>
+                      <span class="message-content">{{ message.content|safe }}</span>
+                  </div>
+                  {% elif message.role == 'assistant' %}
+                  <div class="message dm-message">
+                      <span class="message-sender">DM: </span>
+                      <span class="message-content">{{ message.content|safe }}</span>
+                  </div>
+                  {% elif message.role == 'user' %}
+                  <div class="message player-message">
+                      <span class="message-sender">{{ message.sender or 'Player' }}: </span>
                       <span class="message-content">{{ message.content|safe }}</span>
                   </div>
                   {% endif %}
@@ -102,7 +111,6 @@
       </div>
     </div>
   </div>
-
   <!-- AI Models Modal -->
   <div id="ai-models-modal" class="modal hidden">
     <div class="modal-content">
@@ -116,6 +124,24 @@
         </div>
         <div class="model-list" id="model-list">
           <!-- Models will be populated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Models Modal -->
+  <div id="image-models-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Select Image Model</h3>
+        <button id="close-image-modal-btn" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="current-model">
+          <strong>Current Image Model:</strong> <span id="current-image-model-name">HiDream</span>
+        </div>
+        <div class="model-list" id="image-model-list">
+          <!-- Image models will be populated here -->
         </div>
       </div>
     </div>

@@ -275,8 +275,7 @@ const PlayerManager = (function() {
         if (playerContainer) {
             playerContainer.remove();
         }
-        
-        // Add system message about player leaving
+          // Add system message about player leaving
         addSystemMessage(`${oldName} has left the game.`, false, false, true);
         
         // Get list of remaining players for context
@@ -285,34 +284,43 @@ const PlayerManager = (function() {
             .map(([num, name]) => `${name} (Player ${num})`)
             .join(', ') || 'Only Player 1 remains';
         
-        // Notify DM with invisible system message
-        if (currentGameId) {
+        // Send a natural prompt to the DM to acknowledge the departure within the story
+        if (currentGameId && sendStreamRequest) {
+            // Create a temporary system message that will prompt the DM naturally
+            const dmPrompt = `[DM STORY PROMPT] ${oldName} has just left the adventure permanently. Please acknowledge their departure naturally within the story context - they might have "vanished in a flash of light", "decided to part ways with the group", "been called away on urgent business", or met some other narrative fate appropriate to the current situation. Then continue the adventure focusing only on the remaining active characters: ${remainingPlayers}. Keep your response brief and story-appropriate.`;
+            
+            // Create a loading div for the DM response
+            const loadingDiv = createLoadingDivForDM();
+            
+            // Send the message as if it came from the system, but visible to players
             fetch('/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    message: `[CRITICAL SYSTEM UPDATE] ${oldName} (Player ${playerNumber}) has LEFT THE GAME PERMANENTLY.
-                    
-                    🚨 IMPORTANT: ${oldName} is NO LONGER part of this adventure. Do NOT address them anymore.
-                    
-                    CURRENT ACTIVE PLAYERS: ${remainingPlayers}
-                    
-                    Please briefly acknowledge ${oldName}'s departure in the story (maybe they "vanished in a flash of light" or "decided to part ways") and then ONLY continue the adventure with the remaining active players listed above.
-                    
-                    Do NOT wait for or expect any response from ${oldName}. They are completely gone from this game.`,
+                    message: dmPrompt,
                     game_id: currentGameId,
                     player_number: 'system',
                     is_system: true,
-                    invisible_to_players: true // Add this flag to mark as invisible
+                    trigger_dm_response: true // Flag to trigger immediate DM response
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data && data.message_id) {
-                    debugLog("Invisible system message sent to DM for player departure");
+                    debugLog("DM story prompt sent for player departure, message ID:", data.message_id);
+                    // Trigger the DM response
+                    sendStreamRequest(data.message_id, loadingDiv);
+                } else {
+                    debugLog("Failed to send DM story prompt for player departure");
+                    if (loadingDiv && loadingDiv.parentNode) {
+                        loadingDiv.parentNode.removeChild(loadingDiv);
+                    }
                 }
             }).catch(error => {
-                debugLog(`Error notifying DM about player ${playerNumber} leaving:`, error);
+                debugLog(`Error sending DM story prompt for player ${playerNumber} leaving:`, error);
+                if (loadingDiv && loadingDiv.parentNode) {
+                    loadingDiv.parentNode.removeChild(loadingDiv);
+                }
             });
         }
         

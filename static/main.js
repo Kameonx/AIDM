@@ -765,17 +765,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             debugLog("Skipping duplicate image message");
                         } else {
                             console.log("Adding new image message to localStorage:", message);
-                            debugLog("Adding image message to localStorage:", message);
-                              // Ensure the message structure is preserved for localStorage
+                            debugLog("Adding image message to localStorage:", message);                            // Ensure the message structure is preserved for localStorage
                             const imageMessage = {
                                 role: message.role || "assistant",
                                 content: message.content,
                                 timestamp: message.timestamp || Date.now(),
                                 message_type: "image",  // Critical: preserve this field
-                                image_url: message.image_url,  // Now a URL path, not base64 data
+                                image_url: message.image_url,  // Base64 data URL for localStorage
                                 image_prompt: message.image_prompt,
-                                image_model: message.image_model,
-                                image_filename: message.image_filename  // Optional: for cleanup
+                                image_model: message.image_model
                             };
                             
                             saveMessageToLocalStorage(imageMessage);
@@ -915,19 +913,18 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("📦 messageEntry:", messageEntry);
         console.log("🎯 Message type:", messageEntry.message_type);
         console.log("🔗 Has image_url:", !!messageEntry.image_url);
-        console.log("🎮 currentGameId:", currentGameId);
-          if (messageEntry.message_type === "image") {
+        console.log("🎮 currentGameId:", currentGameId);        if (messageEntry.message_type === "image") {
             console.log("🖼️ SAVING IMAGE MESSAGE TO LOCALSTORAGE");
-            console.log("   Image URL:", messageEntry.image_url);
+            console.log("   Image URL:", messageEntry.image_url ? messageEntry.image_url.substring(0, 50) + "..." : "No URL");
             console.log("   Image URL length:", messageEntry.image_url ? messageEntry.image_url.length : 0);
             console.log("   Image prompt:", messageEntry.image_prompt);
             console.log("   Message structure:", JSON.stringify(messageEntry, null, 2));
             
-            // Check if this is a file URL (new efficient method) or base64 data (old method)
-            if (messageEntry.image_url && messageEntry.image_url.startsWith('/images/')) {
-                console.log("✅ Using efficient file-based image storage (URL: " + messageEntry.image_url.length + " chars)");
-            } else if (messageEntry.image_url && messageEntry.image_url.startsWith('data:image')) {
-                console.log("⚠️ Using old base64 image storage (URL: " + messageEntry.image_url.length + " chars - may cause quota issues)");
+            // Check if this is a base64 data URL (localStorage method)
+            if (messageEntry.image_url && messageEntry.image_url.startsWith('data:image')) {
+                console.log("✅ Using base64 image storage for localStorage (URL: " + messageEntry.image_url.length + " chars)");
+            } else if (messageEntry.image_url && messageEntry.image_url.startsWith('/images/')) {
+                console.log("⚠️ Using file-based image storage (not recommended for localStorage)");
             }
         }
         

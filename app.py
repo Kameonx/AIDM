@@ -185,7 +185,7 @@ def process_image_requests(text):
     return cleaned_text, image_prompts
 
 def generate_and_save_image(prompt, user_id, game_id):
-    """Generate an image and save it to disk, then save metadata to chat history"""
+    """Generate an image and save it to chat history with base64 data for localStorage"""
     try:
         # Get selected image model from session or use default
         selected_model = session.get('selected_image_model', DEFAULT_IMAGE_MODEL_ID)
@@ -270,38 +270,22 @@ def generate_and_save_image(prompt, user_id, game_id):
             app.logger.error(f"Invalid base64 data. Type: {type(image_data)}, Length: {len(image_data) if hasattr(image_data, '__len__') else 'N/A'}")
             raise Exception("Invalid response from image API")
         
-        # Generate a unique filename for this image
-        timestamp = int(time.time())
-        image_filename = f"{user_id}_{game_id}_{timestamp}_{uuid.uuid4().hex[:8]}.png"
-        image_path = os.path.join(IMAGES_DIR, image_filename)
-        
-        # Decode base64 and save to disk
-        try:
-            image_binary = base64.b64decode(image_data)
-            with open(image_path, 'wb') as f:
-                f.write(image_binary)
-            app.logger.debug(f"Saved image to disk: {image_path}, size: {len(image_binary)} bytes")
-        except Exception as e:
-            app.logger.error(f"Failed to save image to disk: {e}")
-            raise Exception(f"Failed to save image: {e}")
-        
-        # Create URL for the image (served by our Flask app)
-        image_url = f"/images/{image_filename}"
-        app.logger.debug(f"Created image URL: {image_url}")
+        # Create data URL from base64 image data (for localStorage storage)
+        image_url = f"data:image/png;base64,{image_data}"
+        app.logger.debug(f"Created image URL with length: {len(image_url)}")
         
         # Load chat history and add image message
         chat_history = load_chat_history(user_id, game_id)
         
-        # Add image message to history (with URL instead of base64 data)
+        # Add image message to history (with base64 data for localStorage)
         image_message = {
             "role": "assistant",
             "content": f'<div class="image-message"><img src="{image_url}" alt="{prompt}" style="max-width: 100%; border-radius: 8px; margin: 10px 0;"><div class="image-caption"><em>Generated image: {prompt}</em></div></div>',
             "timestamp": time.time(),
             "message_type": "image",
-            "image_url": image_url,  # URL instead of base64 data
+            "image_url": image_url,  # Base64 data URL for localStorage
             "image_prompt": prompt,
-            "image_model": selected_model,
-            "image_filename": image_filename  # Store filename for potential cleanup
+            "image_model": selected_model
         }
         
         chat_history.append(image_message)
@@ -310,7 +294,7 @@ def generate_and_save_image(prompt, user_id, game_id):
         app.logger.debug(f"Generated and saved image for prompt: {prompt[:50]}...")
         app.logger.debug(f"Chat history now has {len(chat_history)} messages after adding image")
         app.logger.debug(f"Image message added with type: {image_message.get('message_type')}")
-        app.logger.debug(f"Image URL: {image_url}")
+        app.logger.debug(f"Image URL length: {len(image_url)}")
         
     except Exception as e:
         app.logger.error(f"Error in generate_and_save_image: {str(e)}")
@@ -685,14 +669,6 @@ def stream_response():
 @app.route('/new_game', methods=['POST'])
 def new_game():
     user_id = get_user_id()
-    
-    # Optional: Clean up old games (keep last 5 games per user)
-    # This prevents unlimited accumulation of chat files and images
-    try:
-        cleanup_old_user_data(user_id, keep_recent_games=5)
-    except Exception as e:
-        app.logger.warning(f"Cleanup failed but continuing with new game: {e}")
-    
     game_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
     chat_history = []
     # Only add the welcome message once

@@ -5,7 +5,6 @@ import uuid
 import time
 import requests
 import re
-import base64
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 
 # Import configuration
@@ -21,11 +20,6 @@ app.secret_key = os.urandom(24)  # Required for session
 # Create a directory to store user chat histories
 if not os.path.exists(CHAT_DIR):
     os.makedirs(CHAT_DIR)
-
-# Create a directory to store generated images
-IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images')
-if not os.path.exists(IMAGES_DIR):
-    os.makedirs(IMAGES_DIR)
 
 # Validate API key
 if not VENICE_API_KEY:
@@ -185,7 +179,7 @@ def process_image_requests(text):
     return cleaned_text, image_prompts
 
 def generate_and_save_image(prompt, user_id, game_id):
-    """Generate an image and save it to chat history with base64 data for localStorage"""
+    """Generate an image and save it to chat history"""
     try:
         # Get selected image model from session or use default
         selected_model = session.get('selected_image_model', DEFAULT_IMAGE_MODEL_ID)
@@ -200,8 +194,7 @@ def generate_and_save_image(prompt, user_id, game_id):
             "model": selected_model,
             "prompt": prompt,
             "width": 1024,
-            "height": 1024,
-            "format": "png",
+            "height": 1024,            "format": "png",
             "steps": 20,
             "cfg_scale": 7.5,
             "safe_mode": False,
@@ -227,11 +220,9 @@ def generate_and_save_image(prompt, user_id, game_id):
             app.logger.error(f"Failed to parse JSON response: {json_error}")
             app.logger.error(f"Raw response: {response.text}")
             raise Exception("Invalid JSON response from image API")
-        
         app.logger.debug(f"Venice AI full response: {result}")
         app.logger.debug(f"Venice AI response keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
-        
-        # Check if we have the expected data structure
+          # Check if we have the expected data structure
         if not result:
             app.logger.error(f"Empty response from Venice AI")
             raise Exception("Empty response from image API")
@@ -269,21 +260,20 @@ def generate_and_save_image(prompt, user_id, game_id):
         if not isinstance(image_data, str) or len(image_data) < 100:
             app.logger.error(f"Invalid base64 data. Type: {type(image_data)}, Length: {len(image_data) if hasattr(image_data, '__len__') else 'N/A'}")
             raise Exception("Invalid response from image API")
-        
-        # Create data URL from base64 image data (for localStorage storage)
+          # Create data URL from base64 image data
         image_url = f"data:image/png;base64,{image_data}"
         app.logger.debug(f"Created image URL with length: {len(image_url)}")
         
         # Load chat history and add image message
         chat_history = load_chat_history(user_id, game_id)
         
-        # Add image message to history (with base64 data for localStorage)
+        # Add image message to history
         image_message = {
             "role": "assistant",
             "content": f'<div class="image-message"><img src="{image_url}" alt="{prompt}" style="max-width: 100%; border-radius: 8px; margin: 10px 0;"><div class="image-caption"><em>Generated image: {prompt}</em></div></div>',
             "timestamp": time.time(),
             "message_type": "image",
-            "image_url": image_url,  # Base64 data URL for localStorage
+            "image_url": image_url,
             "image_prompt": prompt,
             "image_model": selected_model
         }
@@ -292,9 +282,6 @@ def generate_and_save_image(prompt, user_id, game_id):
         save_chat_history(user_id, chat_history, game_id)
         
         app.logger.debug(f"Generated and saved image for prompt: {prompt[:50]}...")
-        app.logger.debug(f"Chat history now has {len(chat_history)} messages after adding image")
-        app.logger.debug(f"Image message added with type: {image_message.get('message_type')}")
-        app.logger.debug(f"Image URL length: {len(image_url)}")
         
     except Exception as e:
         app.logger.error(f"Error in generate_and_save_image: {str(e)}")
@@ -304,15 +291,6 @@ def generate_and_save_image(prompt, user_id, game_id):
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
-
-# Add route to serve generated images
-@app.route('/images/<filename>')
-def serve_image(filename):
-    """Serve generated images from the images directory"""
-    try:
-        return send_from_directory(IMAGES_DIR, filename)
-    except FileNotFoundError:
-        return "Image not found", 404
 
 # Route to serve the HTML page
 @app.route('/')
@@ -607,9 +585,7 @@ def stream_response():
                             choice = response_data['choices'][0]
                             if 'message' in choice and 'content' in choice['message']:
                                 full_response = choice['message']['content']
-                                app.logger.debug(f"Extracted content length: {len(full_response)}")
-                                
-                                # Send the full response at once
+                                app.logger.debug(f"Extracted content length: {len(full_response)}")                                # Send the full response at once
                                 yield f"data: {json.dumps({'content': full_response, 'full': full_response})}\n\n"
                             else:
                                 app.logger.error(f"Unexpected response structure: {choice}")
@@ -630,13 +606,12 @@ def stream_response():
                 if full_response:
                     # Process image generation requests first
                     processed_response, image_requests = process_image_requests(full_response)
-                      # Always format the content before storing
+                    
+                    # Always format the content before storing
                     formatted_content = format_message_content(processed_response)
                     chat_history.append({"role": "assistant", "content": formatted_content})
                     save_chat_history(user_id, chat_history, game_id)
-                    app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")
-                    
-                    # Generate images if requested
+                    app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")                    # Generate images if requested
                     if image_requests:
                         app.logger.debug(f"Found {len(image_requests)} image requests to generate")
                         for i, prompt in enumerate(image_requests):
@@ -644,16 +619,12 @@ def stream_response():
                             try:
                                 generate_and_save_image(prompt, user_id, game_id)
                                 app.logger.debug(f"Successfully generated image for prompt: {prompt[:50]}...")
-                                # Send immediate notification that image is complete
-                                yield f"event: image_complete\ndata: {json.dumps({'prompt': prompt[:50], 'image_index': i+1, 'total_images': len(image_requests)})}\n\n"
                             except Exception as e:
                                 app.logger.error(f"Error generating image for prompt '{prompt}': {str(e)}")
                                 # Add error message to chat
                                 error_msg = {"role": "assistant", "content": f"<div class='system-message'><em>Error generating image: {prompt[:50]}...</em></div>", "message_type": "system"}
                                 chat_history.append(error_msg)
                                 save_chat_history(user_id, chat_history, game_id)
-                                # Send error notification
-                                yield f"event: image_error\ndata: {json.dumps({'prompt': prompt[:50], 'error': str(e)})}\n\n"
                     else:
                         app.logger.debug("No image requests found in response")
                 
@@ -1006,7 +977,8 @@ def truncate_chat_history(chat_history, system_prompt, max_tokens=25000):
         else:
             # Stop adding messages if we would exceed the limit
             break
-      # Ensure we don't have more than MAX_HISTORY_SIZE messages
+    
+    # Ensure we don't have more than MAX_HISTORY_SIZE messages
     if len(truncated_history) > MAX_HISTORY_SIZE:
         truncated_history = truncated_history[-MAX_HISTORY_SIZE:]
     
@@ -1014,64 +986,6 @@ def truncate_chat_history(chat_history, system_prompt, max_tokens=25000):
     app.logger.debug(f"Estimated tokens: system={system_tokens}, history={current_tokens}, total={system_tokens + current_tokens}")
     
     return truncated_history
-
-def cleanup_old_game_data(user_id, old_game_id):
-    """Clean up chat history and images from a previous game"""
-    try:
-        # Clean up old chat history file
-        old_chat_file = get_chat_file_path(user_id, old_game_id)
-        if os.path.exists(old_chat_file):
-            # Load the old chat to find image files to delete
-            with open(old_chat_file, 'r') as f:
-                old_chat = json.load(f)
-            
-            # Delete associated image files
-            image_files_deleted = 0
-            for msg in old_chat:
-                if (msg.get('message_type') == 'image' and 
-                    msg.get('image_filename') and 
-                    not msg.get('image_url', '').startswith('data:')):  # Only delete file-based images, not base64
-                    
-                    image_path = os.path.join(IMAGES_DIR, msg['image_filename'])
-                    if os.path.exists(image_path):
-                        os.remove(image_path)
-                        image_files_deleted += 1
-                        app.logger.debug(f"Deleted old image file: {image_path}")
-            
-            # Delete the chat history file
-            os.remove(old_chat_file)
-            app.logger.debug(f"Cleaned up game {old_game_id}: deleted chat file and {image_files_deleted} image files")
-            
-    except Exception as e:
-        app.logger.error(f"Error cleaning up old game data for {old_game_id}: {e}")
-
-def cleanup_old_user_data(user_id, keep_recent_games=5):
-    """Clean up old game data for a user, keeping only the most recent games"""
-    try:
-        # Find all chat files for this user
-        chat_files = []
-        for filename in os.listdir(CHAT_DIR):
-            if filename.startswith(f"chat_history_{user_id}_") and filename.endswith('.json'):
-                file_path = os.path.join(CHAT_DIR, filename)
-                # Extract game_id from filename
-                if filename != f"chat_history_{user_id}_current.json":  # Skip the current file
-                    game_id = filename.replace(f"chat_history_{user_id}_", "").replace(".json", "")
-                    # Get file modification time
-                    mtime = os.path.getmtime(file_path)
-                    chat_files.append((mtime, game_id, file_path))
-        
-        # Sort by modification time (newest first) and keep only recent ones
-        chat_files.sort(reverse=True)
-        old_games = chat_files[keep_recent_games:]  # Games beyond the keep limit
-        
-        for _, game_id, _ in old_games:
-            cleanup_old_game_data(user_id, game_id)
-            
-        if old_games:
-            app.logger.debug(f"Cleaned up {len(old_games)} old games for user {user_id}")
-            
-    except Exception as e:
-        app.logger.error(f"Error during user data cleanup for {user_id}: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -4,8 +4,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function debugLog(...args) {
         if (DEBUG) console.log(...args);
     }
+      debugLog("=== TOP-LEVEL DOMCONTENTLOADED STARTED ===");
     
-    debugLog("=== TOP-LEVEL DOMCONTENTLOADED STARTED ===");
+    // Test device capabilities for image display
+    console.log("📱 Testing device image capabilities...");
+    testImageFormatSupport().then(formats => {
+        console.log("✅ Image format support test complete:", formats);
+        if (!formats.png) {
+            console.warn("⚠️ PNG format not supported - this may cause image display issues");
+        }
+    });
     
     // IMMEDIATE TEST OF LOCALSTORAGE
     console.log("=== TESTING LOCALSTORAGE ===");
@@ -337,15 +345,20 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             debugLog("Error generating image:", error);
             addSystemMessage("Error generating image. Please try again.", false, false, true);
-        });    }
-      function displayImageMessage(message) {
-        console.log("=== DISPLAYING IMAGE MESSAGE ===");
+        });    }    function displayImageMessage(message) {
+        console.log("=== DISPLAYING IMAGE MESSAGE (ENHANCED) ===");
         console.log("Image message:", message);
         console.log("chatWindow exists:", !!chatWindow);
-        console.log("chatWindow element:", chatWindow);
         
         if (!chatWindow) {
             console.error("❌ chatWindow is null/undefined - cannot display image");
+            return;
+        }
+        
+        // Validate and repair image data first
+        const validatedMessage = validateAndRepairImageData(message);
+        if (!validatedMessage) {
+            console.error("❌ Failed to validate image message");
             return;
         }
         
@@ -362,41 +375,57 @@ document.addEventListener('DOMContentLoaded', function() {
         const contentSpan = document.createElement('span');
         contentSpan.className = 'message-content';
         
-        // Check if we have an image URL to display
-        if (message.image_url) {
-            console.log("Creating image element with URL:", message.image_url);
+        // Check if we have a valid image URL to display
+        if (validatedMessage.image_url) {
+            console.log("Creating mobile-optimized image element...");
+            console.log("Image URL length:", validatedMessage.image_url.length);
+            console.log("Image URL type:", validatedMessage.image_url.startsWith('data:image') ? 'base64' : 'file path');
             
-            // Create image container with proper styling
+            // Create image container with mobile-friendly styling
             const imageContainer = document.createElement('div');
             imageContainer.className = 'image-message';
+            imageContainer.style.cssText = `
+                display: block;
+                width: 100%;
+                text-align: center;
+                margin: 15px 0;
+                padding: 0;
+                box-sizing: border-box;
+                /* Mobile optimizations */
+                -webkit-transform: translateZ(0);
+                transform: translateZ(0);
+            `;
             
-            // Create the image element
-            const img = document.createElement('img');
-            img.src = message.image_url;
-            img.alt = message.image_prompt || 'Generated image';
-            img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            img.style.borderRadius = '10px';
-            img.style.margin = '10px 0';
-            
+            // Create mobile-optimized image element
+            const img = createMobileOptimizedImage(validatedMessage);
             imageContainer.appendChild(img);
             
-            // Add caption if available
-            if (message.image_prompt) {
+            // Add caption with mobile-friendly styling
+            if (validatedMessage.image_prompt) {
                 const caption = document.createElement('div');
                 caption.className = 'image-caption';
-                caption.textContent = `Image: ${message.image_prompt}`;
-                caption.style.fontSize = '14px';
-                caption.style.fontStyle = 'italic';
-                caption.style.color = '#6272a4';
-                caption.style.marginTop = '5px';
+                caption.textContent = `Image: ${validatedMessage.image_prompt}`;
+                caption.style.cssText = `
+                    font-size: 14px;
+                    font-style: italic;
+                    color: #6272a4;
+                    margin-top: 8px;
+                    padding: 5px 10px;
+                    text-align: center;
+                    word-wrap: break-word;
+                    line-height: 1.4;
+                    /* Mobile text optimizations */
+                    -webkit-text-size-adjust: 100%;
+                    text-size-adjust: 100%;
+                `;
                 imageContainer.appendChild(caption);
             }
             
             contentSpan.appendChild(imageContainer);
         } else {
             // Fallback to text content if no image URL
-            contentSpan.innerHTML = message.content || 'Image generation completed';
+            console.warn("⚠️ No valid image_url found in message, using fallback content");
+            contentSpan.innerHTML = validatedMessage.content || 'Image generation completed';
         }
           messageDiv.appendChild(contentSpan);
         
@@ -601,10 +630,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         image_url_length: msg.image_url ? msg.image_url.length : 0,
                         content_preview: msg.content ? msg.content.substring(0, 50) + "..." : "no content"
                     });
-                });
-                console.log("=== END DETAILED ANALYSIS ===");
+                });                console.log("=== END DETAILED ANALYSIS ===");
+                
+                // Validate image persistence before displaying
+                validateAndFixImagePersistence();
+                
                 displayMessages(localHistory);
-                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");                console.log("=== END DEBUG ===");                
+                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");console.log("=== END DEBUG ===");                
                 // TEMPORARY FIX: Check localStorage for image consistency
                 // This will be removed once we figure out why images aren't persisting
                 const imageMessages = localHistory.filter(msg => msg.message_type === "image");
@@ -904,8 +936,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Functions for localStorage chat management ---
-    
-    /**
+      /**
      * Save a single message to localStorage chat history
      */    function saveMessageToLocalStorage(messageEntry) {
         console.log("=== saveMessageToLocalStorage CALLED ===");
@@ -913,18 +944,40 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("📦 messageEntry:", messageEntry);
         console.log("🎯 Message type:", messageEntry.message_type);
         console.log("🔗 Has image_url:", !!messageEntry.image_url);
-        console.log("🎮 currentGameId:", currentGameId);        if (messageEntry.message_type === "image") {
+        console.log("🎮 currentGameId:", currentGameId);        
+        if (messageEntry.message_type === "image") {
             console.log("🖼️ SAVING IMAGE MESSAGE TO LOCALSTORAGE");
             console.log("   Image URL:", messageEntry.image_url ? messageEntry.image_url.substring(0, 50) + "..." : "No URL");
             console.log("   Image URL length:", messageEntry.image_url ? messageEntry.image_url.length : 0);
             console.log("   Image prompt:", messageEntry.image_prompt);
             console.log("   Message structure:", JSON.stringify(messageEntry, null, 2));
             
+            // Validate image data before saving
+            if (!messageEntry.image_url || typeof messageEntry.image_url !== 'string') {
+                console.error("❌ Invalid image_url - cannot save image message");
+                return;
+            }
+            
             // Check if this is a base64 data URL (localStorage method)
-            if (messageEntry.image_url && messageEntry.image_url.startsWith('data:image')) {
+            if (messageEntry.image_url.startsWith('data:image')) {
                 console.log("✅ Using base64 image storage for localStorage (URL: " + messageEntry.image_url.length + " chars)");
-            } else if (messageEntry.image_url && messageEntry.image_url.startsWith('/images/')) {
-                console.log("⚠️ Using file-based image storage (not recommended for localStorage)");
+                
+                // Ensure the image message has all required fields
+                messageEntry = {
+                    role: messageEntry.role || "assistant",
+                    type: messageEntry.type || "dm",
+                    content: messageEntry.content || `Generated image: ${messageEntry.image_prompt || 'AI generated image'}`,
+                    timestamp: messageEntry.timestamp || Date.now(),
+                    message_type: "image",
+                    image_url: messageEntry.image_url,
+                    image_prompt: messageEntry.image_prompt,
+                    image_model: messageEntry.image_model
+                };
+                console.log("✅ Enhanced image message structure for localStorage");
+            } else if (messageEntry.image_url.startsWith('/images/')) {
+                console.warn("⚠️ Using file-based image storage (not recommended for localStorage)");
+            } else {
+                console.warn("⚠️ Unknown image URL format:", messageEntry.image_url.substring(0, 50));
             }
         }
         
@@ -937,6 +990,24 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const existingHistory = Utils.loadChatHistory(currentGameId);
             console.log("📚 Existing history length BEFORE save:", existingHistory.length);
+            
+            // Check for duplicates before adding (especially important for images)
+            const isDuplicate = existingHistory.some(existingMsg => {
+                if (messageEntry.message_type === "image" && existingMsg.message_type === "image") {
+                    // For images, check image_url and prompt
+                    return existingMsg.image_url === messageEntry.image_url && 
+                           existingMsg.image_prompt === messageEntry.image_prompt;
+                } else {
+                    // For text messages, check content and timestamp
+                    return existingMsg.content === messageEntry.content && 
+                           Math.abs((existingMsg.timestamp || 0) - (messageEntry.timestamp || 0)) < 1000; // Within 1 second
+                }
+            });
+            
+            if (isDuplicate) {
+                console.log("⚠️ Duplicate message detected, skipping save");
+                return;
+            }
             
             existingHistory.push(messageEntry);
             Utils.saveChatHistory(currentGameId, existingHistory);
@@ -955,7 +1026,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log("🔍 Last message in localStorage:", {
                     message_type: lastMessage.message_type,
                     has_image_url: !!lastMessage.image_url,
-                    image_url_length: lastMessage.image_url ? lastMessage.image_url.length : 0
+                    image_url_length: lastMessage.image_url ? lastMessage.image_url.length : 0,
+                    is_data_url: lastMessage.image_url ? lastMessage.image_url.startsWith('data:image') : false
                 });
                 
                 // Test localStorage size
@@ -990,6 +1062,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     total_characters: totalSize,
                     approximate_size_mb: (totalSize / 1024 / 1024).toFixed(2)
                 });
+                
+                // Try to free up space by removing old data
+                console.log("🧹 Attempting to free up localStorage space...");
+                try {
+                    // Remove old game data first
+                    const keysToRemove = [];
+                    for (let key in localStorage) {
+                        if (key.startsWith('chatHistory_') && key !== `chatHistory_${currentGameId}`) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                    console.log("🧹 Removed", keysToRemove.length, "old game histories");
+                    
+                    // Try saving again
+                    const existingHistory = Utils.loadChatHistory(currentGameId);
+                    existingHistory.push(messageEntry);
+                    Utils.saveChatHistory(currentGameId, existingHistory);
+                    console.log("✅ Message saved after cleanup!");
+                } catch (e2) {
+                    console.error("❌ Failed to save even after cleanup:", e2);
+                }
             }
             
             debugLog("Error saving message to localStorage:", e);
@@ -1038,11 +1132,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log(`Skipping invisible message ${index}`);
                 return;
             }
-            
-            // Handle image messages specifically
+              // Handle image messages specifically
             if (msg.message_type === "image") {
-                console.log(`🖼️ Displaying image message ${index} with URL: ${msg.image_url}`);
-                displayImageMessage(msg);
+                console.log(`🖼️ Displaying image message ${index}:`);
+                console.log(`   - Image URL exists: ${!!msg.image_url}`);
+                console.log(`   - Image URL type: ${typeof msg.image_url}`);
+                console.log(`   - Image URL length: ${msg.image_url ? msg.image_url.length : 0}`);
+                console.log(`   - Image URL preview: ${msg.image_url ? msg.image_url.substring(0, 50) + '...' : 'None'}`);
+                
+                // Validate image URL before displaying
+                if (msg.image_url && typeof msg.image_url === 'string' && msg.image_url.length > 0) {
+                    // Check if it's a valid data URL or file path
+                    const isDataURL = msg.image_url.startsWith('data:image');
+                    const isFilePath = msg.image_url.startsWith('/images/');
+                    
+                    if (isDataURL || isFilePath) {
+                        console.log(`✅ Valid image URL detected (${isDataURL ? 'base64' : 'file path'}), displaying...`);
+                        displayImageMessage(msg);
+                    } else {
+                        console.warn(`⚠️ Invalid image URL format: ${msg.image_url.substring(0, 50)}`);
+                        // Try to display anyway, might work
+                        displayImageMessage(msg);
+                    }
+                } else {
+                    console.error(`❌ Image message has no valid image_url:`, msg);
+                    // Create a fallback error message
+                    const errorMessage = {
+                        ...msg,
+                        content: `Image failed to load: ${msg.image_prompt || 'Generated image'}`
+                    };
+                    console.log("Displaying error fallback for failed image");
+                }
                 return;
             }if (msg.role === "assistant" || msg.type === "dm") {
                 // This is a DM message - always display it
@@ -1406,8 +1526,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
             if (responseTextElem) {
                 responseTextElem.classList.remove('typing');
-                const oldCursor = responseTextElem.querySelector('.cursor');
-                if (oldCursor) oldCursor.remove();
+                const cursor = responseTextElem.querySelector('.cursor');
+                if (cursor) cursor.remove();
                 
                 if (!responseTextElem.textContent.trim()) {
                     responseTextElem.textContent = "Response timeout. Please try again.";
@@ -2144,3 +2264,172 @@ document.addEventListener('DOMContentLoaded', function() {
     // cleanupOldLocalStorageData(); // Disabled for now
 
 });  // End of DOMContentLoaded event listener
+
+// --- Enhanced image persistence and mobile compatibility functions ---
+    
+    /**
+     * Enhanced image validation and repair function
+     */
+    function validateAndRepairImageData(imageMessage) {
+        console.log("🔧 Validating and repairing image data...");
+        
+        if (!imageMessage || !imageMessage.image_url) {
+            console.warn("⚠️ No image URL to validate");
+            return null;
+        }
+        
+        // Ensure the image message has all required fields
+        const repairedMessage = {
+            role: imageMessage.role || "assistant",
+            type: imageMessage.type || "dm", 
+            content: imageMessage.content || `Generated image: ${imageMessage.image_prompt || 'AI generated image'}`,
+            timestamp: imageMessage.timestamp || Date.now(),
+            message_type: "image",
+            image_url: imageMessage.image_url,
+            image_prompt: imageMessage.image_prompt || "Generated image",
+            image_model: imageMessage.image_model || "unknown"
+        };
+        
+        // Validate base64 data URL
+        if (repairedMessage.image_url.startsWith('data:image')) {
+            const base64Part = repairedMessage.image_url.split(',')[1];
+            if (!base64Part || base64Part.length < 100) {
+                console.error("❌ Invalid base64 data in image URL");
+                return null;
+            }
+            console.log("✅ Valid base64 image data detected");
+        } else if (repairedMessage.image_url.startsWith('/images/')) {
+            console.log("ℹ️ File-based image detected (less reliable for mobile)");
+        } else {
+            console.warn("⚠️ Unknown image URL format:", repairedMessage.image_url.substring(0, 50));
+        }
+        
+        return repairedMessage;
+    }
+    
+    /**
+     * Create a mobile-optimized image element
+     */
+    function createMobileOptimizedImage(imageMessage) {
+        console.log("📱 Creating mobile-optimized image element...");
+        
+        const img = document.createElement('img');
+        img.src = imageMessage.image_url;
+        img.alt = imageMessage.image_prompt || 'Generated image';
+        
+        // Apply comprehensive mobile-friendly styles
+        img.style.cssText = `
+            max-width: 100%;
+            max-height: 70vh;
+            width: auto;
+            height: auto;
+            border-radius: 10px;
+            margin: 0 auto;
+            display: block;
+            object-fit: contain;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            background: rgba(255,255,255,0.05);
+            transition: transform 0.2s ease;
+            /* Mobile browser optimizations */
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            /* Prevent image selection on mobile */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            /* Improve rendering on mobile */
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        `;
+        
+        // Add loading and error handlers
+        let loadAttempts = 0;
+        const maxAttempts = 3;
+        
+        const retryLoad = () => {
+            loadAttempts++;
+            console.log(`🔄 Image load attempt ${loadAttempts}/${maxAttempts}`);
+            
+            if (loadAttempts <= maxAttempts) {
+                // Force reload by adding timestamp
+                const originalSrc = imageMessage.image_url;
+                if (originalSrc.startsWith('data:image')) {
+                    // For base64, just retry
+                    setTimeout(() => {
+                        img.src = originalSrc;
+                    }, 100 * loadAttempts);
+                } else {
+                    // For file paths, add cache buster
+                    img.src = originalSrc + (originalSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+                }
+            }
+        };
+        
+        img.onload = function() {
+            console.log("✅ Image loaded successfully on attempt", loadAttempts + 1);
+            // Trigger layout recalculation for mobile browsers
+            this.style.opacity = '0.99';
+            setTimeout(() => {
+                this.style.opacity = '1';
+            }, 10);
+        };
+        
+        img.onerror = function() {
+            console.error(`❌ Image failed to load (attempt ${loadAttempts + 1})`);
+            
+            if (loadAttempts < maxAttempts) {
+                retryLoad();
+            } else {
+                console.error("❌ All image load attempts failed, showing fallback");
+                // Replace with error message
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    padding: 20px;
+                    background: linear-gradient(135deg, #ff5555, #ff6b6b);
+                    border: 1px solid #ff7979;
+                    border-radius: 8px;
+                    color: white;
+                    text-align: center;
+                    margin: 10px 0;
+                `;
+                errorDiv.innerHTML = `
+                    <strong>🖼️ Image Failed to Load</strong><br>
+                    <em>${imageMessage.image_prompt || 'Generated image could not be displayed'}</em><br>
+                    <small>This may be due to corrupted image data or device compatibility issues.</small>
+                `;
+                
+                // Replace the img element with error div
+                if (this.parentNode) {
+                    this.parentNode.replaceChild(errorDiv, this);
+                }
+            }
+        };
+        
+        return img;
+    }
+    
+    /**
+     * Test image format support for the current device
+     */
+    function testImageFormatSupport() {
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'red';
+            ctx.fillRect(0, 0, 1, 1);
+            
+            const formats = {
+                webp: canvas.toDataURL('image/webp').indexOf('image/webp') !== -1,
+                png: canvas.toDataURL('image/png').indexOf('image/png') !== -1,
+                jpeg: canvas.toDataURL('image/jpeg').indexOf('image/jpeg') !== -1
+            };
+            
+            console.log("📱 Device image format support:", formats);
+            resolve(formats);
+        });
+    }

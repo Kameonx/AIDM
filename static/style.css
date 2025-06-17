@@ -186,30 +186,29 @@ body {
     box-shadow: none;
 }
 
-/* Image message styling */
+/* Image message styling - Mobile-first responsive design */
 .image-message {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 20px; /* Increased padding for larger images */
-    margin: 20px auto; /* More margin for better spacing */
+    display: block;
     width: 100%;
-    max-width: 100%;
+    text-align: center;
+    padding: 15px 10px;
+    margin: 15px 0;
     box-sizing: border-box;
+    clear: both;
 }
 
 .image-message img {
-    max-width: min(700px, 85vw); /* Double the size but responsive to viewport */
-    max-height: 600px; /* Increase height proportionally */
+    max-width: 100%;
+    max-height: 70vh; /* Use viewport height for better mobile display */
     width: auto;
     height: auto;
-    border-radius: 10px; /* Slightly larger border radius for bigger images */
-    margin: 0 auto 15px auto; /* More margin for larger images */
+    border-radius: 10px;
+    margin: 0 auto 10px auto;
     display: block;
-    box-shadow: 0 6px 12px rgba(0,0,0,0.4); /* Enhanced shadow for larger images */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
     transition: transform 0.2s ease;
+    object-fit: contain; /* Ensure images scale properly */
+    background: rgba(255,255,255,0.1); /* Fallback background for loading */
 }
 
 .image-message img:hover {
@@ -220,11 +219,11 @@ body {
 .image-caption {
     color: #bbb;
     font-style: italic;
-    font-size: 16px; /* Increase font size to match larger images */
-    margin: 0 auto;
-    padding: 10px 15px; /* More padding for larger text */
-    max-width: min(700px, 85vw); /* Match image width */
-    line-height: 1.5; /* Better line height for larger text */
+    font-size: 14px;
+    margin: 8px auto 0 auto;
+    padding: 5px 10px;
+    max-width: 100%;
+    line-height: 1.4;
     word-wrap: break-word;
     white-space: pre-wrap;
     text-align: center;
@@ -1126,26 +1125,37 @@ body, html, .app-wrapper, .chat-container {
     justify-content: center;
 }
 
-/* Mobile responsive image styling */
+/* Mobile responsive image styling - Enhanced for persistence and mobile display */
 @media screen and (max-width: 768px) {
     .image-message {
-        padding: 10px;
-        margin: 10px auto;
+        padding: 10px 5px;
+        margin: 10px 0;
+        width: 100%;
+        box-sizing: border-box;
     }
     
     .image-message img {
-        max-width: min(480px, 90vw); /* Larger on mobile but still responsive */
-        max-height: 420px; /* Proportional height increase */
+        max-width: 100%;
+        max-height: 60vh; /* Use viewport height for better mobile experience */
+        width: auto;
+        height: auto;
         border-radius: 8px;
-        margin: 0 auto 10px auto;
+        margin: 0 auto 8px auto;
+        display: block;
+        object-fit: contain;
+        /* Ensure images are visible on all mobile browsers */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
     }
     
     .image-caption {
-        font-size: 15px; /* Slightly larger text on mobile */
-        padding: 8px 12px;
-        margin: 0 auto;
-        max-width: min(480px, 90vw); /* Match image width */
-        line-height: 1.4;
+        font-size: 13px;
+        padding: 5px 8px;
+        margin: 5px auto 0 auto;
+        max-width: 100%;
+        line-height: 1.3;
+        word-wrap: break-word;
+        text-align: center;
     }
 }
 

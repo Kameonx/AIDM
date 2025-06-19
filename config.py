@@ -244,8 +244,8 @@ SYSTEM_PROMPT_BASE = """🎯 MANDATORY EMOJI RULE: Every message MUST contain at
 🏗️ Only create location names AFTER character creation is complete.
 
 🔥 EMOJI ENFORCEMENT - NO EXCEPTIONS! 🔥
-🎯 Start EVERY message with emoji
-🌟 Include 8+ emojis throughout EVERY response 
+🎯 Remember to use emojis in all messages going forward.
+🌟 Include many emojis throughout EVERY response 
 💫 Use emojis for: actions, emotions, objects, characters, atmosphere
 � Examples to use frequently: 🧙⚔️🐉🏰💰🍺🔮🎲💥🛡️❤️🌲🏆❓👋😊🤔🎉✨🔥❄️⚡🌟🗡️🏹🧝🧔🏃💀🌙☀️
 🚨 If you use fewer than 8 emojis, you're failing this requirement!

@@ -46,9 +46,21 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Track processed messages to avoid duplicates
     const processedMessageIds = new Set();
-    
-    // Keep track of last message from each player to avoid duplicates
+      // Keep track of last message from each player to avoid duplicates
     const lastPlayerMessages = {};
+    
+    /**
+     * Update global player selection variables
+     * Called by PlayerManager when player selection changes
+     */
+    function updatePlayerSelection(playerElement, playerNum) {
+        debugLog(`updatePlayerSelection called: playerNum=${playerNum}, element=`, playerElement);
+        selectedPlayerElement = playerElement;
+        selectedPlayerNum = playerNum;
+    }
+    
+    // Make updatePlayerSelection available to PlayerManager
+    window.updatePlayerSelection = updatePlayerSelection;
     
     // Get DOM elements once
     const chatWindow = document.getElementById('chat-window');
@@ -1511,10 +1523,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Setup remaining event listeners
     if (newGameBtn) newGameBtn.addEventListener('click', createNewGame);
-    
-    if (addPlayerBtn) {
+      if (addPlayerBtn) {
         addPlayerBtn.addEventListener('click', function() {
             PlayerManager.addPlayer(sendMessage);
+        });
+    }
+    
+    // Remove player button event listener
+    if (removePlayerBtn) {
+        removePlayerBtn.addEventListener('click', function() {
+            const selectedPlayerNum = PlayerManager.getSelectedPlayerNumber();
+            if (selectedPlayerNum && selectedPlayerNum > 1) {
+                debugLog(`Removing player ${selectedPlayerNum}`);
+                PlayerManager.removePlayer(selectedPlayerNum);
+            } else {
+                debugLog('No valid player selected for removal or trying to remove Player 1');
+                addSystemMessage('Please select a player to remove (Player 1 cannot be removed).', false, false, true);
+            }
         });
     }
     

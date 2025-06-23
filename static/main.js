@@ -2117,12 +2117,170 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        
-        debugLog("Mobile fixes initialized");
+          debugLog("Mobile fixes initialized");
     }
 
-    // Initialize mobile fixes
+    // Initialize mobile image long-press handling
+    function initImageLongPress() {
+        debugLog("Initializing image long-press handling");
+        
+        // Use event delegation to handle dynamically added images
+        document.addEventListener('contextmenu', function(e) {
+            if (e.target.tagName === 'IMG' && e.target.closest('.image-message')) {
+                // Allow context menu for images (enables save option)
+                debugLog("Context menu allowed for image");
+                return true;
+            }
+        });
+        
+        // Add touch handling for iOS Safari which doesn't always show context menu
+        let touchTimer = null;
+        let touchStarted = false;
+        
+        document.addEventListener('touchstart', function(e) {
+            if (e.target.tagName === 'IMG' && e.target.closest('.image-message')) {
+                touchStarted = true;
+                debugLog("Touch started on image");
+                
+                // Set a timer for long press
+                touchTimer = setTimeout(() => {
+                    if (touchStarted) {
+                        debugLog("Long press detected on image");
+                        // For iOS Safari, we can try to trigger the save dialog
+                        showImageSaveOptions(e.target);
+                    }
+                }, 500); // 500ms for long press
+            }
+        }, { passive: true });
+        
+        document.addEventListener('touchend', function(e) {
+            if (touchTimer) {
+                clearTimeout(touchTimer);
+                touchTimer = null;
+            }
+            touchStarted = false;
+        }, { passive: true });
+        
+        document.addEventListener('touchcancel', function(e) {
+            if (touchTimer) {
+                clearTimeout(touchTimer);
+                touchTimer = null;
+            }
+            touchStarted = false;
+        }, { passive: true });
+        
+        document.addEventListener('touchmove', function(e) {
+            // Cancel long press if user moves finger
+            if (touchTimer) {
+                clearTimeout(touchTimer);
+                touchTimer = null;
+            }
+            touchStarted = false;
+        }, { passive: true });
+        
+        debugLog("Image long-press handling initialized");
+    }
+    
+    // Show image save options for mobile browsers
+    function showImageSaveOptions(imgElement) {
+        if (!imgElement || !imgElement.src) return;
+        
+        debugLog("Showing image save options for:", imgElement.src);
+        
+        // For browsers that support it, try to trigger a download
+        try {
+            // Create a temporary link element
+            const link = document.createElement('a');
+            link.href = imgElement.src;
+            link.download = `ai-dungeon-image-${Date.now()}.png`;
+            
+            // For data URLs (base64 images), we can't use download directly
+            if (imgElement.src.startsWith('data:')) {
+                // Try to show a custom save dialog or instructions
+                showMobileSaveInstructions(imgElement);
+            } else {
+                // For regular URLs, try the download approach
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } catch (error) {
+            debugLog("Error with download approach:", error);
+            showMobileSaveInstructions(imgElement);
+        }
+    }
+    
+    // Show instructions for saving images on mobile
+    function showMobileSaveInstructions(imgElement) {
+        // Create a simple modal with instructions
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+            box-sizing: border-box;
+        `;
+        
+        const content = document.createElement('div');
+        content.style.cssText = `
+            background: #282a36;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 350px;
+            text-align: center;
+            font-family: inherit;
+        `;
+        
+        content.innerHTML = `
+            <h3 style="margin-top: 0; color: #50fa7b;">Save Image</h3>
+            <p style="margin: 15px 0;">To save this image:</p>
+            <ul style="text-align: left; margin: 15px 0;">
+                <li>Long press the image again</li>
+                <li>Select "Save Image" or "Save to Photos"</li>
+                <li>On some devices, tap "Copy Image" then paste into Photos</li>
+            </ul>
+            <button id="close-save-instructions" style="
+                background: #50fa7b;
+                color: #282a36;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-size: 16px;
+                cursor: pointer;
+                margin-top: 10px;
+            ">Got it!</button>
+        `;
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // Close the modal
+        const closeBtn = content.querySelector('#close-save-instructions');
+        const closeModal = () => {
+            document.body.removeChild(modal);
+        };
+        
+        closeBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+        
+        // Auto-close after 5 seconds
+        setTimeout(closeModal, 5000);
+    }    // Initialize mobile fixes
     initMobileFixes();
+    
+    // Initialize image long-press handling
+    initImageLongPress();
 
     // Initialize the application
     initialize();

@@ -210,6 +210,20 @@ body {
     display: block;
     box-shadow: 0 6px 12px rgba(0,0,0,0.4);
     transition: transform 0.2s ease;
+    
+    /* Enable long-press image saving on mobile */
+    -webkit-touch-callout: default;
+    -webkit-user-drag: auto;
+    -khtml-user-drag: auto;
+    -moz-user-drag: auto;
+    -o-user-drag: auto;
+    
+    /* Ensure images can be saved on mobile browsers */
+    pointer-events: auto;
+    -webkit-user-select: auto;
+    -moz-user-select: auto;
+    -ms-user-select: auto;
+    user-select: auto;
 }
 
 .image-message img:hover {
@@ -1132,12 +1146,18 @@ body, html, .app-wrapper, .chat-container {
         padding: 6px; /* Minimal cushion on mobile */
         margin: 6px auto;
     }
-    
-    .image-message img {
+      .image-message img {
         max-width: min(700px, 94vw); /* Much larger on mobile with small cushion */
         max-height: 60vh; /* Use viewport height for better space usage */
         border-radius: 8px;
         margin: 0 auto 6px auto;
+        
+        /* Ensure long-press works on mobile */
+        -webkit-touch-callout: default;
+        -webkit-user-drag: auto;
+        pointer-events: auto;
+        -webkit-user-select: auto;
+        user-select: auto;
     }
     
     .image-caption {

@@ -309,9 +309,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (model && currentImageModelName) {
             currentImageModelName.textContent = model.name;
         }
-    }
-
-    function generateImage(prompt) {
+    }    function generateImage(prompt) {
         if (!currentGameId) {
             addSystemMessage("Error: No active game session for image generation.", false, false, true);
             return;
@@ -337,11 +335,31 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // The image message is already saved to history by the server
-                // Just add it to the current chat display
-                const message = data.message;
-                displayImageMessage(message);
-                debugLog("Image generated successfully:", data.image_url);
+                // Create image message with base64 data URL for localStorage persistence
+                const imageMessage = {
+                    role: "assistant",
+                    content: `Generated image: ${prompt}`,
+                    text: `Generated image: ${prompt}`,
+                    timestamp: Date.now(),
+                    message_type: "image",
+                    image_url: data.message.image_url, // This is already a base64 data URL
+                    image_prompt: prompt,
+                    image_model: data.model,
+                    sender: dmName,
+                    type: "dm",
+                    images: [data.message.image_url] // Store in images array for consistency
+                };
+                
+                console.log("=== ABOUT TO DISPLAY AND SAVE IMAGE ===");
+                console.log("Image message object:", imageMessage);
+                console.log("Image URL length:", data.message.image_url.length);
+                
+                // Add to chat display
+                displayImageMessage(imageMessage);
+                  // Save to localStorage immediately
+                saveImageToLocalStorage(imageMessage);
+                
+                debugLog("Image generated and saved to localStorage:", data.message.image_url.substring(0, 50) + "...");
             } else {
                 addSystemMessage(`Error generating image: ${data.error}`, false, false, true);
             }
@@ -356,18 +374,82 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message dm-message image-message-container';
-        messageDiv.innerHTML = `
-            <span class="message-sender">${dmName}: </span>
-            <span class="message-content">${message.content}</span>
-        `;
         
-        console.log("Created image message div:", messageDiv);
+        // Create sender span
+        const senderSpan = document.createElement('span');
+        senderSpan.className = 'message-sender';
+        senderSpan.textContent = `${dmName}: `;
+        messageDiv.appendChild(senderSpan);
+
+        // Create content span
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'message-content';
+        
+        // Handle image display - check for various image URL sources
+        let imageUrl = message.image_url;
+        if (!imageUrl && message.images && message.images.length > 0) {
+            imageUrl = message.images[0]; // Use first image from array
+        }
+        
+        // Get image prompt from various sources
+        let imagePrompt = message.image_prompt || message.alt || 'Generated image';
+        if (!imagePrompt || imagePrompt === 'Generated image') {
+            // Try to extract from content/text
+            if (message.content && message.content.includes('Generated image:')) {
+                const match = message.content.match(/Generated image: (.+)/);
+                if (match) imagePrompt = match[1];
+            } else if (message.text && message.text.includes('Generated image:')) {
+                const match = message.text.match(/Generated image: (.+)/);
+                if (match) imagePrompt = match[1];
+            }
+        }        console.log("Image URL found:", imageUrl ? imageUrl.substring(0, 50) + "..." : "none");
+        console.log("Image prompt:", imagePrompt);
+        console.log("Image URL is valid base64:", imageUrl && imageUrl.startsWith('data:image/'));
+        console.log("Image URL length:", imageUrl ? imageUrl.length : 0);
+          // Additional validation for base64 data
+        if (imageUrl && imageUrl.startsWith('data:image/')) {
+            const base64Data = imageUrl.split(',')[1];
+            console.log("Base64 data length:", base64Data ? base64Data.length : 0);
+            console.log("Base64 data preview:", base64Data ? base64Data.substring(0, 50) + "..." : "none");
+            
+            // Check if base64 data ends properly
+            if (base64Data && base64Data.length > 100) {
+                const ending = base64Data.slice(-20);
+                console.log("Base64 data ending:", ending);
+                console.log("Image should be valid");
+            } else {
+                console.warn("Base64 data appears to be too short or invalid");
+            }
+        }        // If we have a base64 image URL, create the image display
+        if (imageUrl && imageUrl.length > 50 && imageUrl.startsWith('data:image/')) {
+            contentSpan.innerHTML = `
+                <div class="image-message">
+                    <img src="${imageUrl}" alt="${imagePrompt}" 
+                         style="max-width: 100%; border-radius: 8px; margin: 10px 0; display: block; background-color: #f0f0f0;" 
+                         onload="console.log('Image loaded successfully:', this.alt); this.style.backgroundColor = 'transparent'; if(this.closest('#chat-window')) this.closest('#chat-window').scrollTop = this.closest('#chat-window').scrollHeight;"
+                         onerror="console.error('Image failed to load:', this.alt, this.src.substring(0, 50)); this.style.backgroundColor = '#ffebee'; this.alt = 'Image failed to load';">
+                    <div class="image-caption">
+                        <em>Generated image: ${imagePrompt}</em>
+                    </div>
+                </div>
+            `;
+        } else if (message.content || message.text) {
+            // Fallback to content if no direct image_url
+            const content = message.content || message.text;
+            contentSpan.innerHTML = Utils.processFormattedText(content);
+        } else {
+            // Last resort fallback
+            contentSpan.innerHTML = `<em>Image message (no content available)</em>`;
+        }
+          messageDiv.appendChild(contentSpan);
         chatWindow.appendChild(messageDiv);
         chatWindow.scrollTop = chatWindow.scrollHeight;
         
-        console.log("Image message added to chat window");
+        console.log("Image message displayed successfully");
         console.log("=== END DISPLAYING IMAGE MESSAGE ===");
-    }// Function to check for new messages (including images) from the server
+    }
+
+    // Function to check for new messages (including images) from the server
     // DISABLED: Now using localStorage instead of server polling
     function checkForNewMessages() {
         // No longer needed - using localStorage
@@ -529,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         role: msg.role,
                         type: msg.type,
                         sender: msg.sender,
-                        content: msg.content ? msg.content.substring(0, 50) + "..." : "No content",
+                        content: (msg.content || msg.text) ? (msg.content || msg.text).substring(0, 50) + "..." : "No content",
                         timestamp: msg.timestamp
                     });
                 });
@@ -541,18 +623,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (msg.role === 'user' && !msg.type) {
                         msg.type = 'player';
                     }
-                });
-                  console.log("About to call displayMessages with", localHistory.length, "messages");
-                displayMessages(localHistory);
-                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");
-                console.log("=== END DEBUG ===");
+                });                console.log("About to call displayMessages with", localHistory.length, "messages");
+                displayMessages(localHistory);                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");
                 
-                // Also check for any image messages that might have been generated on the server
-                // but not yet captured in localStorage (in case of previous session inconsistencies)
-                setTimeout(() => {
-                    console.log("Checking for additional server messages after initialization...");
-                    checkForImageMessages();
-                }, 500);
+                console.log("=== END DEBUG ===");
             } else {
                 console.log("No messages in localStorage");
                 console.log("=== END DEBUG ===");
@@ -700,13 +774,12 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('lastUndoneMessage');
         localStorage.removeItem('lastUndonePlayerNumber');
         debugLog("Undo/Redo state cleared");
-    }
-
-    // --- Functions for localStorage chat management ---
+    }    // --- Functions for localStorage chat management ---
     
     /**
      * Save a single message to localStorage chat history
-     */    function saveMessageToLocalStorage(messageEntry) {
+     */
+    function saveMessageToLocalStorage(messageEntry) {
         console.log("=== saveMessageToLocalStorage CALLED ===");
         console.log("messageEntry:", messageEntry);
         console.log("currentGameId:", currentGameId);
@@ -718,23 +791,228 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const existingHistory = Utils.loadChatHistory(currentGameId);
-            console.log("Existing history length:", existingHistory.length);
+            // Load existing messages
+            const existingMessages = Utils.loadChatHistory(currentGameId) || [];
             
-            existingHistory.push(messageEntry);
-            Utils.saveChatHistory(currentGameId, existingHistory);
+            // Convert the message entry to the localStorage format
+            const messageToSave = {
+                sender: messageEntry.role === 'user' ? 'user' : 'assistant',
+                text: messageEntry.content || messageEntry.text || '',
+                images: messageEntry.images || [],
+                timestamp: messageEntry.timestamp || Date.now(),
+                role: messageEntry.role,
+                type: messageEntry.type || (messageEntry.role === 'user' ? 'player' : 'dm'),
+                message_type: (messageEntry.images && messageEntry.images.length > 0) ? 'image' : 'text'
+            };
+              // Add the new message (check for duplicates based on timestamp and content)
+            const isDuplicate = existingMessages.some(msg => 
+                Math.abs(msg.timestamp - messageToSave.timestamp) < 1000 && 
+                msg.text === messageToSave.text && 
+                msg.role === messageToSave.role
+            );
             
-            console.log("Message saved! New history length:", existingHistory.length);
-            debugLog("Message saved to localStorage:", messageEntry);
+            if (!isDuplicate) {
+                existingMessages.push(messageToSave);
+                
+                // Save back to localStorage
+                Utils.saveChatHistory(currentGameId, existingMessages);
+                
+                console.log("Message saved to localStorage successfully");
+                debugLog("Message saved to localStorage:", messageToSave);
+            } else {
+                console.log("Skipping duplicate message save");
+            }
         } catch (e) {
             console.log("ERROR saving message:", e);
             debugLog("Error saving message to localStorage:", e);
         }
         console.log("=== saveMessageToLocalStorage END ===");
+    }    /**
+     * Save an image message to localStorage chat history
+     */    function saveImageToLocalStorage(imageMessage) {
+        try {
+            console.log("=== SAVING IMAGE TO LOCALSTORAGE ===");
+            console.log("Image message:", imageMessage);
+            
+            if (!currentGameId) {
+                console.log("No currentGameId, cannot save image");
+                return;
+            }
+            
+            // Load existing messages from localStorage
+            const existingMessages = Utils.loadChatHistory(currentGameId) || [];
+              // Create a message to save (compress if needed) - ensure all required fields are present
+            const messageToSave = {
+                sender: 'assistant',
+                text: imageMessage.image_prompt || imageMessage.text || 'Generated image',
+                content: imageMessage.content || `<div class="image-message"><img src="${imageMessage.image_url}" alt="${imageMessage.image_prompt || 'Generated image'}" style="max-width: 100%; border-radius: 8px; margin: 10px 0;"><div class="image-caption"><em>Generated image: ${imageMessage.image_prompt || 'Generated image'}</em></div></div>`,
+                images: [imageMessage.image_url], // Store the full image URL first
+                timestamp: imageMessage.timestamp || Date.now(),
+                role: 'assistant',
+                type: 'dm',
+                message_type: 'image',
+                image_url: imageMessage.image_url,
+                image_prompt: imageMessage.image_prompt || imageMessage.text || 'Generated image',
+                image_model: imageMessage.image_model || 'pony-realism'
+            };
+            
+            console.log("Formatted message to save:", messageToSave);
+            console.log("Image URL length:", messageToSave.image_url ? messageToSave.image_url.length : 0);
+            
+            // Add the new message
+            existingMessages.push(messageToSave);
+            
+            // Try to save - if localStorage quota exceeded, compress the image
+            try {
+                Utils.saveChatHistory(currentGameId, existingMessages);
+                console.log("Image message saved to localStorage successfully");
+                console.log("Total messages in localStorage:", existingMessages.length);
+            } catch (quotaError) {
+                console.warn("LocalStorage quota exceeded, attempting compression:", quotaError);
+                
+                // If the image is large, try to compress it
+                if (imageMessage.image_url && imageMessage.image_url.length > 500000) {
+                    console.log("Compressing large image for localStorage...");
+                    
+                    try {
+                        // Create a canvas to compress the image synchronously
+                        const img = new Image();
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            
+                            // Reduce size to max 800px while maintaining aspect ratio
+                            const maxSize = 800;
+                            let { width, height } = img;
+                            
+                            if (width > height) {
+                                if (width > maxSize) {
+                                    height = (height * maxSize) / width;
+                                    width = maxSize;
+                                }
+                            } else {
+                                if (height > maxSize) {
+                                    width = (width * maxSize) / height;
+                                    height = maxSize;
+                                }
+                            }
+                            
+                            canvas.width = width;
+                            canvas.height = height;
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            // Compress to JPEG with lower quality
+                            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                            console.log("Compressed image from", imageMessage.image_url.length, "to", compressedDataUrl.length);
+                            
+                            // Update the message with compressed image
+                            messageToSave.images = [compressedDataUrl];
+                            messageToSave.image_url = compressedDataUrl;
+                            messageToSave.content = messageToSave.content.replace(imageMessage.image_url, compressedDataUrl);
+                            
+                            // Update in the array and try to save again
+                            existingMessages[existingMessages.length - 1] = messageToSave;
+                            
+                            try {
+                                Utils.saveChatHistory(currentGameId, existingMessages);
+                                console.log("Compressed image message saved to localStorage successfully");
+                            } catch (stillTooLarge) {
+                                console.error("Even compressed image is too large, saving without image data");
+                                // Fallback: save without the image data but keep the message structure
+                                messageToSave.images = [];
+                                messageToSave.image_url = null;
+                                messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image too large for storage (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
+                                existingMessages[existingMessages.length - 1] = messageToSave;
+                                Utils.saveChatHistory(currentGameId, existingMessages);
+                                console.log("Saved image message without data due to quota limits");
+                            }
+                        };
+                        img.onerror = function() {
+                            console.error("Failed to load image for compression");
+                            // Fallback: save without the image data
+                            messageToSave.images = [];
+                            messageToSave.image_url = null;
+                            messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image failed to load (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
+                            existingMessages[existingMessages.length - 1] = messageToSave;
+                            Utils.saveChatHistory(currentGameId, existingMessages);
+                            console.log("Saved image message without data due to load failure");
+                        };
+                        img.src = imageMessage.image_url;
+                    } catch (compressionError) {
+                        console.error("Image compression failed:", compressionError);
+                        // Fallback: save without the image data
+                        messageToSave.images = [];
+                        messageToSave.image_url = null;
+                        messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image compression failed (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
+                        existingMessages[existingMessages.length - 1] = messageToSave;
+                        Utils.saveChatHistory(currentGameId, existingMessages);
+                        console.log("Saved image message without data due to compression failure");
+                    }
+                } else {
+                    // If image is not that large, still try fallback
+                    console.log("Image not large enough for compression, using fallback");
+                    messageToSave.images = [];
+                    messageToSave.image_url = null;
+                    messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image storage failed (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
+                    existingMessages[existingMessages.length - 1] = messageToSave;
+                    Utils.saveChatHistory(currentGameId, existingMessages);
+                    console.log("Saved image message without data due to quota limits");
+                }
+            }
+            
+            console.log("=== END SAVING IMAGE ===");
+            
+        } catch (error) {
+            console.error("Error saving image to localStorage:", error);
+            debugLog("Error saving image to localStorage:", error);
+        }
+    }
+
+    /**
+     * Save chat history to localStorage (following the pattern from your other app)
+     */    function saveChatHistoryToLocalStorage() {
+        if (!currentGameId) return;
+        
+        const messageElements = chatWindow.querySelectorAll('.message:not(.temporary-message)');
+        const messages = [];
+
+        messageElements.forEach(msgEl => {
+            const senderEl = msgEl.querySelector('.message-sender');
+            const textEl = msgEl.querySelector('.message-content');
+            const imageEls = msgEl.querySelectorAll('img');
+            
+            if (!senderEl || !textEl) return;
+            
+            // Extract image sources (base64 data URLs)
+            const images = Array.from(imageEls).map(img => img.src);
+            
+            const sender = senderEl.textContent.replace(':', '').trim();
+            const isUser = !msgEl.classList.contains('dm-message');
+            const textContent = textEl.textContent || '';
+            
+            // Skip empty messages unless they have images
+            if (!textContent.trim() && images.length === 0) {
+                return;
+            }
+            
+            messages.push({
+                sender: isUser ? 'user' : 'assistant',
+                text: textContent,
+                images: images,  // Store base64 image URLs
+                timestamp: Date.now(),
+                role: isUser ? 'user' : 'assistant',
+                type: isUser ? 'player' : 'dm',
+                message_type: images.length > 0 ? 'image' : 'text'
+            });
+        });
+
+        Utils.saveChatHistory(currentGameId, messages);
+        console.log("Chat history saved to localStorage:", messages.length, "messages");
     }
 
     // --- Chat message handling functions ---
-      function displayMessages(messages) {
+    
+    function displayMessages(messages) {
         if (!Array.isArray(messages)) {
             debugLog("Invalid messages array:", messages);
             return;
@@ -744,26 +1022,35 @@ document.addEventListener('DOMContentLoaded', function() {
             // Skip invisible messages - don't show them in chat
             if (msg.invisible) {
                 return;
-            }
-            
-            // Handle image messages specifically
-            if (msg.message_type === "image") {
+            }            // Handle image messages specifically - enhanced detection for better compatibility
+            if (msg.message_type === "image" || 
+                (msg.images && msg.images.length > 0 && msg.images[0] && msg.images[0].length > 50) || 
+                (msg.image_url && msg.image_url.length > 50 && msg.image_url.startsWith('data:image/')) ||
+                (msg.content && msg.content.includes('Generated image:')) ||
+                (msg.content && msg.content.includes('<img src="data:image/')) ||
+                (msg.text && msg.text && typeof msg.text === 'string' && msg.role === 'assistant' && 
+                 (msg.image_url || (msg.images && msg.images.length > 0)))) {
+                console.log("Found image message in localStorage:", msg);
+                console.log("Message type:", msg.message_type, "Images array:", msg.images?.length || 0, "Image URL:", msg.image_url ? msg.image_url.substring(0, 50) + "..." : "none");
                 displayImageMessage(msg);
                 return;
-            }            if (msg.role === "assistant" || msg.type === "dm") {
+            }
+
+            if (msg.role === "assistant" || msg.type === "dm") {
                 // This is a DM message - always display it
-                debugLog("Displaying DM message:", msg.content.substring(0, 50) + "...");
+                const messageContent = msg.content || msg.text || '';
+                debugLog("Displaying DM message:", messageContent.substring(0, 50) + "...");
                 
                 // Check if content is already HTML formatted from server OR has color tags that need processing
-                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(msg.content);
-                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(msg.content);
+                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
+                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
                 
                 if (hasHTMLFormatting && !hasColorTags) {
                     // Content is already fully formatted as HTML, use it directly
-                    addMessage(dmName, msg.content, false, true, true, true);
+                    addMessage(dmName, messageContent, false, true, true, true);
                 } else {
                     // Process content through formatting to ensure proper display (handles color tags and text formatting)
-                    const processedContent = Utils.processFormattedText(msg.content);
+                    const processedContent = Utils.processFormattedText(messageContent);
                     addMessage(dmName, processedContent, false, true, true, true);
                 }
             } else if (msg.role === "user" || msg.type === "player") {
@@ -782,21 +1069,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 // Check if content is already HTML formatted OR has color tags that need processing
-                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(msg.content);
-                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(msg.content);
+                const messageContent = msg.content || msg.text || '';
+                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
+                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
                 
                 if (hasHTMLFormatting && !hasColorTags) {
                     // Content is already fully formatted as HTML, use it directly  
-                    addMessage(senderName || `Player ${msg.player_number || 1}`, msg.content, false, true, true, true);
+                    addMessage(senderName || `Player ${msg.player_number || 1}`, messageContent, false, true, true, true);
                 } else {
                     // Process player messages through formatting as well (handles color tags and text formatting)
-                    const processedContent = Utils.processFormattedText(msg.content);
+                    const processedContent = Utils.processFormattedText(messageContent);
                     addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
                 }
             } else if (msg.role === "system" || msg.type === "system") {
                 // Only show system messages that aren't marked as invisible
                 if (!msg.invisible) {
-                    addSystemMessage(msg.content, true, true);
+                    const messageContent = msg.content || msg.text || '';
+                    addSystemMessage(messageContent, true, true);
                 }
             }
         });
@@ -813,17 +1102,20 @@ document.addEventListener('DOMContentLoaded', function() {
         debugLog(`Restoring chat state from history index ${index}. State contains ${state.length} messages.`);
         
         chatWindow.innerHTML = ''; // Clear chat window
-        
         state.forEach(msg => {
-            if (msg.type === 'system') {
-                addSystemMessage(msg.content, true, true); // fromUpdate = true, skipHistory = true
+            if (msg.message_type === "image") {
+                // Handle image messages specifically
+                displayImageMessage(msg);
+            } else if (msg.type === 'system') {
+                const messageContent = msg.contentHTML || msg.content || msg.text || '';
+                addSystemMessage(messageContent, true, true); // fromUpdate = true, skipHistory = true
             } else if (msg.type === 'dm') {
                 // Use the HTML content if available, otherwise fall back to plain text
-                const content = msg.contentHTML || msg.content;
+                const content = msg.contentHTML || msg.content || msg.text || '';
                 addMessage(dmName, content, false, true, true, true); // Added parameter to indicate HTML content
             } else { // player message
                 // Use the HTML content if available, otherwise fall back to plain text
-                const content = msg.contentHTML || msg.content;
+                const content = msg.contentHTML || msg.content || msg.text || '';
                 addMessage(msg.sender, content, false, true, true, true); // Added parameter to indicate HTML content
             }
         });
@@ -1148,10 +1440,36 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     isGenerating = false;
-                }, 30000);
-
-                debugLog("Received message chunk for messageId:", messageId, "Data:", event.data.substring(0, 50) + "...");
-                const data = JSON.parse(event.data);
+                }, 30000);                debugLog("Received message chunk for messageId:", messageId, "Data:", event.data.substring(0, 50) + "...");
+                const data = JSON.parse(event.data);                // Handle image generation messages
+                if (data.image_generated) {
+                    console.log("=== RECEIVED IMAGE FROM STREAM ===");
+                    console.log("Image message:", data.image_message);
+                    
+                    // Ensure the image message has the correct format for localStorage
+                    const formattedImageMessage = {
+                        ...data.image_message,
+                        text: data.image_message.image_prompt || 'Generated image',
+                        content: data.image_message.image_prompt || 'Generated image',
+                        images: [data.image_message.image_url], // Add images array
+                        sender: 'assistant',
+                        role: 'assistant',
+                        type: 'dm',
+                        message_type: 'image',
+                        timestamp: Date.now()
+                    };
+                    
+                    // Display the image immediately
+                    displayImageMessage(formattedImageMessage);
+                    
+                    // Save to localStorage with proper format - remove the delayed saveChatHistoryToLocalStorage call
+                    // as it might overwrite the image data
+                    saveImageToLocalStorage(formattedImageMessage);
+                    
+                    console.log("=== IMAGE PROCESSED FROM STREAM ===");
+                    return; // Don't process as text content
+                }
+                
                 const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
                 
                 if (responseTextElem) {
@@ -1229,37 +1547,35 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Note: Image generation is now handled automatically on the server side
                     // when the DM includes [IMAGE: description] tags in responses                    // Save the completed DM response to localStorage
                     const processedResponse = Utils.processFormattedText(fullResponseText);
-                    
-                    // Remove [IMAGE: ...] tags from the displayed/saved content
+                      // Remove [IMAGE: ...] tags from the displayed/saved content
                     const cleanedContent = processedResponse.replace(/\[IMAGE:\s*[^\]]+\]/gi, '').replace(/\s+/g, ' ').trim();
                     
-                    // Save DM message directly to localStorage
-                    const dmMessage = {
-                        role: "assistant",
-                        type: "dm", 
-                        content: cleanedContent,
-                        timestamp: Date.now(),
-                        sender: dmName
-                    };
-                      console.log("About to save DM message:", dmMessage);
-                    saveMessageToLocalStorage(dmMessage);
-                    console.log("DM message save completed");
+                    // Only save the DM message if it has actual content (not just empty after removing image tags)
+                    if (cleanedContent) {
+                        // Save DM message directly to localStorage
+                        const dmMessage = {
+                            role: "assistant",
+                            type: "dm", 
+                            content: cleanedContent,
+                            timestamp: Date.now(),
+                            sender: dmName
+                        };
+                          console.log("About to save DM message:", dmMessage);
+                        saveMessageToLocalStorage(dmMessage);
+                        console.log("DM message save completed");
+                    } else {
+                        console.log("Skipping save of empty DM message (only contained image tags)");
+                    }
                     
                     // Check if this response contains image generation requests
                     const hasImageRequest = /\[IMAGE:\s*([^\]]+)\]/i.test(fullResponseText);
                     if (hasImageRequest) {
-                        console.log("DM response contains image request, will check for images after longer delay");
-                        // Wait longer for image generation to complete
-                        setTimeout(() => {
-                            console.log("Checking for image messages after DM with image request...");
-                            checkForImageMessages();
-                        }, 3000); // 3 seconds for image generation
-                    } else {
-                        // Check for new image messages after the response is complete
-                        // Images are generated asynchronously on the server
-                        setTimeout(() => {
-                            checkForImageMessages();
-                        }, 1000); // Give server time to generate images
+                        console.log("DM response contains image request, will check for images after longer delay");                        // Images are now handled directly in the generateImage function
+                        // No need to check for server-side images since we're using localStorage
+                        console.log("Message with image request processed, images handled via localStorage");} else {
+                        // Images are now handled directly in the generateImage function
+                        // No need to check for server-side images since we're using localStorage
+                        console.log("Message processed, images handled via localStorage");
                     }
                     
                     console.log("=== END SAVING DM MESSAGE ===");
@@ -1311,8 +1627,7 @@ document.addEventListener('DOMContentLoaded', function() {
             redoBtn.style.opacity = redoBtn.disabled ? '0.5' : '1';
         }
     }
-    
-    function saveChatState() {
+      function saveChatState() {
         debugLog(`Attempting to save chat state. Current historyIndex: ${historyIndex}, History length: ${messageHistory.length}`);
         const messages = Array.from(chatWindow.querySelectorAll('.message:not(.temporary-message)')) 
             .map(msg => {
@@ -1330,33 +1645,74 @@ document.addEventListener('DOMContentLoaded', function() {
                 const contentHTML = contentEl.innerHTML.trim();
                 const contentText = contentEl.textContent.trim();
                 
-                // Skip empty messages
-                if (!contentText && !contentHTML) {
+                // IMPROVED: Extract images from the message more comprehensively
+                const imageElements = msg.querySelectorAll('img'); // Search the entire message, not just content
+                const images = Array.from(imageElements).map(img => {
+                    console.log("Found image in message:", img.src.substring(0, 50) + "...");
+                    return img.src;
+                }).filter(src => src && src.startsWith('data:image/')); // Only keep base64 data URLs
+                
+                console.log(`Message from ${senderText}: found ${images.length} images`);
+                
+                // Skip empty messages unless they have images
+                if (!contentText && !contentHTML && images.length === 0) {
                     debugLog("Skipping empty message:", msg.outerHTML.substring(0, 100));
                     return null;
                 }
                 
                 // Skip pure loading indicators (typing with no actual content)
-                if (msg.querySelector('.typing') && contentEl.querySelector('.cursor') && !contentText.replace(/\s/g, '')) {
+                if (msg.querySelector('.typing') && contentEl.querySelector('.cursor') && !contentText.replace(/\s/g, '') && images.length === 0) {
                     debugLog("Skipping pure loading indicator:", msg.outerHTML.substring(0, 100));
                     return null;
                 }
 
                 const isSystem = msg.classList.contains('system-message');
+                const isImageMessage = msg.classList.contains('image-message-container') || images.length > 0;
                 // Determine if DM by checking sender text against current dmName or if it's a DM loading message
                 const isDM = senderText === dmName || (msg.classList.contains('dm-message') && senderText === "DM");
 
                 // Store the timestamp to help with identifying message sequences
                 const timestamp = new Date().getTime();
 
-                return {
+                // Create base message object (following your other app's pattern)
+                const messageObj = {
                     sender: senderText,
                     content: contentText,
+                    text: contentText, // Add both for compatibility
                     contentHTML: contentHTML,
+                    images: images, // Store base64 image URLs like your other app
                     type: isSystem ? 'system' : (isDM ? 'dm' : 'player'),
+                    role: isSystem ? 'system' : (isDM ? 'assistant' : 'user'),
                     timestamp: timestamp
                 };
-            }).filter(msg => msg !== null); 
+
+                // If this is an image message, preserve additional image data
+                if (isImageMessage && images.length > 0) {
+                    const imgElement = msg.querySelector('img');
+                    const captionElement = msg.querySelector('.image-caption');
+                    
+                    messageObj.message_type = "image";
+                    messageObj.image_url = images[0]; // Use first image as primary
+                    
+                    if (imgElement) {
+                        messageObj.image_prompt = imgElement.alt || '';
+                    }
+                    
+                    if (captionElement) {
+                        // Extract prompt from caption text
+                        const captionText = captionElement.textContent;
+                        const promptMatch = captionText.match(/Generated image: (.+)/);
+                        if (promptMatch) {
+                            messageObj.image_prompt = promptMatch[1];
+                        }
+                    }
+                    
+                    messageObj.role = "assistant"; // Image messages are from the assistant/DM
+                    console.log("Saved image message with prompt:", messageObj.image_prompt);
+                }
+
+                return messageObj;
+            }).filter(msg => msg !== null);
 
     // CRITICAL FIX: Always save if we have ANY valid messages
     if (messages.length === 0) {
@@ -1390,7 +1746,7 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         localStorage.setItem('chatHistory', JSON.stringify(messageHistory)); 
         debugLog(`Chat state saved successfully. New history size: ${messageHistory.length}, New Index: ${historyIndex}`);
-        debugLog(`Chat state saved. Messages in this state: ${messages.length}. Last saved messages:`, messages.map(m => `${m.sender}: ${m.content.substring(0,20)}`));
+        debugLog(`Chat state saved. Messages in this state: ${messages.length}. Last saved messages:`, messages.map(m => `${m.sender}: ${(m.content || m.text || '').substring(0,20)}`));
     } catch (e) {
         debugLog("Error saving chatHistory to localStorage:", e);
     }
@@ -1434,7 +1790,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (lastUserMessage && messagesToRemove > 0) {
                 // Store for redo
-                lastUndoneMessage = lastUserMessage.content;
+                lastUndoneMessage = lastUserMessage.content || lastUserMessage.text || '';
                 if (lastUserMessage.player) {
                     const playerMatch = lastUserMessage.player.match(/player(\d+)/);
                     if (playerMatch) {
@@ -1517,7 +1873,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (player1Container) {
         player1Container.addEventListener('click', function() {
             debugLog('Player 1 container clicked');
-            selectPlayer(player1Container, 1);
+            PlayerManager.selectPlayer(player1Container, 1);
         });
     }
 

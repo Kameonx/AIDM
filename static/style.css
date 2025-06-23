@@ -193,22 +193,22 @@ body {
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 20px; /* Increased padding for larger images */
-    margin: 20px auto; /* More margin for better spacing */
+    padding: 8px; /* Small cushion around image */
+    margin: 8px auto; /* Minimal margin for compact spacing */
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
 }
 
 .image-message img {
-    max-width: min(700px, 85vw); /* Double the size but responsive to viewport */
-    max-height: 600px; /* Increase height proportionally */
+    max-width: min(900px, 95vw); /* Larger images using more viewport width */
+    max-height: 70vh; /* Use viewport height for better space utilization */
     width: auto;
     height: auto;
-    border-radius: 10px; /* Slightly larger border radius for bigger images */
-    margin: 0 auto 15px auto; /* More margin for larger images */
+    border-radius: 10px;
+    margin: 0 auto 8px auto; /* Small margin below image */
     display: block;
-    box-shadow: 0 6px 12px rgba(0,0,0,0.4); /* Enhanced shadow for larger images */
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
     transition: transform 0.2s ease;
 }
 
@@ -220,11 +220,11 @@ body {
 .image-caption {
     color: #bbb;
     font-style: italic;
-    font-size: 16px; /* Increase font size to match larger images */
+    font-size: 16px;
     margin: 0 auto;
-    padding: 10px 15px; /* More padding for larger text */
-    max-width: min(700px, 85vw); /* Match image width */
-    line-height: 1.5; /* Better line height for larger text */
+    padding: 6px 10px; /* Reduced padding for compact layout */
+    max-width: min(900px, 95vw); /* Match new image width */
+    line-height: 1.5;
     word-wrap: break-word;
     white-space: pre-wrap;
     text-align: center;
@@ -606,14 +606,14 @@ body {
 /* Tablet responsive image styling */
 @media screen and (max-width: 1024px) and (min-width: 769px) {
     .image-message img {
-        max-width: min(550px, 80vw); /* Intermediate size for tablets */
-        max-height: 500px;
+        max-width: min(800px, 92vw); /* Larger on tablets, small cushion */
+        max-height: 65vh; /* Use viewport height */
     }
     
     .image-caption {
         font-size: 15px;
-        max-width: min(550px, 80vw);
-        padding: 9px 13px;
+        max-width: min(800px, 92vw);
+        padding: 6px 10px;
     }
 }
 
@@ -1129,22 +1129,22 @@ body, html, .app-wrapper, .chat-container {
 /* Mobile responsive image styling */
 @media screen and (max-width: 768px) {
     .image-message {
-        padding: 10px;
-        margin: 10px auto;
+        padding: 6px; /* Minimal cushion on mobile */
+        margin: 6px auto;
     }
     
     .image-message img {
-        max-width: min(480px, 90vw); /* Larger on mobile but still responsive */
-        max-height: 420px; /* Proportional height increase */
+        max-width: min(700px, 94vw); /* Much larger on mobile with small cushion */
+        max-height: 60vh; /* Use viewport height for better space usage */
         border-radius: 8px;
-        margin: 0 auto 10px auto;
+        margin: 0 auto 6px auto;
     }
     
     .image-caption {
-        font-size: 15px; /* Slightly larger text on mobile */
-        padding: 8px 12px;
+        font-size: 15px;
+        padding: 6px 8px;
         margin: 0 auto;
-        max-width: min(480px, 90vw); /* Match image width */
+        max-width: min(700px, 94vw); /* Match image width */
         line-height: 1.4;
     }
 }

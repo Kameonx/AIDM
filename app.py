@@ -408,34 +408,46 @@ def stream_response():
             session['selected_model'] = get_valid_model(model_id)
 
     # Load chat history for this specific user
-    chat_history = load_chat_history(user_id, game_id)
-    
-    # Print debug info
+    chat_history = load_chat_history(user_id, game_id)    # Print debug info
     app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model')}")
 
     def generate():
-        # Check if there are multiple players in the session and gather names
-        player_counts = {}
-        
-        # Look for player names in the chat history
-        for msg in chat_history:
-            if msg.get("role") == "user" and msg.get("player"):
-                player = msg.get("player")
-                player_counts[player] = player_counts.get(player, 0) + 1
-        
-        # Check if multiple players are active
-        is_multiplayer = len(player_counts) > 1
-          # Build system prompt based on multiplayer status
-        system_prompt = build_system_prompt(is_multiplayer)
-        
-        # Truncate chat history to prevent token limit issues
-        truncated_history = truncate_chat_history(chat_history, system_prompt)
-        
-        # Prepare messages for the API
+        try:
+            app.logger.debug("Starting generate() function")
+            
+            # Check if there are multiple players in the session and gather names
+            player_counts = {}
+            
+            # Look for player names in the chat history
+            for msg in chat_history:
+                if msg.get("role") == "user" and msg.get("player"):
+                    player = msg.get("player")
+                    player_counts[player] = player_counts.get(player, 0) + 1
+            
+            # Check if multiple players are active
+            is_multiplayer = len(player_counts) > 1
+            app.logger.debug(f"Is multiplayer: {is_multiplayer}, Player counts: {player_counts}")
+            
+            # Build the full system prompt based on game type
+            system_prompt = build_system_prompt(is_multiplayer)
+            app.logger.debug(f"System prompt built, length: {len(system_prompt)} characters")
+            
+            # Truncate chat history to prevent token limit issues
+            truncated_history = truncate_chat_history(chat_history, system_prompt)
+            app.logger.debug(f"Chat history truncated from {len(chat_history)} to {len(truncated_history)} messages")
+        except Exception as setup_error:
+            error_details = f"Setup error: {str(setup_error)} (Type: {type(setup_error).__name__})"
+            app.logger.error(f"Error in generate() setup: {error_details}")
+            yield f"data: {json.dumps({'content': '🚨 Error preparing request. Please try again.', 'full': '🚨 Error preparing request. Please try again.', 'error': True, 'debug': error_details})}\n\n"
+            yield f"event: done\ndata: {{}}\n\n"
+            return
+          # Prepare messages for the API using full prompt
         api_messages = [
             {"role": "system", "content": system_prompt}
         ]
-          # Include conversation history but format it properly for the API
+        app.logger.debug("Adding system message to API messages")
+        
+        # Include conversation history but format it properly for the API
         for msg in truncated_history:
             if msg.get("role") == "system" and msg.get("player") == "system":
                 # This is a system notification (like player joining)
@@ -450,27 +462,31 @@ def stream_response():
                     player_num = msg.get("player").replace("player", "")
                     prefix = f"Player {player_num}: "
                 
+                # Strip HTML from user content before sending to API
+                clean_content = strip_html_tags(msg["content"])
                 api_messages.append({
                     "role": "user", 
-                    "content": prefix + msg["content"]
+                    "content": prefix + clean_content
                 })
             else:
-                # Assistant (DM) messages
+                # Assistant (DM) messages - strip HTML from content
+                clean_content = strip_html_tags(msg.get("content", ""))
                 api_messages.append({
                     "role": msg.get("role", "assistant"),
-                    "content": msg.get("content", "")
+                    "content": clean_content
                 })
         
         # Log token usage for debugging
         total_tokens = sum(estimate_tokens(msg.get("content", "")) for msg in api_messages)
         app.logger.debug(f"Total estimated tokens being sent to API: {total_tokens}")
         app.logger.debug(f"Number of messages being sent: {len(api_messages)}")
+        app.logger.debug(f"Full system prompt length: {len(system_prompt)} chars")
         
         # Final safety check - if still too many tokens, further truncate
-        if total_tokens > 30000:
+        if total_tokens > 45000:  # Increased from 30000 to 45000 to preserve more context
             app.logger.warning(f"Token count still high ({total_tokens}), applying emergency truncation")
-            # Keep system prompt and only the last few messages
-            emergency_history = truncated_history[-10:] if len(truncated_history) > 10 else truncated_history
+            # Keep system prompt and only the last few messages, but be less aggressive
+            emergency_history = truncated_history[-15:] if len(truncated_history) > 15 else truncated_history
             api_messages = [
                 {"role": "system", "content": system_prompt}
             ]
@@ -505,38 +521,25 @@ def stream_response():
         
         # Get model capabilities to determine which parameters to include
         capabilities = get_model_capabilities(selected_model)
-        app.logger.debug(f"Model capabilities: {capabilities}")
+        app.logger.debug(f"Model capabilities: {capabilities}")        # Create structured payload for API
+        payload = create_structured_api_payload(api_messages, selected_model, capabilities)
+        app.logger.debug(f"API payload created, size: {len(json.dumps(payload))} bytes")
         
-        payload = {
-            "venice_parameters": {"include_venice_system_prompt": False},
-            "model": selected_model,
-            "messages": api_messages,
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "n": 1,
-            "stream": True,
-            "presence_penalty": 0.2,
-            "frequency_penalty": 0.1
-        }
-        
-        # Only add parallel_tool_calls if the model supports it
-        if capabilities['supportsParallelToolCalls']:
-            payload["parallel_tool_calls"] = True
-            app.logger.debug("Added parallel_tool_calls to payload")
-        else:
-            app.logger.debug("Skipped parallel_tool_calls - not supported by this model")
-
         headers = {
             "Authorization": f"Bearer {VENICE_API_KEY}",
             "Content-Type": "application/json"
         }
+        
+        app.logger.debug(f"About to make API request to {VENICE_URL}")
+        
         try:
             with requests.post(
                 VENICE_URL,
                 json=payload,
                 headers=headers,
                 stream=True,
-                timeout=60
+                timeout=60,
+                verify=True  # Re-enable SSL verification
             ) as response:
                 full_response = ""
                 app.logger.debug(f"Venice API response status: {response.status_code}")
@@ -611,14 +614,74 @@ def stream_response():
                     formatted_content = format_message_content(processed_response)
                     chat_history.append({"role": "assistant", "content": formatted_content})
                     save_chat_history(user_id, chat_history, game_id)
-                    app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")                    # Generate images if requested
+                    app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")                    # Generate images if requested and yield them to the client
                     if image_requests:
                         app.logger.debug(f"Found {len(image_requests)} image requests to generate")
                         for i, prompt in enumerate(image_requests):
                             app.logger.debug(f"Generating image {i+1}/{len(image_requests)}: {prompt[:50]}...")
                             try:
-                                generate_and_save_image(prompt, user_id, game_id)
-                                app.logger.debug(f"Successfully generated image for prompt: {prompt[:50]}...")
+                                # Generate the image and get the data
+                                selected_model = session.get('selected_image_model', DEFAULT_IMAGE_MODEL_ID)
+                                
+                                headers = {
+                                    "Authorization": f"Bearer {VENICE_API_KEY}",
+                                    "Content-Type": "application/json"
+                                }
+                                
+                                payload = {
+                                    "model": selected_model,
+                                    "prompt": prompt,
+                                    "width": 1024,
+                                    "height": 1024,
+                                    "format": "png",
+                                    "steps": 20,
+                                    "cfg_scale": 7.5,
+                                    "safe_mode": False,
+                                    "return_binary": False,
+                                    "embed_exif_metadata": False,
+                                    "hide_watermark": True,
+                                    "seed": 0                                }
+                                
+                                response = requests.post(VENICE_IMAGE_URL, json=payload, headers=headers, timeout=60)
+                                
+                                if response.status_code == 200:
+                                    result = response.json()
+                                    if 'images' in result and result['images']:
+                                        image_data = result['images'][0] if isinstance(result['images'], list) else result['images']
+                                        
+                                        # Validate the image data
+                                        if not isinstance(image_data, str) or len(image_data) < 100:
+                                            app.logger.error(f"Invalid image data received for prompt '{prompt}': length={len(image_data) if hasattr(image_data, '__len__') else 'N/A'}")
+                                            continue
+                                        
+                                        image_url = f"data:image/png;base64,{image_data}"
+                                        app.logger.debug(f"Generated image URL length: {len(image_url)} for prompt: {prompt[:30]}...")
+                                          # Create image message with better formatting - ensure compatibility with frontend localStorage format
+                                        image_message = {
+                                            "role": "assistant",
+                                            "content": f'<div class="image-message"><img src="{image_url}" alt="{prompt}" style="max-width: 100%; border-radius: 8px; margin: 10px 0; display: block;"><div class="image-caption"><em>Generated image: {prompt}</em></div></div>',
+                                            "text": prompt,  # Add text field for compatibility
+                                            "timestamp": time.time(),
+                                            "message_type": "image",
+                                            "image_url": image_url,
+                                            "image_prompt": prompt,
+                                            "image_model": selected_model,
+                                            "sender": "assistant",  # Changed from "DM" to "assistant" for consistency
+                                            "type": "dm",
+                                            "images": [image_url]  # Add images array for localStorage compatibility
+                                        }
+                                        
+                                        # Add to chat history
+                                        chat_history.append(image_message)
+                                        save_chat_history(user_id, chat_history, game_id)
+                                        
+                                        # Send the image data to the client via the stream
+                                        yield f"data: {json.dumps({'image_generated': True, 'image_message': image_message})}\n\n"
+                                        
+                                        app.logger.debug(f"Successfully generated and streamed image for prompt: {prompt[:50]}...")
+                                else:
+                                    app.logger.error(f"Image generation failed for prompt '{prompt}': {response.status_code}")
+                                    
                             except Exception as e:
                                 app.logger.error(f"Error generating image for prompt '{prompt}': {str(e)}")
                                 # Add error message to chat
@@ -627,12 +690,28 @@ def stream_response():
                                 save_chat_history(user_id, chat_history, game_id)
                     else:
                         app.logger.debug("No image requests found in response")
-                
+                  
                 # Send done event to signal completion
                 yield f"event: done\ndata: {{}}\n\n"
+        except requests.exceptions.SSLError as ssl_error:
+            error_details = f"SSL Error: {str(ssl_error)}"
+            app.logger.error(f"SSL Error connecting to Venice AI: {error_details}")
+            yield f"data: {json.dumps({'content': '🚨 Connection error with AI service. Please try again in a moment.', 'full': '🚨 Connection error with AI service. Please try again in a moment.', 'error': True, 'debug': error_details})}\n\n"
+            yield f"event: done\ndata: {{}}\n\n"
+        except requests.exceptions.ConnectionError as conn_error:
+            error_details = f"Connection Error: {str(conn_error)}"
+            app.logger.error(f"Connection Error to Venice AI: {error_details}")
+            yield f"data: {json.dumps({'content': '🚨 Unable to connect to AI service. Please check your internet connection and try again.', 'full': '🚨 Unable to connect to AI service. Please check your internet connection and try again.', 'error': True, 'debug': error_details})}\n\n"
+            yield f"event: done\ndata: {{}}\n\n"
+        except requests.exceptions.Timeout as timeout_error:
+            error_details = f"Timeout Error: {str(timeout_error)}"
+            app.logger.error(f"Timeout Error connecting to Venice AI: {error_details}")
+            yield f"data: {json.dumps({'content': '🚨 Request timed out. Please try again.', 'full': '🚨 Request timed out. Please try again.', 'error': True, 'debug': error_details})}\n\n"
+            yield f"event: done\ndata: {{}}\n\n"
         except Exception as e:
-            app.logger.error(f"Error in API request: {str(e)}")
-            yield f"data: {json.dumps({'content': f'Error: {str(e)}', 'full': f'Error: {str(e)}', 'error': True})}\n\n"
+            error_details = f"Unexpected error: {str(e)} (Type: {type(e).__name__})"
+            app.logger.error(f"Error in API request: {error_details}")
+            yield f"data: {json.dumps({'content': f'🚨 Unexpected error: Please try again.', 'full': f'🚨 Unexpected error: Please try again.', 'error': True, 'debug': error_details})}\n\n"
             yield f"event: done\ndata: {{}}\n\n"
     
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
@@ -946,7 +1025,7 @@ def estimate_tokens(text):
         return 0
     return max(1, len(text) // 4)
 
-def truncate_chat_history(chat_history, system_prompt, max_tokens=25000):
+def truncate_chat_history(chat_history, system_prompt, max_tokens=45000):  # Increased from 35000
     """
     Truncate chat history to stay within token limits while preserving recent context.
     Keeps the most recent messages and important system messages.
@@ -956,19 +1035,31 @@ def truncate_chat_history(chat_history, system_prompt, max_tokens=25000):
     
     # Estimate system prompt tokens
     system_tokens = estimate_tokens(system_prompt)
-    available_tokens = max_tokens - system_tokens - 1000  # Reserve 1000 tokens for response
+    available_tokens = max_tokens - system_tokens - 3000  # Reserve 3000 tokens for response (increased buffer)
+    
+    # If the system prompt itself is too large, allow more tokens for history
+    if system_tokens > 20000:
+        available_tokens = max_tokens - system_tokens - 2000  # Use less buffer for huge prompts
+        app.logger.warning(f"System prompt is very large ({system_tokens} tokens), reducing buffer")
     
     # Start from the end and work backwards
     truncated_history = []
     current_tokens = 0
     
+    # Always keep at least the last 15 messages to maintain conversation context (increased from 10)
+    min_messages_to_keep = min(15, len(chat_history))
+    
     # Reverse iteration to prioritize recent messages
-    for msg in reversed(chat_history):
+    for i, msg in enumerate(reversed(chat_history)):
         msg_content = msg.get("content", "")
         msg_tokens = estimate_tokens(msg_content)
         
+        # Force inclusion of the last few messages regardless of token count
+        if i < min_messages_to_keep:
+            truncated_history.insert(0, msg)
+            current_tokens += msg_tokens
         # Always include very short messages or important system messages
-        if msg_tokens < 50 or (msg.get("role") == "system" and msg.get("player") == "system"):
+        elif msg_tokens < 50 or (msg.get("role") == "system" and msg.get("player") == "system"):
             truncated_history.insert(0, msg)
             current_tokens += msg_tokens
         elif current_tokens + msg_tokens <= available_tokens:
@@ -986,6 +1077,102 @@ def truncate_chat_history(chat_history, system_prompt, max_tokens=25000):
     app.logger.debug(f"Estimated tokens: system={system_tokens}, history={current_tokens}, total={system_tokens + current_tokens}")
     
     return truncated_history
+
+def create_structured_api_payload(api_messages, selected_model, capabilities):
+    """Create a structured API payload that's more efficient for the Venice AI API"""
+    
+    # Find the system message
+    system_content = None
+    message_list = []
+    
+    for msg in api_messages:
+        if msg["role"] == "system":
+            system_content = msg["content"]
+        else:
+            message_list.append(msg)
+    
+    # Create a more structured payload
+    payload = {
+        "venice_parameters": {"include_venice_system_prompt": False},
+        "model": selected_model,
+        "messages": [
+            {"role": "system", "content": system_content}
+        ] + message_list,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "n": 1,
+        "stream": True,
+        "presence_penalty": 0.2,
+        "frequency_penalty": 0.1
+    }
+    
+    # Only add parallel_tool_calls if the model supports it
+    if capabilities['supportsParallelToolCalls']:
+        payload["parallel_tool_calls"] = True
+    
+    return payload
+
+def strip_html_tags(text):
+    """Remove HTML tags from text content"""
+    if not text:
+        return text
+    # Remove HTML tags
+    clean = re.sub('<.*?>', '', text)
+    # Convert HTML entities
+    clean = clean.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+    return clean
+
+@app.route('/debug/env', methods=['GET'])
+def debug_env():
+    """Debug endpoint to check environment variables"""
+    try:
+        return jsonify({
+            'venice_api_key_present': bool(VENICE_API_KEY),
+            'venice_api_key_length': len(VENICE_API_KEY) if VENICE_API_KEY else 0,
+            'venice_url': VENICE_URL,
+            'default_model': DEFAULT_MODEL_ID,
+            'debug': True
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/debug/venice', methods=['GET'])
+def debug_venice():
+    """Debug endpoint to test Venice API directly"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {VENICE_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "venice_parameters": {"include_venice_system_prompt": False},
+            "model": "venice-uncensored",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Say hello"}
+            ],
+            "temperature": 1.0,
+            "stream": False,
+            "max_tokens": 50
+        }
+        
+        app.logger.debug(f"Making test API call to {VENICE_URL}")
+        response = requests.post(VENICE_URL, json=payload, headers=headers, timeout=30)
+        
+        return jsonify({
+            'status_code': response.status_code,
+            'headers': dict(response.headers),
+            'success': response.status_code == 200,
+            'response_preview': response.text[:500] if response.text else None,
+            'debug': True
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Debug Venice API test failed: {str(e)}")
+        return jsonify({'error': str(e), 'error_type': type(e).__name__})
+
+# Utility function removed - using full prompt only
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -163,6 +163,30 @@ def process_image_requests(text):
     """Process [IMAGE: description] tags in text and return cleaned text and image prompts"""
     import re
     
+    # First, check for incorrect "Generated image:" patterns and convert them to proper [IMAGE:] tags
+    # This is a safety net for when the AI doesn't follow instructions properly
+    generated_image_pattern = r'Generated image:\s*([^.\n]+)'
+    matches = re.findall(generated_image_pattern, text, re.IGNORECASE)
+    
+    if matches:
+        app.logger.warning(f"Found improper 'Generated image:' usage, converting to [IMAGE:] tags: {matches}")
+        for match in matches:
+            # Convert "Generated image: description" to "[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, description]"
+            proper_tag = f"[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, {match.strip()}]"
+            text = re.sub(r'Generated image:\s*' + re.escape(match), proper_tag, text, flags=re.IGNORECASE)
+    
+    # Also check for other improper patterns
+    improper_patterns = [
+        (r'Image:\s*([^.\n\[]+)', r'[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, \1]'),
+        (r'\*shows image of ([^*]+)\*', r'[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, \1]'),
+        (r'You see (?:a detailed )?image of ([^.\n]+)', r'[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, \1]')
+    ]
+    
+    for pattern, replacement in improper_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            app.logger.warning(f"Found improper image description pattern, converting to [IMAGE:] tag")
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
     # Find all [IMAGE: description] tags
     image_pattern = r'\[IMAGE:\s*(.*?)\]'
     image_matches = re.findall(image_pattern, text, re.IGNORECASE | re.DOTALL)

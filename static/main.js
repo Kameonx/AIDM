@@ -1574,6 +1574,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         let fullResponseText = ""; // Accumulate full response for checkForPlayerNames
+        let imageProcessedFromStream = false; // Track if image was already processed from stream
 
         eventSource.onmessage = function(event) {
             try {
@@ -1598,6 +1599,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.image_generated) {
                     console.log("=== RECEIVED IMAGE FROM STREAM ===");
                     console.log("Image message:", data.image_message);
+                    
+                    // Set flag to prevent duplicate image generation
+                    imageProcessedFromStream = true;
                     
                     // Ensure the image message has the correct format for localStorage
                     const formattedImageMessage = {
@@ -1738,7 +1742,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Check if this response contains image generation requests
                     const hasImageRequest = /\[IMAGE:\s*([^\]]+)\]/i.test(fullResponseText);
-                    if (hasImageRequest) {
+                    if (hasImageRequest && !imageProcessedFromStream) {
                         console.log("DM response contains image request, will check for images after longer delay");
                         
                         // Extract image prompts and generate them
@@ -1759,6 +1763,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         console.log("Message with image request processed, images handled via localStorage");
+                    } else if (imageProcessedFromStream) {
+                        console.log("Image already processed from stream, skipping [IMAGE:] tag generation");
                     } else {
                         // Images are now handled directly in the generateImage function
                         // No need to check for server-side images since we're using localStorage
@@ -2213,23 +2219,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (currentGameId) {
         debugLog("Restoring session:", currentGameId);
         initialize();
-        loadAvailableModels(); // Load models after initialization
-        loadAvailableImageModels(); // Load image models after initialization
     } else {
         debugLog("No previous gameId. Setting up for a new game implicitly.");
         
-        // CRITICAL: Load player names even for new games
-        const loadedState = Utils.loadPlayerState();
-        if (loadedState && loadedState.names) {
-            playerNames = loadedState.names;
-            debugLog("Restored player names for new game:", playerNames);
-        }
+        // Initialize for new game
+        initialize();
         
+        // Additional setup for completely new games
         messageHistory = [];
         historyIndex = -1;
         localStorage.removeItem('chatHistory');
-        chatWindow.innerHTML = '';
-        addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
         
         // Set up PlayerManager with loaded names
         PlayerManager.setup({
@@ -2558,12 +2557,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize image long-press handling
     initImageLongPress();
 
-    // Initialize the application
-    initialize();
-    
-    // Load available models on page load
-    loadAvailableModels();
-    loadAvailableImageModels();
+    // Models are already loaded in the initialization paths above
 
 });  // End of DOMContentLoaded event listener
 

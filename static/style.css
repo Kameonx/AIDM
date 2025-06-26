@@ -115,6 +115,38 @@ body {
     background: rgba(30, 31, 40, 0.8);
     word-wrap: break-word; /* Add word wrapping to chat window */
     transition: width 0.3s ease; /* Add smooth transition for width changes */
+    position: relative; /* For positioning the scroll button */
+}
+
+/* Scroll to bottom button */
+.scroll-to-bottom {
+    position: fixed;
+    bottom: 120px; /* Position above the input area */
+    right: 30px;
+    width: 40px;
+    height: 40px;
+    background: rgba(97, 175, 239, 0.9);
+    border: 2px solid #61afef;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 1000;
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.scroll-to-bottom:hover {
+    background: rgba(97, 175, 239, 1);
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.scroll-to-bottom.show {
+    display: flex;
 }
 
 /* Improve alignment between chat window and player inputs */
@@ -1165,7 +1197,8 @@ body, html, .app-wrapper, .chat-container {
         padding: 6px; /* Minimal cushion on mobile */
         margin: 6px auto;
     }
-      .image-message img {
+    
+    .image-message img {
         max-width: min(700px, 94vw); /* Much larger on mobile with small cushion */
         max-height: 60vh; /* Use viewport height for better space usage */
         border-radius: 8px;
@@ -1185,6 +1218,15 @@ body, html, .app-wrapper, .chat-container {
         margin: 0 auto;
         max-width: min(700px, 94vw); /* Match image width */
         line-height: 1.4;
+    }
+    
+    /* Mobile scroll to bottom button positioning */
+    .scroll-to-bottom {
+        bottom: 100px; /* Adjust for mobile input area */
+        right: 20px;
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
     }
 }
 

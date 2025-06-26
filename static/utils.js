@@ -369,12 +369,26 @@ function saveChatHistory(gameId, chatHistory) {
     try {
         const key = `chatHistory_${gameId}`;
         console.log("Utils.saveChatHistory - key:", key, "messages:", chatHistory.length);
-        localStorage.setItem(key, JSON.stringify(chatHistory));
-        console.log("Utils.saveChatHistory - SUCCESS");
+        
+        // Add extra validation
+        if (!gameId) {
+            console.error("Utils.saveChatHistory - ERROR: No gameId provided");
+            return;
+        }
+        
+        if (!Array.isArray(chatHistory)) {
+            console.error("Utils.saveChatHistory - ERROR: chatHistory is not an array:", typeof chatHistory);
+            return;
+        }
+        
+        const serialized = JSON.stringify(chatHistory);
+        localStorage.setItem(key, serialized);
+        console.log("Utils.saveChatHistory - SUCCESS, stored", serialized.length, "characters");
         Utils.debugLog("Chat history saved to localStorage:", key, chatHistory.length, "messages");
     } catch (e) {
         console.log("Utils.saveChatHistory - ERROR:", e);
         Utils.debugLog("Error saving chat history:", e);
+        throw e; // Re-throw so calling code can handle
     }
 }
 
@@ -384,13 +398,18 @@ function saveChatHistory(gameId, chatHistory) {
 function loadChatHistory(gameId) {
     try {
         const key = `chatHistory_${gameId}`;
+        console.log("Utils.loadChatHistory - loading key:", key);
         const saved = localStorage.getItem(key);
         if (saved) {
             const history = JSON.parse(saved);
+            console.log("Utils.loadChatHistory - SUCCESS: loaded", history.length, "messages");
             Utils.debugLog("Chat history loaded from localStorage:", key, history.length, "messages");
             return history;
+        } else {
+            console.log("Utils.loadChatHistory - No data found for key:", key);
         }
     } catch (e) {
+        console.log("Utils.loadChatHistory - ERROR:", e);
         Utils.debugLog("Error loading chat history:", e);
     }
     return [];

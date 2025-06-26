@@ -44,9 +44,22 @@ const Utils = (function() {
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
             .replace(/\*(.*?)\*/g, '<em>$1</em>');             // Italic
 
-        // Process new color tags [color:text]
+        // Process new color tags [color:text] - Handle nested and malformed tags
         const colorTypes = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'pink', 'cyan', 'lime', 'teal', 'brown', 'silver', 'wood'];
-          for (const color of colorTypes) {
+        
+        // First, clean up nested color tags like [purple:[purple:text]] -> [purple:text]
+        for (const color of colorTypes) {
+            // Remove nested color tags of the same type
+            const nestedRegex = new RegExp(`\\[${color}:\\[${color}:(.*?)\\]\\]`, 'gi');
+            processedText = processedText.replace(nestedRegex, `[${color}:$1]`);
+            
+            // Remove any remaining nested brackets within color tags
+            const malformedRegex = new RegExp(`\\[${color}:\\[([^\\]]*?):(.*?)\\]\\]`, 'gi');
+            processedText = processedText.replace(malformedRegex, `[${color}:$2]`);
+        }
+        
+        // Now process clean color tags [color:text]
+        for (const color of colorTypes) {
             const regex = new RegExp(`\\[${color}:(.*?)\\]`, 'gi');
             processedText = processedText.replace(regex, `<span class="${color}">$1</span>`);
         }

@@ -117,17 +117,22 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedModel = localStorage.getItem('selectedModel') || 'venice-uncensored';
 
     function loadAvailableModels() {
+        debugLog("Loading available AI models...");
         fetch('/get_models')
         .then(response => response.json())
         .then(data => {
+            debugLog("Received AI models data:", data);
             if (data.models) {
                 availableModels = data.models;
+                debugLog("AI models loaded:", availableModels.length);
                 populateModelList();
                 updateCurrentModelDisplay();
                 
                 // IMPORTANT: Set the model on the server after loading models
                 // This ensures the server knows which model to use on page refresh
                 setServerModel(selectedModel);
+            } else {
+                debugLog("No models in response data");
             }
         })
         .catch(error => {
@@ -157,6 +162,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateModelList() {
+        debugLog("Populating model list, available models:", availableModels.length);
+        if (!modelList) {
+            debugLog("Error: modelList element not found");
+            return;
+        }
+        
         modelList.innerHTML = '';
         
         availableModels.forEach(model => {
@@ -236,11 +247,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Image Models functionality
     function loadAvailableImageModels() {
+        debugLog("Loading available image models...");
         fetch('/get_image_models')
         .then(response => response.json())
         .then(data => {
+            debugLog("Received image models data:", data);
             if (data.models) {
                 availableImageModels = data.models;
+                debugLog("Image models loaded:", availableImageModels.length);
                 
                 // Validate selectedImageModel exists, default to lustify-sdxl
                 const modelExists = availableImageModels.some(m => m.id === selectedImageModel);
@@ -256,6 +270,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Set the image model on the server after loading models
                 setServerImageModel(selectedImageModel);
+            } else {
+                debugLog("No image models in response data");
             }
         })
         .catch(error => {
@@ -283,7 +299,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateImageModelList() {
-        if (!imageModelList) return;
+        debugLog("Populating image model list, available models:", availableImageModels.length);
+        if (!imageModelList) {
+            debugLog("Error: imageModelList element not found");
+            return;
+        }
         
         imageModelList.innerHTML = '';
         
@@ -717,6 +737,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         initializeHistory();
+        
+        // Load available models for the popups
+        loadAvailableModels();
+        loadAvailableImageModels();
         
         // CRITICAL: Pass the loaded playerNames to PlayerManager setup
         const playerResult = PlayerManager.setup({

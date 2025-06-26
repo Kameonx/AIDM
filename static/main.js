@@ -44,18 +44,221 @@ document.addEventListener('DOMContentLoaded', function() {
         return null;
     }
     
-    // Session data - check cookie first, then localStorage
-    let currentGameId = getCookie('game_id') || localStorage.getItem('currentGameId');
-    debugLog("Initial gameId from cookie:", getCookie('game_id'));
-    debugLog("Initial gameId from localStorage:", localStorage.getItem('currentGameId'));
-    debugLog("Final currentGameId:", currentGameId);
+    // Version tracking to detect deployments
+    const APP_VERSION = Date.now(); // This will change with each deployment
+    const STORED_VERSION = localStorage.getItem('app_version');
     
-    // If we got a game ID from cookie but it's different from localStorage, update localStorage
-    if (getCookie('game_id') && getCookie('game_id') !== localStorage.getItem('currentGameId')) {
-        debugLog("Updating localStorage with game ID from cookie:", getCookie('game_id'));
-        currentGameId = getCookie('game_id');
-        localStorage.setItem('currentGameId', currentGameId);
+    if (STORED_VERSION && STORED_VERSION !== APP_VERSION.toString()) {
+        console.log("=== NEW DEPLOYMENT DETECTED ===");
+        console.log("Previous version:", STORED_VERSION);
+        console.log("Current version:", APP_VERSION);
+        
+        // Try to recover any data that might have been lost
+        const allGameIds = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('chatHistory_game_')) {
+                const gameId = key.replace('chatHistory_', '');
+                allGameIds.push(gameId);
+            }
+        }
+        
+        if (allGameIds.length > 0) {
+            console.log("Found existing game data for games:", allGameIds);
+            // If current game ID doesn't exist but we have others, try the most recent
+            if (!localStorage.getItem(`chatHistory_${currentGameId}`) && allGameIds.length > 0) {
+                const mostRecentGameId = allGameIds.sort().pop(); // Get most recent by name
+                console.log("Current game has no data, switching to most recent:", mostRecentGameId);
+                currentGameId = mostRecentGameId;
+                localStorage.setItem('currentGameId', currentGameId);
+            }
+        }
     }
+    
+    // Update version tracking
+    localStorage.setItem('app_version', APP_VERSION.toString());
+
+    // Enhanced localStorage persistence with backup keys
+    function backupChatHistory(gameId) {
+        try {
+            const chatHistory = Utils.loadChatHistory(gameId);
+            if (chatHistory && chatHistory.length > 0) {
+                // Create multiple backup keys for redundancy
+                const backupKey1 = `backup_chat_${gameId}`;
+                const backupKey2 = `chat_backup_${Date.now()}`;
+                const generalBackup = 'latest_chat_backup';
+                
+                const backupData = {
+                    gameId: gameId,
+                    timestamp: Date.now(),
+                    messages: chatHistory,
+                    playerNames: playerNames,
+                    dmName: dmName
+                };
+                
+                localStorage.setItem(backupKey1, JSON.stringify(backupData));
+                localStorage.setItem(backupKey2, JSON.stringify(backupData));
+                localStorage.setItem(generalBackup, JSON.stringify(backupData));
+                
+                debugLog("Chat history backed up with keys:", [backupKey1, backupKey2, generalBackup]);
+            }
+        } catch (error) {
+            debugLog("Error backing up chat history:", error);
+        }
+    }
+
+    function recoverChatHistory(gameId) {
+        try {
+            // Try to recover from backup keys
+            const backupKey1 = `backup_chat_${gameId}`;
+            const generalBackup = 'latest_chat_backup';
+            
+            let backupData = null;
+            
+            // Try specific game backup first
+            const backup1 = localStorage.getItem(backupKey1);
+            if (backup1) {
+                backupData = JSON.parse(backup1);
+            } else {
+                // Try general backup
+                const backup2 = localStorage.getItem(generalBackup);
+                if (backup2) {
+                    backupData = JSON.parse(backup2);
+                }
+            }
+            
+            if (backupData && backupData.messages) {
+                debugLog("Recovered chat history from backup:", backupData.messages.length, "messages");
+                
+                // Restore the data
+                Utils.saveChatHistory(gameId, backupData.messages);
+                if (backupData.playerNames) {
+                    playerNames = backupData.playerNames;
+                    Utils.savePlayerNames(playerNames);
+                }
+                if (backupData.dmName) {
+                    dmName = backupData.dmName;
+                }
+                
+                return backupData.messages;
+            }
+        } catch (error) {
+            debugLog("Error recovering chat history:", error);
+        }
+        return null;
+    }
+
+    // Enhanced save function that includes automatic backup
+    function saveChatHistoryWithBackup(gameId, messages) {
+        // Save to primary storage
+        Utils.saveChatHistory(gameId, messages);
+        
+        // Create backup
+        backupChatHistory(gameId);
+        
+        debugLog("Chat history saved and backed up for game:", gameId);
+    }
+
+    // Manual backup/restore system for user data export/import
+    function exportAllData() {
+        const exportData = {
+            version: APP_VERSION,
+            timestamp: Date.now(),
+            currentGameId: currentGameId,
+            playerNames: playerNames,
+            dmName: dmName,
+            games: {}
+        };
+        
+        // Export all chat histories
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('chatHistory_')) {
+                const gameId = key.replace('chatHistory_', '');
+                const chatData = localStorage.getItem(key);
+                if (chatData) {
+                    try {
+                        exportData.games[gameId] = JSON.parse(chatData);
+                    } catch (e) {
+                        debugLog("Error parsing chat data for export:", gameId, e);
+                    }
+                }
+            }
+        }
+        
+        return JSON.stringify(exportData, null, 2);
+    }
+    
+    function importAllData(jsonData) {
+        try {
+            const importData = JSON.parse(jsonData);
+            
+            if (importData.currentGameId) {
+                currentGameId = importData.currentGameId;
+                localStorage.setItem('currentGameId', currentGameId);
+            }
+            
+            if (importData.playerNames) {
+                playerNames = importData.playerNames;
+                Utils.savePlayerNames(playerNames);
+            }
+            
+            if (importData.dmName) {
+                dmName = importData.dmName;
+            }
+            
+            if (importData.games) {
+                Object.entries(importData.games).forEach(([gameId, chatData]) => {
+                    Utils.saveChatHistory(gameId, chatData);
+                    backupChatHistory(gameId);
+                });
+            }
+            
+            debugLog("Data import successful");
+            return true;
+        } catch (error) {
+            debugLog("Error importing data:", error);
+            return false;
+        }
+    }
+
+    // Create periodic backups
+    function startPeriodicBackup() {
+        setInterval(() => {
+            if (currentGameId) {
+                backupChatHistory(currentGameId);
+            }
+        }, 60000); // Backup every minute
+    }
+
+    // Generate a deterministic game ID based on browser fingerprint + timestamp
+    function generateGameId() {
+        // Create a semi-unique browser fingerprint
+        const fingerprint = btoa(
+            navigator.userAgent + 
+            screen.width + screen.height + 
+            navigator.language + 
+            (navigator.hardwareConcurrency || 4) +
+            new Date().getTimezoneOffset()
+        ).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
+        
+        const timestamp = Date.now();
+        const randomStr = Math.random().toString(36).substring(2, 11);
+        
+        return `game_${timestamp}_${fingerprint}_${randomStr}`;
+    }
+
+    // Session data - use ONLY localStorage, ignore cookies for deployment stability
+    let currentGameId = localStorage.getItem('currentGameId');
+    
+    // If no game ID exists, generate a new one
+    if (!currentGameId) {
+        currentGameId = generateGameId();
+        localStorage.setItem('currentGameId', currentGameId);
+        debugLog("Generated new game ID:", currentGameId);
+    }
+    
+    debugLog("Final currentGameId:", currentGameId);
     
     // Player tracking - IMPORTANT: Use let instead of const to allow reassignment
     let playerNames = Utils.loadPlayerNames();
@@ -674,12 +877,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 span.textContent = `${dmName}: `;
             });
         }
-          // Load chat history from localStorage instead of server
+          // Load chat history from localStorage with backup recovery
         if (currentGameId) {
             console.log("=== INITIALIZE: Loading chat history ===");
             console.log("currentGameId:", currentGameId);
             
-            const localHistory = Utils.loadChatHistory(currentGameId);
+            let localHistory = Utils.loadChatHistory(currentGameId);
+            
+            // If no history found, try to recover from backup
+            if (!localHistory || localHistory.length === 0) {
+                console.log("No primary chat history found, attempting recovery from backup...");
+                localHistory = recoverChatHistory(currentGameId);
+            }
             
             // DEBUG: Check what's in localStorage
             console.log("=== DEBUG CHAT HISTORY ===");
@@ -695,7 +904,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("All localStorage keys with 'chatHistory':");
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (key && key.includes('chatHistory')) {
+                if (key && (key.includes('chatHistory') || key.includes('backup_chat') || key.includes('chat_backup'))) {
                     console.log(`  ${key}: ${localStorage.getItem(key) ? localStorage.getItem(key).length + ' chars' : 'null'}`);
                 }
             }
@@ -767,8 +976,11 @@ document.addEventListener('DOMContentLoaded', function() {
         updatePlayerLabels();
         updateUndoRedoButtons();
         
+        // Start periodic backup system for deployment persistence
+        startPeriodicBackup();
+        
         // No longer need to sync with server
-        debugLog("Initialization complete - using localStorage only");
+        debugLog("Initialization complete - using localStorage only with backup system active");
     }
     
     /**
@@ -901,6 +1113,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const messageToSave = {
                 sender: messageEntry.role === 'user' ? 'user' : 'assistant',
                 text: messageEntry.content || messageEntry.text || '',
+                content: messageEntry.content || messageEntry.text || '', // Plain text content
+                contentHTML: messageEntry.contentHTML || messageEntry.content || messageEntry.text || '', // Formatted HTML content
                 images: messageEntry.images || [],
                 timestamp: messageEntry.timestamp || Date.now(),
                 role: messageEntry.role,
@@ -1215,20 +1429,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (msg.role === "assistant" || msg.type === "dm") {
                 // This is a DM message - always display it
-                const messageContent = msg.content || msg.text || '';
+                // Use preserved HTML content first, fallback to plain text
+                const messageContent = msg.contentHTML || msg.content || msg.text || '';
                 debugLog("Displaying DM message:", messageContent.substring(0, 50) + "...");
                 
-                // Check if content is already HTML formatted from server OR has color tags that need processing
-                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
-                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
-                
-                if (hasHTMLFormatting && !hasColorTags) {
-                    // Content is already fully formatted as HTML, use it directly
-                    addMessage(dmName, messageContent, false, true, true, true);
+                // If we have contentHTML, it's already formatted - use it directly
+                if (msg.contentHTML && msg.contentHTML.includes('<span class=') || msg.contentHTML && msg.contentHTML.includes('<strong>') || msg.contentHTML && msg.contentHTML.includes('<em>')) {
+                    // Content has HTML formatting, use it directly
+                    addMessage(dmName, msg.contentHTML, false, true, true, true);
                 } else {
-                    // Process content through formatting to ensure proper display (handles color tags and text formatting)
-                    const processedContent = Utils.processFormattedText(messageContent);
-                    addMessage(dmName, processedContent, false, true, true, true);
+                    // Check if content is already HTML formatted from server OR has color tags that need processing
+                    const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
+                    const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
+                    
+                    if (hasHTMLFormatting && !hasColorTags) {
+                        // Content is already fully formatted as HTML, use it directly
+                        addMessage(dmName, messageContent, false, true, true, true);
+                    } else {
+                        // Process content through formatting to ensure proper display (handles color tags and text formatting)
+                        const processedContent = Utils.processFormattedText(messageContent);
+                        addMessage(dmName, processedContent, false, true, true, true);
+                    }
                 }
             } else if (msg.role === "user" || msg.type === "player") {
                 // Always use playerNames mapping for sender label
@@ -1245,18 +1466,27 @@ document.addEventListener('DOMContentLoaded', function() {
                         senderName = msg.player;
                     }
                 }
-                // Check if content is already HTML formatted OR has color tags that need processing
-                const messageContent = msg.content || msg.text || '';
-                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
-                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
                 
-                if (hasHTMLFormatting && !hasColorTags) {
-                    // Content is already fully formatted as HTML, use it directly  
-                    addMessage(senderName || `Player ${msg.player_number || 1}`, messageContent, false, true, true, true);
+                // Use preserved HTML content first, fallback to plain text
+                const messageContent = msg.contentHTML || msg.content || msg.text || '';
+                
+                // If we have contentHTML with formatting, use it directly
+                if (msg.contentHTML && (msg.contentHTML.includes('<span class=') || msg.contentHTML.includes('<strong>') || msg.contentHTML.includes('<em>'))) {
+                    // Content has HTML formatting, use it directly
+                    addMessage(senderName || `Player ${msg.player_number || 1}`, msg.contentHTML, false, true, true, true);
                 } else {
-                    // Process player messages through formatting as well (handles color tags and text formatting)
-                    const processedContent = Utils.processFormattedText(messageContent);
-                    addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
+                    // Check if content is already HTML formatted OR has color tags that need processing
+                    const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
+                    const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
+                    
+                    if (hasHTMLFormatting && !hasColorTags) {
+                        // Content is already fully formatted as HTML, use it directly  
+                        addMessage(senderName || `Player ${msg.player_number || 1}`, messageContent, false, true, true, true);
+                    } else {
+                        // Process player messages through formatting as well (handles color tags and text formatting)
+                        const processedContent = Utils.processFormattedText(messageContent);
+                        addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
+                    }
                 }
             } else if (msg.role === "system" || msg.type === "system") {
                 // Only show system messages that aren't marked as invisible
@@ -1457,10 +1687,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (name) playerContext[num] = name;
         });
         
-        // Save user message to localStorage immediately
+        // Save user message to localStorage immediately with formatting preserved
+        const processedUserMessage = Utils.processFormattedText(userMessage);
         const userMessageEntry = {
             role: "user",
-            content: userMessage,
+            content: userMessage, // Plain text
+            contentHTML: processedUserMessage, // Formatted HTML
+            text: userMessage, // Compatibility
             player: `player${playerNumber}`,
             timestamp: Date.now(),
             sender: sender
@@ -1730,14 +1963,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     const processedResponse = Utils.processFormattedText(fullResponseText);
                       // Remove [IMAGE: ...] tags from the displayed/saved content
                     const cleanedContent = processedResponse.replace(/\[IMAGE:\s*[^\]]+\]/gi, '').replace(/\s+/g, ' ').trim();
+                    const cleanedPlainText = fullResponseText.replace(/\[IMAGE:\s*[^\]]+\]/gi, '').replace(/\s+/g, ' ').trim();
                     
                     // Only save the DM message if it has actual content (not just empty after removing image tags)
                     if (cleanedContent) {
-                        // Save DM message directly to localStorage
+                        // Save DM message directly to localStorage with both HTML and plain text content
                         const dmMessage = {
                             role: "assistant",
                             type: "dm", 
-                            content: cleanedContent,
+                            content: cleanedPlainText, // Plain text for compatibility
+                            contentHTML: cleanedContent, // Formatted HTML content
+                            text: cleanedPlainText, // Additional compatibility
                             timestamp: Date.now(),
                             sender: dmName
                         };
@@ -2186,6 +2422,65 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target === imageModelsModal) {
                 imageModelsModal.classList.add('hidden');
             }
+        });
+    }
+
+    // Export/Import Data functionality for deployment persistence
+    const exportDataBtn = document.getElementById('export-data-btn');
+    const importDataBtn = document.getElementById('import-data-btn');
+    const importFileInput = document.getElementById('import-file-input');
+    
+    if (exportDataBtn) {
+        exportDataBtn.addEventListener('click', function() {
+            try {
+                const exportData = exportAllData();
+                const blob = new Blob([exportData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `dnd_chat_backup_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addSystemMessage("✅ Chat data exported successfully! Save this file to restore your data after deployments.", false, false, true);
+            } catch (error) {
+                debugLog("Error exporting data:", error);
+                addSystemMessage("❌ Error exporting chat data.", false, false, true);
+            }
+        });
+    }
+    
+    if (importDataBtn && importFileInput) {
+        importDataBtn.addEventListener('click', function() {
+            importFileInput.click();
+        });
+        
+        importFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const success = importAllData(e.target.result);
+                    if (success) {
+                        addSystemMessage("✅ Chat data imported successfully! Refreshing page to load restored data...", false, false, true);
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        addSystemMessage("❌ Error importing chat data. Please check the file format.", false, false, true);
+                    }
+                } catch (error) {
+                    debugLog("Error importing data:", error);
+                    addSystemMessage("❌ Error reading import file.", false, false, true);
+                }
+            };
+            reader.readAsText(file);
+            
+            // Reset the input
+            e.target.value = '';
         });
     }
 

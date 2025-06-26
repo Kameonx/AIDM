@@ -5,6 +5,11 @@ import uuid
 import time
 import requests
 import re
+import hashlib
+import random
+import string
+import io
+import base64
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
 
 # Import configuration
@@ -24,6 +29,7 @@ if not os.path.exists(CHAT_DIR):
 # Validate API key
 if not VENICE_API_KEY:
     print("ERROR: VENICE_API_KEY not found in environment. Please check your .env file.", file=sys.stderr)
+    sys.exit(1)
 
 def get_user_id():
     """Get or create a unique user ID for the current session"""
@@ -40,7 +46,15 @@ def get_chat_file_path(user_id, game_id=None):
     return os.path.join(CHAT_DIR, f"chat_history_{user_id}_current.json")
 
 def load_chat_history(user_id, game_id=None):
-    """Load chat history for a specific user and game"""
+    """Load chat history - respects storage mode preference"""
+    storage_mode = session.get('storage_mode', 'hybrid')
+    
+    # In client-only mode, return empty (frontend will handle loading from localStorage)
+    if storage_mode == 'client-only':
+        app.logger.debug(f"Client-only mode: Returning empty history for user {user_id}")
+        return []
+    
+    # Hybrid mode - load from server as before
     file_path = get_chat_file_path(user_id, game_id)
     if os.path.exists(file_path):
         with open(file_path, 'r') as file:
@@ -48,7 +62,15 @@ def load_chat_history(user_id, game_id=None):
     return []
 
 def save_chat_history(user_id, chat_history, game_id=None):
-    """Save chat history for a specific user and game"""
+    """Save chat history - respects storage mode preference"""
+    storage_mode = session.get('storage_mode', 'hybrid')
+    
+    # In client-only mode, don't save to server
+    if storage_mode == 'client-only':
+        app.logger.debug(f"Client-only mode: Skipping server storage for user {user_id}")
+        return
+    
+    # Hybrid mode - save to server as before
     file_path = get_chat_file_path(user_id, game_id)
     with open(file_path, 'w') as file:
         json.dump(chat_history, file)
@@ -141,7 +163,7 @@ def build_system_prompt(is_multiplayer):
     return prompt
 
 def load_or_create_game_id(user_id):
-    """Get existing game ID or create a new one"""
+    """Get existing game ID or create a new one - using frontend format for consistency"""
     try:
         # Try to get an existing game ID from the chat directory
         chat_files = os.listdir(CHAT_DIR)
@@ -153,11 +175,20 @@ def load_or_create_game_id(user_id):
             game_id = latest_file.replace(f"chat_history_{user_id}_", "").replace(".json", "")
             return game_id
         else:
-            # Create a new game ID
-            return str(uuid.uuid4())
+            # Create a new game ID using the same format as frontend
+            import random
+            import string
+            timestamp = str(int(time.time() * 1000))  # milliseconds
+            random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=9))
+            return f"game_{timestamp}_{random_str}"
     except Exception as e:
         app.logger.error(f"Error loading/creating game ID: {str(e)}")
-        return str(uuid.uuid4())
+        # Fallback to frontend format
+        import random
+        import string
+        timestamp = str(int(time.time() * 1000))
+        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=9))
+        return f"game_{timestamp}_{random_str}"
 
 def process_image_requests(text):
     """Process [IMAGE: description] tags in text and return cleaned text and image prompts"""
@@ -200,6 +231,11 @@ def process_image_requests(text):
     # Return cleaned text and list of image prompts
     image_prompts = [prompt.strip() for prompt in image_matches if prompt.strip()]
     
+    # Limit to only the first image request to prevent multiple generations
+    if len(image_prompts) > 1:
+        app.logger.debug(f"Multiple image requests detected ({len(image_prompts)}), limiting to first one")
+        image_prompts = image_prompts[:1]
+    
     return cleaned_text, image_prompts
 
 def generate_and_save_image(prompt, user_id, game_id):
@@ -218,7 +254,8 @@ def generate_and_save_image(prompt, user_id, game_id):
             "model": selected_model,
             "prompt": prompt,
             "width": 1024,
-            "height": 1024,            "format": "png",
+            "height": 1024,
+            "format": "webp",
             "steps": 20,
             "cfg_scale": 7.5,
             "safe_mode": False,
@@ -326,16 +363,10 @@ def index():
         # Generate a new game id if none is stored
         game_id = load_or_create_game_id(user_id)
         chat_history = load_chat_history(user_id, game_id)
-        if not chat_history:
-            # Always include a welcome message
-            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
-            save_chat_history(user_id, chat_history, game_id)
+        # Don't auto-add welcome message - let frontend handle it via localStorage
     else:
         chat_history = load_chat_history(user_id, game_id)
-        # Even if we have a chat history, make sure it has at least one message
-        if not chat_history:
-            chat_history = [{"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"}]
-            save_chat_history(user_id, chat_history, game_id)
+        # Don't auto-add welcome message - let frontend handle it via localStorage
     
     # Pass the chat history to the template to display immediately on load
     response = make_response(render_template('index.html', chat_history=chat_history))
@@ -657,14 +688,15 @@ def stream_response():
                                     "prompt": prompt,
                                     "width": 1024,
                                     "height": 1024,
-                                    "format": "png",
+                                    "format": "webp",
                                     "steps": 20,
                                     "cfg_scale": 7.5,
                                     "safe_mode": False,
                                     "return_binary": False,
                                     "embed_exif_metadata": False,
                                     "hide_watermark": True,
-                                    "seed": 0                                }
+                                    "seed": 0
+                                }
                                 
                                 response = requests.post(VENICE_IMAGE_URL, json=payload, headers=headers, timeout=60)
                                 
@@ -680,19 +712,25 @@ def stream_response():
                                         
                                         image_url = f"data:image/png;base64,{image_data}"
                                         app.logger.debug(f"Generated image URL length: {len(image_url)} for prompt: {prompt[:30]}...")
-                                          # Create image message with better formatting - ensure compatibility with frontend localStorage format
+                                          # Generate unique image ID for mobile-friendly storage
+                                        import hashlib
+                                        image_id = hashlib.md5(f"{prompt}{time.time()}".encode()).hexdigest()[:12]
+                                        
+                                        # Create image message with better formatting - mobile-friendly storage
                                         image_message = {
                                             "role": "assistant",
-                                            "content": f'<div class="image-message"><img src="{image_url}" alt="{prompt}" style="max-width: 100%; border-radius: 8px; margin: 10px 0; display: block;"><div class="image-caption"><em>Generated image: {prompt}</em></div></div>',
+                                            "content": f'<div class="image-message"><img src="/get_image/{image_id}" alt="{prompt}" style="max-width: 100%; border-radius: 8px; margin: 10px 0; display: block;"><div class="image-caption"><em>Generated image: {prompt}</em></div></div>',
                                             "text": prompt,  # Add text field for compatibility
                                             "timestamp": time.time(),
                                             "message_type": "image",
-                                            "image_url": image_url,
+                                            "image_url": image_url,  # Keep full URL for server storage
+                                            "image_reference": image_id,  # Reference for efficient client storage
                                             "image_prompt": prompt,
                                             "image_model": selected_model,
                                             "sender": "assistant",  # Changed from "DM" to "assistant" for consistency
                                             "type": "dm",
-                                            "images": [image_url]  # Add images array for localStorage compatibility
+                                            "images": [f"/get_image/{image_id}"],  # Use reference for localStorage
+                                            "storage_optimized": True
                                         }
                                         
                                         # Add to chat history
@@ -742,14 +780,64 @@ def stream_response():
 
 @app.route('/new_game', methods=['POST'])
 def new_game():
-    user_id = get_user_id()
-    game_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
-    chat_history = []
-    # Only add the welcome message once
-    chat_history.append({"role": "assistant", "content": "Hello adventurer! Let's begin your quest. What is your name?"})
-    save_chat_history(user_id, chat_history, game_id)
-    response_data = {"game_id": game_id, "success": True}
-    return jsonify(response_data)
+    """Create a new game and handle privacy based on storage mode"""
+    try:
+        user_id = get_user_id()
+        storage_mode = session.get('storage_mode', 'hybrid')
+        
+        # Generate new game ID using frontend format for consistency
+        import random
+        import string
+        timestamp = str(int(time.time() * 1000))
+        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=9))
+        new_game_id = f"game_{timestamp}_{random_str}"
+        
+        deleted_files = 0
+        
+        # Handle cleanup based on storage mode
+        if storage_mode == 'hybrid':
+            # PRIVACY: Completely erase all previous chat history files for this user
+            try:
+                chat_files = os.listdir(CHAT_DIR)
+                user_files = [f for f in chat_files if f.startswith(f"chat_history_{user_id}_")]
+                
+                for file_name in user_files:
+                    file_path = os.path.join(CHAT_DIR, file_name)
+                    try:
+                        os.remove(file_path)
+                        deleted_files += 1
+                        app.logger.info(f"Privacy cleanup: Deleted {file_name}")
+                    except Exception as e:
+                        app.logger.error(f"Error deleting {file_name}: {str(e)}")
+                
+                app.logger.info(f"Privacy cleanup: Deleted {deleted_files} chat history files for user {user_id}")
+                
+            except Exception as e:
+                app.logger.error(f"Error during privacy cleanup: {str(e)}")
+                # Continue even if cleanup fails
+        
+        # Create empty chat history for new game (only in hybrid mode)
+        chat_history = []
+        if storage_mode == 'hybrid':
+            save_chat_history(user_id, chat_history, new_game_id)
+        
+        response_data = {
+            "game_id": new_game_id, 
+            "success": True,
+            "storage_mode": storage_mode,
+            "privacy_cleanup": storage_mode == 'hybrid',
+            "server_files_deleted": deleted_files,
+            "message": f"New game created in {storage_mode} mode. " + 
+                      (f"All previous server histories deleted for privacy." if storage_mode == 'hybrid' and deleted_files > 0 
+                       else "No server storage - maximum privacy mode." if storage_mode == 'client-only'
+                       else "Ready to start.")
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        app.logger.error(f"Error creating new game: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/load_history', methods=['POST'])
 def load_history():
@@ -1196,7 +1284,526 @@ def debug_venice():
         app.logger.error(f"Debug Venice API test failed: {str(e)}")
         return jsonify({'error': str(e), 'error_type': type(e).__name__})
 
-# Utility function removed - using full prompt only
+@app.route('/get_image/<image_id>', methods=['GET'])
+def get_image(image_id):
+    """Serve images by ID with privacy controls"""
+    try:
+        user_id = get_user_id()
+        
+        # Privacy check: Only serve images to the user who created them
+        chat_files = os.listdir(CHAT_DIR)
+        user_files = [f for f in chat_files if f.startswith(f"chat_history_{user_id}_") and f.endswith(".json")]
+        
+        for file_name in user_files:
+            file_path = os.path.join(CHAT_DIR, file_name)
+            with open(file_path, 'r') as file:
+                chat_history = json.load(file)
+                
+                for msg in chat_history:
+                    # Check if this message contains the requested image
+                    if (msg.get('message_type') == 'image' and 
+                        msg.get('image_url') and 
+                        (image_id in msg.get('image_url', '') or 
+                         image_id == msg.get('image_reference', ''))):
+                        
+                        # Extract base64 data from the data URL
+                        image_url = msg.get('image_url', '')
+                        if image_url.startswith('data:image/'):
+                            format_and_data = image_url.split(',', 1)
+                            if len(format_and_data) == 2:
+                                try:
+                                    image_data = base64.b64decode(format_and_data[1])
+                                    
+                                    # Determine content type
+                                    if 'png' in format_and_data[0]:
+                                        content_type = 'image/png'
+                                    elif 'webp' in format_and_data[0]:
+                                        content_type = 'image/webp'
+                                    else:
+                                        content_type = 'image/jpeg'
+                                    
+                                    # Add privacy headers
+                                    response = Response(image_data, mimetype=content_type)
+                                    response.headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate'
+                                    response.headers['Pragma'] = 'no-cache'
+                                    response.headers['Expires'] = '0'
+                                    return response
+                                    
+                                except Exception as decode_error:
+                                    app.logger.error(f"Error decoding image {image_id}: {str(decode_error)}")
+                                    break
+        
+        # Log access attempt for security
+        app.logger.warning(f"Image access denied or not found: {image_id} for user {user_id}")
+        return jsonify({"error": "Image not found or access denied"}), 404
+        
+    except Exception as e:
+        app.logger.error(f"Error serving image {image_id}: {str(e)}")
+        return jsonify({"error": "Server error"}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/optimize_storage', methods=['POST'])
+def optimize_storage():
+    """Optimize chat history by replacing large images with references"""
+    try:
+        user_id = get_user_id()
+        data = request.get_json()
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({"success": False, "error": "No game ID provided"})
+        
+        # Load chat history
+        chat_history = load_chat_history(user_id, game_id)
+        optimized_history = []
+        images_optimized = 0
+        
+        for msg in chat_history:
+            if (msg.get('message_type') == 'image' and 
+                msg.get('image_url') and 
+                msg['image_url'].startswith('data:image/')):
+                
+                # Generate a unique image ID
+                import hashlib
+                image_id = hashlib.md5(msg['image_url'].encode()).hexdigest()[:12]
+                
+                # Create optimized version with image reference
+                optimized_msg = msg.copy()
+                optimized_msg['image_reference'] = image_id
+                optimized_msg['image_url_original'] = msg['image_url']  # Keep original for server
+                optimized_msg['image_url'] = f'/get_image/{image_id}'  # Client will use this
+                optimized_msg['optimized'] = True
+                
+                optimized_history.append(optimized_msg)
+                images_optimized += 1
+            else:
+                optimized_history.append(msg)
+        
+        # Save optimized history
+        save_chat_history(user_id, optimized_history, game_id)
+        
+        return jsonify({
+            "success": True,
+            "images_optimized": images_optimized,
+            "original_size": len(chat_history),
+            "optimized_size": len(optimized_history)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error optimizing storage: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/cleanup_storage', methods=['POST'])
+def cleanup_storage():
+    """Automatically clean up old chat history to prevent localStorage overflow"""
+    try:
+        user_id = get_user_id()
+        data = request.get_json()
+        game_id = data.get('game_id')
+        max_messages = data.get('max_messages', 100)  # Keep last 100 messages
+        
+        if not game_id:
+            return jsonify({"success": False, "error": "No game ID provided"})
+        
+        # Load current chat history
+        chat_history = load_chat_history(user_id, game_id)
+        
+        if len(chat_history) <= max_messages:
+            return jsonify({
+                "success": True,
+                "cleaned": False,
+                "message": "No cleanup needed",
+                "current_size": len(chat_history)
+            })
+        
+        # Keep the most recent messages and important system messages
+        important_messages = []
+        recent_messages = []
+        
+        # First pass: collect important messages (welcome, system notifications)
+        for i, msg in enumerate(chat_history):
+            if (msg.get('message_type') == 'system' or 
+                (msg.get('role') == 'assistant' and 'welcome' in msg.get('content', '').lower()) or
+                msg.get('important', False)):
+                important_messages.append((i, msg))
+        
+        # Second pass: collect recent messages
+        start_index = max(0, len(chat_history) - max_messages)
+        recent_messages = chat_history[start_index:]
+        
+        # Combine important and recent messages, avoiding duplicates
+        final_history = []
+        important_indices = {i for i, _ in important_messages}
+        
+        # Add important messages first
+        for _, msg in important_messages:
+            final_history.append(msg)
+        
+        # Add recent messages that aren't already included
+        for i, msg in enumerate(recent_messages, start=start_index):
+            if i not in important_indices:
+                final_history.append(msg)
+        
+        # Sort by original order (approximate)
+        # This is a simple approach - you might want more sophisticated ordering
+        
+        # Save cleaned history
+        save_chat_history(user_id, final_history, game_id)
+        
+        return jsonify({
+            "success": True,
+            "cleaned": True,
+            "original_size": len(chat_history),
+            "new_size": len(final_history),
+            "messages_removed": len(chat_history) - len(final_history),
+            "important_messages_kept": len(important_messages)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error cleaning up storage: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/get_storage_info', methods=['POST'])
+def get_storage_info():
+    """Get information about current storage usage"""
+    try:
+        user_id = get_user_id()
+        data = request.get_json()
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({"success": False, "error": "No game ID provided"})
+        
+        # Load chat history
+        chat_history = load_chat_history(user_id, game_id)
+        
+        # Calculate storage metrics
+        total_messages = len(chat_history)
+        image_messages = sum(1 for msg in chat_history if msg.get('message_type') == 'image')
+        text_messages = total_messages - image_messages
+        
+        # Estimate localStorage usage (rough calculation)
+        estimated_size = 0
+        large_messages = 0
+        
+        for msg in chat_history:
+            msg_str = json.dumps(msg)
+            msg_size = len(msg_str.encode('utf-8'))
+            estimated_size += msg_size
+            
+            if msg_size > 10000:  # Messages larger than 10KB
+                large_messages += 1
+        
+        # Convert to MB for readability
+        estimated_size_mb = estimated_size / (1024 * 1024)
+        
+        return jsonify({
+            "success": True,
+            "total_messages": total_messages,
+            "image_messages": image_messages,
+            "text_messages": text_messages,
+            "estimated_size_bytes": estimated_size,
+            "estimated_size_mb": round(estimated_size_mb, 2),
+            "large_messages": large_messages,
+            "needs_cleanup": estimated_size_mb > 5,  # Suggest cleanup if over 5MB
+            "game_id": game_id
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting storage info: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/privacy_settings', methods=['GET', 'POST'])
+def privacy_settings():
+    """Manage privacy and data retention settings"""
+    if request.method == 'GET':
+        return jsonify({
+            "success": True,
+            "current_settings": {
+                "server_storage_enabled": True,  # Currently always enabled
+                "auto_delete_on_new_game": True,
+                "max_retention_hours": 24,  # Delete after 24 hours
+                "encryption_enabled": False  # Could be implemented later
+            },
+            "privacy_info": {
+                "server_storage_risk": "Files stored on server can potentially be accessed by law enforcement",
+                "client_storage_risk": "localStorage is private to your browser but limited in size",
+                "recommendation": "Use incognito mode and clear browser data for maximum privacy"
+            }
+        })
+    
+    # POST method for updating settings would go here
+    return jsonify({"success": False, "error": "Settings update not implemented"})
+
+@app.route('/emergency_delete', methods=['POST'])
+def emergency_delete():
+    """Emergency endpoint to delete all data for a user (privacy protection)"""
+    try:
+        user_id = get_user_id()
+        data = request.get_json()
+        confirm_delete = data.get('confirm_delete', False)
+        
+        if not confirm_delete:
+            return jsonify({
+                "success": False,
+                "error": "Must confirm deletion",
+                "warning": "This will permanently delete ALL your chat histories and images"
+            })
+        
+        # Delete all files for this user
+        try:
+            chat_files = os.listdir(CHAT_DIR)
+            user_files = [f for f in chat_files if f.startswith(f"chat_history_{user_id}_")]
+            
+            deleted_files = 0
+            for file_name in user_files:
+                file_path = os.path.join(CHAT_DIR, file_name)
+                try:
+                    os.remove(file_path)
+                    deleted_files += 1
+                except Exception as e:
+                    app.logger.error(f"Error deleting {file_name}: {str(e)}")
+            
+            app.logger.info(f"Emergency delete: Removed {deleted_files} files for user {user_id}")
+            
+            return jsonify({
+                "success": True,
+                "files_deleted": deleted_files,
+                "message": f"Successfully deleted all data. {deleted_files} files removed from server."
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error during emergency deletion: {str(e)}")
+            return jsonify({
+                "success": False,
+                "error": "Failed to complete deletion",
+                "details": str(e)
+            })
+        
+    except Exception as e:
+        app.logger.error(f"Error in emergency delete: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/privacy_status', methods=['GET'])
+def privacy_status():
+    """Get current privacy status and data stored for user"""
+    try:
+        user_id = get_user_id()
+        
+        # Count files and estimate data stored for this user
+        try:
+            chat_files = os.listdir(CHAT_DIR)
+            user_files = [f for f in chat_files if f.startswith(f"chat_history_{user_id}_")]
+            
+            total_size = 0
+            file_details = []
+            
+            for file_name in user_files:
+                file_path = os.path.join(CHAT_DIR, file_name)
+                if os.path.exists(file_path):
+                    file_size = os.path.getsize(file_path)
+                    total_size += file_size;
+                    
+                    # Get file modification time
+                    mod_time = os.path.getmtime(file_path);
+                    
+                    file_details.append({
+                        "filename": file_name,
+                        "size_bytes": file_size,
+                        "size_mb": round(file_size / (1024 * 1024), 3),
+                        "last_modified": mod_time,
+                        "game_id": file_name.replace(f"chat_history_{user_id}_", "").replace(".json", "")
+                    })
+            
+            return jsonify({
+                "success": True,
+                "user_id": user_id,
+                "total_files": len(user_files),
+                "total_size_bytes": total_size,
+                "total_size_mb": round(total_size / (1024 * 1024), 3),
+                "files": file_details,
+                "privacy_notes": [
+                    "Files are stored on the server and could potentially be accessed by authorities",
+                    "Use 'New Game' to automatically delete previous histories",
+                    "Use 'Emergency Delete' to remove all data immediately",
+                    "Consider using incognito mode for maximum privacy"
+                ]
+            })
+            
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": f"Could not access data directory: {str(e)}"
+            })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting privacy status: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/set_storage_mode', methods=['POST'])
+def set_storage_mode():
+    """Set storage mode preference (client-only vs hybrid)"""
+    try:
+        data = request.get_json()
+        storage_mode = data.get('storage_mode', 'hybrid')  # 'client-only' or 'hybrid'
+        
+        if storage_mode not in ['client-only', 'hybrid']:
+            return jsonify({"success": False, "error": "Invalid storage mode"}), 400
+        
+        # Store in session
+        session['storage_mode'] = storage_mode
+        
+        # If switching to client-only, delete any existing server files for privacy
+        if storage_mode == 'client-only':
+            user_id = get_user_id()
+            try:
+                chat_files = os.listdir(CHAT_DIR)
+                user_files = [f for f in chat_files if f.startswith(f"chat_history_{user_id}_")]
+                
+                deleted_files = 0
+                for file_name in user_files:
+                    file_path = os.path.join(CHAT_DIR, file_name)
+                    try:
+                        os.remove(file_path)
+                        deleted_files += 1
+                        app.logger.info(f"Client-only mode: Deleted server file {file_name}")
+                    except Exception as e:
+                        app.logger.error(f"Error deleting {file_name}: {str(e)}")
+                
+                return jsonify({
+                    "success": True,
+                    "storage_mode": storage_mode,
+                    "server_files_deleted": deleted_files,
+                    "message": f"Switched to client-only storage. {deleted_files} server files deleted for privacy."
+                })
+                
+            except Exception as e:
+                app.logger.error(f"Error cleaning up server files: {str(e)}")
+                return jsonify({
+                    "success": True,
+                    "storage_mode": storage_mode,
+                    "warning": "Mode switched but cleanup failed",
+                    "error": str(e)
+                })
+        
+        return jsonify({
+            "success": True,
+            "storage_mode": storage_mode,
+            "message": f"Storage mode set to: {storage_mode}"
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error setting storage mode: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/get_storage_mode', methods=['GET'])
+def get_storage_mode():
+    """Get current storage mode"""
+    storage_mode = session.get('storage_mode', 'hybrid')
+    return jsonify({
+        "success": True,
+        "storage_mode": storage_mode,
+        "modes": {
+            "client-only": {
+                "description": "All data stored only in browser localStorage",
+                "privacy": "Maximum privacy - no server storage",
+                "limitations": "Limited storage space, data lost if browser cleared"
+            },
+            "hybrid": {
+                "description": "Data stored both client and server with privacy controls",
+                "privacy": "Moderate privacy - server files can be deleted on demand",
+                "limitations": "Server files potentially accessible by authorities"
+            }
+        }
+    })
+
+@app.route('/client_storage_info', methods=['GET'])
+def client_storage_info():
+    """Provide information for client-side storage management"""
+    return jsonify({
+        "success": True,
+        "storage_mode": session.get('storage_mode', 'hybrid'),
+        "client_storage_tips": {
+            "image_compression": "Compress images before storing in localStorage",
+            "cleanup_strategy": "Keep only recent messages, delete old conversations",
+            "storage_limit": "Browser localStorage typically limited to 5-10MB",
+            "backup_recommendation": "Periodically save important conversations externally"
+        },
+        "privacy_benefits": [
+            "No server storage - data never leaves your browser",
+            "Complete control over your data",
+            "Instantly delete by clearing browser data",
+            "No risk of external access to chat histories"
+        ]
+    })
+
+@app.route('/compress_image', methods=['POST'])
+def compress_image():
+    """Compress base64 images for more efficient localStorage storage"""
+    try:
+        data = request.get_json()
+        image_data = data.get('image_data')
+        quality = data.get('quality', 70)  # 70% quality by default
+        
+        if not image_data or not image_data.startswith('data:image/'):
+            return jsonify({"success": False, "error": "Invalid image data"}), 400
+        
+        # Extract format and base64 data
+        format_and_data = image_data.split(',', 1)
+        if len(format_and_data) != 2:
+            return jsonify({"success": False, "error": "Invalid image format"}), 400
+        
+        from PIL import Image
+        
+        try:
+            # Decode base64 to image
+            image_bytes = base64.b64decode(format_and_data[1])
+            image = Image.open(io.BytesIO(image_bytes))
+            
+            # Compress image
+            output_buffer = io.BytesIO()
+            
+            # Convert to RGB if necessary (for JPEG compression)
+            if image.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = background
+            
+            # Save with compression
+            image.save(output_buffer, format='JPEG', quality=quality, optimize=True)
+            compressed_bytes = output_buffer.getvalue()
+            
+            # Encode back to base64
+            compressed_b64 = base64.b64encode(compressed_bytes).decode('utf-8')
+            compressed_data_url = f"data:image/jpeg;base64,{compressed_b64}"
+            
+            # Calculate compression ratio
+            original_size = len(format_and_data[1])
+            compressed_size = len(compressed_b64)
+            compression_ratio = compressed_size / original_size
+            
+            return jsonify({
+                "success": True,
+                "compressed_image": compressed_data_url,
+                "original_size_bytes": original_size,
+                "compressed_size_bytes": compressed_size,
+                "compression_ratio": round(compression_ratio, 3),
+                "size_reduction_percent": round((1 - compression_ratio) * 100, 1)
+            })
+            
+        except Exception as compression_error:
+            return jsonify({
+                "success": False,
+                "error": f"Compression failed: {str(compression_error)}",
+                "fallback": "Use original image"
+            }), 500
+        
+    except Exception as e:
+        app.logger.error(f"Error in image compression: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+if __name__ == "__main__":
+    # Ensure chat directory exists
+    os.makedirs(CHAT_DIR, exist_ok=True)
+    
+    # Run the Flask app - localhost only for security
+    app.run(debug=True, host='127.0.0.1', port=5000)

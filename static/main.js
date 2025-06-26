@@ -44,6 +44,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return null;
     }
     
+    // Global scroll to bottom function
+    function scrollToBottom() {
+        const chatWindow = document.getElementById('chat-window');
+        if (chatWindow) {
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+    }
+    
+    // Make it globally available
+    window.scrollToBottom = scrollToBottom;
+    
     // Session data - check cookie first, then localStorage
     let currentGameId = getCookie('game_id') || localStorage.getItem('currentGameId');
     debugLog("Initial gameId from cookie:", getCookie('game_id'));
@@ -265,6 +276,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function setServerImageModel(modelId) {
+        // Set the image model on the server without showing UI feedback
         fetch('/set_image_model', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -277,7 +289,8 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 debugLog("Error setting server image model:", data.error);
             }
-        })        .catch(error => {
+        })
+        .catch(error => {
             debugLog("Error setting server image model:", error);
         });
     }
@@ -498,7 +511,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
           messageDiv.appendChild(contentSpan);
         chatWindow.appendChild(messageDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
+        scrollToBottom();
         
         console.log("Image message displayed successfully");
         console.log("=== END DISPLAYING IMAGE MESSAGE ===");
@@ -629,7 +642,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initial save of current (empty or welcome) state if history is empty
         if (messageHistory.length === 0 && chatWindow.children.length > 0) {
             debugLog("initializeHistory: Chat window has children, but history is empty. Saving initial state.");
-            setTimeout(saveChatState, 100); // Allow DOM to settle        } else {
+            setTimeout(saveChatState, 100); // Allow DOM to settle
+        } else {
             updateUndoRedoButtons();
         }
     }
@@ -1273,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        chatWindow.scrollTop = chatWindow.scrollHeight;
+        scrollToBottom();
     }
 
     function addMessage(sender, text, isTypewriter = false, fromUpdate = false, skipHistory = false, isHTML = false) {
@@ -1309,7 +1323,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         msgDiv.appendChild(contentSpan);
           chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
+        scrollToBottom();
         
         // CRITICAL FIX: Always save chat state for user messages immediately
         if (!skipHistory) {
@@ -1340,7 +1354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         msgDiv.appendChild(contentSpan);
         
         chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
+        scrollToBottom();
         
         if (isTemporary) {
             setTimeout(() => msgDiv.remove(), 8000);
@@ -1532,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingDiv.appendChild(nameSpan);
         loadingDiv.appendChild(responseText);
         chatWindow.appendChild(loadingDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
+        scrollToBottom();
         
         return loadingDiv;
     }
@@ -1671,7 +1685,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         responseTextElem.innerHTML = cleanedDisplayContent + cursorHTML;
                     }
                     
-                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                    scrollToBottom();
                 }
             } catch (e) {
                 debugLog("Error parsing event data:", e);
@@ -2564,7 +2578,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load available models on page load
     loadAvailableModels();
     loadAvailableImageModels();
-
+    
+    // Scroll to bottom functionality
+    function initScrollToBottom() {
+        const chatWindow = document.getElementById('chat-window');
+        const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
+        
+        if (!chatWindow || !scrollToBottomBtn) return;
+        
+        // Check if user has scrolled up and show/hide button
+        function checkScrollPosition() {
+            const isAtBottom = chatWindow.scrollTop >= (chatWindow.scrollHeight - chatWindow.clientHeight - 50);
+            
+            if (isAtBottom) {
+                scrollToBottomBtn.classList.remove('show');
+            } else {
+                scrollToBottomBtn.classList.add('show');
+            }
+        }
+        
+        // Event listeners
+        chatWindow.addEventListener('scroll', checkScrollPosition);
+        scrollToBottomBtn.addEventListener('click', scrollToBottom);
+        
+        // Scroll to bottom initially (after a small delay to ensure content is loaded)
+        setTimeout(scrollToBottom, 100);
+        
+        debugLog("Scroll to bottom functionality initialized");
+    }
+    
+    // Initialize scroll to bottom
+    initScrollToBottom();
 });  // End of DOMContentLoaded event listener
 
 // Global function for reasoning toggle (called from HTML)

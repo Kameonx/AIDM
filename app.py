@@ -1036,11 +1036,31 @@ def generate_image():
         
         result = response.json()
         
-        if 'data' not in result or not result['data'] or not result['data'][0].get('url'):
+        # Check if we have the expected data structure (Venice AI uses 'images' field with base64 data)
+        if 'images' not in result or not result['images']:
             app.logger.error(f"Invalid response from Venice AI: {result}")
             return jsonify({"success": False, "error": "Invalid response from image API"}), 500
+
+        # Extract the base64 image data from the 'images' field
+        images_field = result['images']
         
-        image_url = result['data'][0]['url']
+        if isinstance(images_field, list) and len(images_field) > 0:
+            # Venice AI returns a list with base64 string as first element
+            image_data = images_field[0]
+        elif isinstance(images_field, str):
+            # Sometimes might return directly as string
+            image_data = images_field
+        else:
+            app.logger.error(f"Unexpected images format: {type(images_field)}")
+            return jsonify({"success": False, "error": "Invalid response from image API"}), 500
+        
+        # Validate the base64 data
+        if not isinstance(image_data, str) or len(image_data) < 100:
+            app.logger.error(f"Invalid base64 data. Type: {type(image_data)}, Length: {len(image_data) if hasattr(image_data, '__len__') else 'N/A'}")
+            return jsonify({"success": False, "error": "Invalid response from image API"}), 500
+        
+        # Create data URL from base64 image data
+        image_url = f"data:image/png;base64,{image_data}"
         
         # Save the image message to chat history
         chat_history = load_chat_history(user_id, game_id)

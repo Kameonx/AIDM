@@ -202,21 +202,35 @@ def process_image_requests(text):
     if matches:
         app.logger.warning(f"Found improper 'Generated image:' usage, converting to [IMAGE:] tags: {matches}")
         for match in matches:
-            # Convert "Generated image: description" to "[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, description]"
-            proper_tag = f"[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, {match.strip()}]"
+            # Check if the match already contains style information
+            if "studio ghibli" in match.lower() or "d&d fantasy" in match.lower() or "cartoon illustration" in match.lower():
+                # Already has style, just wrap in [IMAGE:] tag
+                proper_tag = f"[IMAGE: {match.strip()}]"
+            else:
+                # Convert "Generated image: description" to "[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, description]"
+                proper_tag = f"[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, {match.strip()}]"
             text = re.sub(r'Generated image:\s*' + re.escape(match), proper_tag, text, flags=re.IGNORECASE)
     
     # Also check for other improper patterns
     improper_patterns = [
-        (r'Image:\s*([^.\n\[]+)', r'[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, \1]'),
-        (r'\*shows image of ([^*]+)\*', r'[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, \1]'),
-        (r'You see (?:a detailed )?image of ([^.\n]+)', r'[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, \1]')
+        (r'Image:\s*([^.\n\[]+)', r'[IMAGE: \1]'),
+        (r'\*shows image of ([^*]+)\*', r'[IMAGE: \1]'),
+        (r'You see (?:a detailed )?image of ([^.\n]+)', r'[IMAGE: \1]')
     ]
     
     for pattern, replacement in improper_patterns:
-        if re.search(pattern, text, re.IGNORECASE):
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        if matches:
             app.logger.warning(f"Found improper image description pattern, converting to [IMAGE:] tag")
-            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+            for match in matches:
+                # Check if the match already contains style information
+                if "studio ghibli" in match.lower() or "d&d fantasy" in match.lower() or "cartoon illustration" in match.lower():
+                    # Already has style, just wrap in [IMAGE:] tag
+                    proper_tag = f"[IMAGE: {match.strip()}]"
+                else:
+                    # Add style prefix
+                    proper_tag = f"[IMAGE: Studio Ghibli anime style, D&D fantasy art, cartoon illustration, {match.strip()}]"
+                text = re.sub(pattern, proper_tag, text, flags=re.IGNORECASE)
     
     # Find all [IMAGE: description] tags
     image_pattern = r'\[IMAGE:\s*(.*?)\]'

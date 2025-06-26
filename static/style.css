@@ -453,6 +453,25 @@ body {
 #ai-models-btn { background-color: #8be9fd; color: #282a36; }
 #image-models-btn { background-color: #ff79c6; color: #282a36; }
 
+/* Backup button styling */
+.backup-container {
+    margin: 8px 0;
+    padding: 8px 0;
+    border-top: 1px solid #44475a;
+    border-bottom: 1px solid #44475a;
+}
+
+.backup-btn {
+    background-color: #50fa7b !important;
+    color: #282a36 !important;
+    font-size: 11px !important;
+    padding: 8px 12px !important;
+    margin: 2px 0 !important;
+}
+
+#export-data-btn { background-color: #50fa7b; color: #282a36; }
+#import-data-btn { background-color: #f1fa8c; color: #282a36; }
+
 .side-menu-btn:hover {
     transform: translateY(-2px);
     filter: brightness(1.1);

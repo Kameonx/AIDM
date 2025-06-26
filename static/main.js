@@ -480,8 +480,8 @@ document.addEventListener('DOMContentLoaded', function() {
             contentSpan.innerHTML = `
                 <div class="image-message">
                     <img src="${imageUrl}" alt="${imagePrompt}" 
-                         style="max-width: 100%; border-radius: 8px; margin: 10px 0; display: block; background-color: #f0f0f0;" 
-                         onload="console.log('Image loaded successfully:', this.alt); this.style.backgroundColor = 'transparent'; if(this.closest('#chat-window')) this.closest('#chat-window').scrollTop = this.closest('#chat-window').scrollHeight;"
+                         style="background-color: #f0f0f0;" 
+                         onload="console.log('Image loaded successfully:', this.alt); this.style.backgroundColor = 'transparent'; const chatWindow = this.closest('#chat-window'); if(chatWindow) { setTimeout(() => chatWindow.scrollTop = chatWindow.scrollHeight, 100); }"
                          onerror="console.error('Image failed to load:', this.alt, this.src.substring(0, 50)); this.style.backgroundColor = '#ffebee'; this.alt = 'Image failed to load';">
                     <div class="image-caption">
                         <em>Generated image: ${imagePrompt}</em>
@@ -959,7 +959,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const messageToSave = {
                 sender: 'assistant',
                 text: imageMessage.image_prompt || imageMessage.text || 'Generated image',
-                content: imageMessage.content || `<div class="image-message"><img src="${imageMessage.image_url}" alt="${imageMessage.image_prompt || 'Generated image'}" style="max-width: 100%; border-radius: 8px; margin: 10px 0;"><div class="image-caption"><em>Generated image: ${imageMessage.image_prompt || 'Generated image'}</em></div></div>`,
+                content: imageMessage.content || `<div class="image-message"><img src="${imageMessage.image_url}" alt="${imageMessage.image_prompt || 'Generated image'}"><div class="image-caption"><em>Generated image: ${imageMessage.image_prompt || 'Generated image'}</em></div></div>`,
                 images: [imageMessage.image_url], // Store the full image URL first
                 timestamp: imageMessage.timestamp || Date.now(),
                 role: 'assistant',

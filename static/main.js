@@ -1434,7 +1434,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 debugLog("Displaying DM message:", messageContent.substring(0, 50) + "...");
                 
                 // If we have contentHTML, it's already formatted - use it directly
-                if (msg.contentHTML && msg.contentHTML.includes('<span class=') || msg.contentHTML && msg.contentHTML.includes('<strong>') || msg.contentHTML && msg.contentHTML.includes('<em>')) {
+                if (msg.contentHTML && (msg.contentHTML.includes('<span class=') || msg.contentHTML.includes('<strong>') || msg.contentHTML.includes('<em>'))) {
                     // Content has HTML formatting, use it directly
                     addMessage(dmName, msg.contentHTML, false, true, true, true);
                 } else {

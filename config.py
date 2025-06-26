@@ -26,14 +26,14 @@ AVAILABLE_MODELS = [
         "id": "venice-uncensored",
         "name": "Venice Uncensored",
         "description": "Uncensored model (Dolphin-Mistral-24B-Venice-Edition)",
-        "traits": [],
+        "traits": ["default"],
         "pricing": {"input": 0.5, "output": 2},
         "supportsFunctionCalling": False,
         "supportsParallelToolCalls": False
     },
     {
         "id": "qwen-2.5-qwq-32b",
-        "name": "Qwen-2.5-QwQ-32B",
+        "name": "Venice Reasoning",
         "description": "Reasoning specialist (Qwen/QwQ-32B)",
         "traits": [],
         "pricing": {"input": 0.5, "output": 2},
@@ -42,7 +42,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "qwen3-4b",
-        "name": "Qwen3-4B",
+        "name": "Venice Small",
         "description": "Fast, small, supports function calling (Qwen/Qwen3-4B)",
         "traits": [],
         "pricing": {"input": 0.15, "output": 0.6},
@@ -51,7 +51,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "mistral-31-24b",
-        "name": "Mistral-3.1-24B",
+        "name": "Venice Medium",
         "description": "Vision-capable (Mistral-Small-3.1-24B-Instruct-2503)",
         "traits": ["default_vision"],
         "pricing": {"input": 0.5, "output": 2},
@@ -60,7 +60,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "qwen3-235b",
-        "name": "Qwen3-235B",
+        "name": "Venice Large",
         "description": "Large, supports function calling (Qwen/Qwen3-235B-A22B)",
         "traits": [],
         "pricing": {"input": 1.5, "output": 6},
@@ -69,7 +69,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "llama-3.2-3b",
-        "name": "Llama-3.2-3B",
+        "name": "Llama 3.2 3B",
         "description": "Fastest model (Llama-3.2-3B)",
         "traits": ["fastest"],
         "pricing": {"input": 0.15, "output": 0.6},
@@ -78,16 +78,16 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "llama-3.3-70b",
-        "name": "Llama-3.3-70B",
-        "description": "Default D&D model (Llama-3.3-70B-Instruct)",
-        "traits": ["function_calling_default", "default"],
+        "name": "Llama 3.3 70B",
+        "description": "Function calling model (Llama-3.3-70B-Instruct)",
+        "traits": ["function_calling_default"],
         "pricing": {"input": 0.7, "output": 2.8},
         "supportsFunctionCalling": True,
         "supportsParallelToolCalls": True
     },
     {
         "id": "llama-3.1-405b",
-        "name": "Llama-3.1-405B",
+        "name": "Llama 3.1 405B",
         "description": "Most intelligent model (Meta-Llama-3.1-405B-Instruct)",
         "traits": ["most_intelligent"],
         "pricing": {"input": 1.5, "output": 6},
@@ -96,7 +96,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "dolphin-2.9.2-qwen2-72b",
-        "name": "Dolphin-2.9.2-Qwen2-72B",
+        "name": "Dolphin 72B",
         "description": "Most uncensored (dolphin-2.9.2-qwen2-72b)",
         "traits": ["most_uncensored"],
         "pricing": {"input": 0.7, "output": 2.8},
@@ -105,7 +105,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "qwen-2.5-vl",
-        "name": "Qwen-2.5-VL",
+        "name": "Qwen 2.5 VL 72B",
         "description": "Vision-capable (Qwen2.5-VL-72B-Instruct)",
         "traits": [],
         "pricing": {"input": 0.7, "output": 2.8},
@@ -114,7 +114,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "qwen-2.5-coder-32b",
-        "name": "Qwen-2.5-Coder-32B",
+        "name": "Qwen 2.5 Coder 32B",
         "description": "Code-optimized (Qwen2.5-Coder-32B-Instruct-GGUF)",
         "traits": ["default_code"],
         "pricing": {"input": 0.5, "output": 2},
@@ -123,7 +123,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "deepseek-r1-671b",
-        "name": "DeepSeek-R1-671B",
+        "name": "DeepSeek R1 671B",
         "description": "Best reasoning model (DeepSeek-R1)",
         "traits": ["default_reasoning"],
         "pricing": {"input": 3.5, "output": 14},
@@ -132,7 +132,7 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "deepseek-coder-v2-lite",
-        "name": "DeepSeek-Coder-v2-Lite",
+        "name": "DeepSeek Coder V2 Lite",
         "description": "Lite code model (deepseek-coder-v2-lite-Instruct)",
         "traits": [],
         "pricing": {"input": 0.5, "output": 2},

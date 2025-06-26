@@ -1,4 +1,9 @@
+// IMMEDIATE DEBUG TEST
+console.log("=== JAVASCRIPT FILE LOADING ===");
+
 document.addEventListener('DOMContentLoaded', function() {
+    console.log("=== DOMContentLoaded FIRED ===");
+    
     // Debug setup
     const DEBUG = true;
     function debugLog(...args) {
@@ -1600,7 +1605,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (isTemporary) {
             setTimeout(() => msgDiv.remove(), 8000);
-        }        if (!skipHistory) {
+        }
+        
+        if (!skipHistory) {
             setTimeout(saveChatState, 0);
         }
     }
@@ -1610,10 +1617,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function sendMessage(inputElement, playerNumber) {
+        console.log("=== sendMessage called ===", inputElement?.value, playerNumber);
+        
         const userMessage = inputElement.value.trim();
         debugLog(`Attempting to send message: "${userMessage}" from player ${playerNumber}. isGenerating: ${isGenerating}`);
         
-        if (!userMessage) return;
+        if (!userMessage) {
+            console.log("No message content, returning");
+            return;
+        }
         
         // DM rename flow (secret, only when DM asks)
         if (window.awaitingDMRename) {
@@ -2342,28 +2354,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Event Listeners
-    debugLog("Setting up event listeners...");
-    debugLog("userInput element:", userInput);
-    debugLog("sendBtn element:", sendBtn);
-    debugLog("menuToggleBtn element:", menuToggleBtn);
-    debugLog("sideMenu element:", sideMenu);
+    console.log("=== Setting up event listeners ===");
+    debugLog("userInput:", userInput);
+    debugLog("sendBtn:", sendBtn);
     
     if (userInput && sendBtn) {
-        debugLog("Setting up send button and input listeners");
+        console.log("=== Send button found, setting up listeners ===");
         userInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !isGenerating) {
                 e.preventDefault();
-                debugLog("Enter key pressed, sending message");
+                console.log("=== Enter pressed, calling sendMessage ===");
                 sendMessage(userInput, 1);
             }
         });
         sendBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            debugLog("Send button clicked");
-            if (!isGenerating) sendMessage(userInput, 1);
+            console.log("=== Send button clicked ===");
+            if (!isGenerating) {
+                sendMessage(userInput, 1);
+            } else {
+                console.log("Currently generating, ignoring click");
+            }
         });
+        console.log("=== Event listeners set up successfully ===");
     } else {
-        debugLog("ERROR: userInput or sendBtn not found!");
+        console.log("=== ERROR: userInput or sendBtn not found! ===");
+        debugLog("userInput:", userInput);
+        debugLog("sendBtn:", sendBtn);
     }
 
     // Set up click handler for Player 1's container
@@ -2590,18 +2607,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     window.sendMessage = sendMessage;
 
-    // Initialize mobile fixes
-    initMobileFixes();
-    
-    // Initialize image long-press handling
-    initImageLongPress();
-
-    debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
-    
-});  // End of DOMContentLoaded event listener
-
-// Add mobile-specific fixes
-function initMobileFixes() {
+    // Add mobile-specific fixes
+    function initMobileFixes() {
         // Fix for mobile viewport issues
         function setViewportHeight() {
             const vh = window.innerHeight * 0.01;
@@ -2681,7 +2688,7 @@ function initMobileFixes() {
                 }
             });
         }
-          debugLog("Mobile fixes initialized");
+        debugLog("Mobile fixes initialized");
     }
 
     // Initialize mobile image long-press handling
@@ -2841,66 +2848,16 @@ function initMobileFixes() {
         // Auto-close after 5 seconds
         setTimeout(closeModal, 5000);
     }
-    
-    // --- localStorage cleanup functions ---
-    
-    /**
-     * Clean up old localStorage data when quota is exceeded
-     */
-    function cleanupLocalStorage() {
-        console.log("=== CLEANING UP LOCALSTORAGE ===");
-        
-        try {
-            // Get all localStorage keys
-            const keys = Object.keys(localStorage);
-            const gameHistoryKeys = keys.filter(key => key.startsWith('chatHistory_game_'));
-            const gameDataKeys = keys.filter(key => key.startsWith('gameData_game_'));
-            
-            console.log(`Found ${gameHistoryKeys.length} game history entries and ${gameDataKeys.length} game data entries`);
-            
-            // Sort by timestamp (oldest first) and remove old entries
-            const sortedHistoryKeys = gameHistoryKeys.sort((a, b) => {
-                const timestampA = parseInt(a.split('_')[1]) || 0;
-                const timestampB = parseInt(b.split('_')[1]) || 0;
-                return timestampA - timestampB;
-            });
-            
-            // Keep only the 3 most recent games
-            const keysToRemove = sortedHistoryKeys.slice(0, Math.max(0, sortedHistoryKeys.length - 3));
-            
-            keysToRemove.forEach(key => {
-                console.log(`Removing old game data: ${key}`);
-                localStorage.removeItem(key);
-                
-                // Also remove corresponding game data
-                const gameId = key.replace('chatHistory_', '');
-                const gameDataKey = `gameData_${gameId}`;
-                if (localStorage.getItem(gameDataKey)) {
-                    localStorage.removeItem(gameDataKey);
-                    console.log(`Removed game data: ${gameDataKey}`);
-                }
-            });
-            
-            // Also clean up old undo/redo history if it exists
-            const chatHistoryKey = 'chatHistory';
-            if (localStorage.getItem(chatHistoryKey)) {
-                console.log("Removing old undo/redo history");
-                localStorage.removeItem(chatHistoryKey);
-            }
-            
-            console.log(`Cleanup complete. Removed ${keysToRemove.length} old game(s).`);
-            console.log("=== END CLEANUP ===");
-            
-            return keysToRemove.length > 0;
-        } catch (error) {
-            console.error("Error during localStorage cleanup:", error);
-            return false;
-        }
-    }
 
-    // --- Application initialization and setup ---
+    // Initialize mobile fixes
+    initMobileFixes();
     
-    // Models are already loaded in the initialization paths above
+    // Initialize image long-press handling
+    initImageLongPress();
+
+    debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
+    
+});  // End of DOMContentLoaded event listener
 
 // Global function for reasoning toggle (called from HTML)
 function toggleReasoning(reasoningId) {

@@ -10,7 +10,7 @@ VENICE_API_KEY = os.getenv("VENICE_API_KEY")
 VENICE_URL = "https://api.venice.ai/api/v1/chat/completions"
 VENICE_IMAGE_URL = "https://api.venice.ai/api/v1/image/generate"
 DEFAULT_MODEL_ID = "venice-uncensored"
-DEFAULT_IMAGE_MODEL_ID = "pony-realism"  # Most uncensored image model
+DEFAULT_IMAGE_MODEL_ID = "lustify-sdxl"  # NSFW-focused uncensored model
 
 # Validate API key
 if not VENICE_API_KEY:
@@ -144,21 +144,10 @@ AVAILABLE_MODELS = [
 # Available Image models from Venice
 AVAILABLE_IMAGE_MODELS = [
     {
-        "id": "pony-realism",
-        "name": "Pony Realism",
-        "description": "Most uncensored image model",
-        "traits": ["default", "most_uncensored"],
-        "constraints": {
-            "promptCharacterLimit": 1500,
-            "steps": {"default": 20, "max": 50},
-            "widthHeightDivisor": 8
-        }
-    },
-    {
-        "id": "hidream",
-        "name": "HiDream",
-        "description": "High-quality image generation (HiDream-I1-Dev)",
-        "traits": [],
+        "id": "lustify-sdxl",
+        "name": "Lustify SDXL",
+        "description": "NSFW-focused uncensored model",
+        "traits": ["default", "uncensored"],
         "constraints": {
             "promptCharacterLimit": 1500,
             "steps": {"default": 20, "max": 50},
@@ -177,30 +166,19 @@ AVAILABLE_IMAGE_MODELS = [
         }
     },
     {
-        "id": "flux-dev",
-        "name": "FLUX Dev",
-        "description": "Highest quality model (FLUX.1-dev)",
-        "traits": ["highest_quality"],
-        "constraints": {
-            "promptCharacterLimit": 2048,
-            "steps": {"default": 25, "max": 30},
-            "widthHeightDivisor": 8
-        }
-    },
-    {
-        "id": "flux-dev-uncensored",
-        "name": "FLUX Dev Uncensored",
-        "description": "Uncensored FLUX.1-dev",
+        "id": "hidream",
+        "name": "HiDream",
+        "description": "High-quality image generation (HiDream-I1-Dev)",
         "traits": [],
         "constraints": {
-            "promptCharacterLimit": 2048,
-            "steps": {"default": 25, "max": 30},
+            "promptCharacterLimit": 1500,
+            "steps": {"default": 20, "max": 50},
             "widthHeightDivisor": 8
         }
     },
     {
         "id": "fluently-xl",
-        "name": "Fluently XL",
+        "name": "Fluently XL Final",
         "description": "Fast image generation (Fluently-XL-Final)",
         "traits": ["fastest"],
         "constraints": {
@@ -210,10 +188,43 @@ AVAILABLE_IMAGE_MODELS = [
         }
     },
     {
-        "id": "lustify-sdxl",
-        "name": "Lustify SDXL",
-        "description": "NSFW-focused model (Lustify SDXL)",
-        "traits": [],
+        "id": "flux-dev",
+        "name": "FLUX Standard",
+        "description": "Highest quality model (FLUX.1-dev)",
+        "traits": ["highest_quality"],
+        "constraints": {
+            "promptCharacterLimit": 2048,
+            "steps": {"default": 25, "max": 30},
+            "widthHeightDivisor": 8
+        }
+    },
+    {
+        "id": "flux-dev-uncensored-11",
+        "name": "FLUX Custom 1.1",
+        "description": "Enhanced uncensored FLUX model (FLUX Enhanced 1.1)",
+        "traits": ["uncensored"],
+        "constraints": {
+            "promptCharacterLimit": 2048,
+            "steps": {"default": 25, "max": 30},
+            "widthHeightDivisor": 8
+        }
+    },
+    {
+        "id": "flux-dev-uncensored",
+        "name": "FLUX Custom",
+        "description": "Uncensored FLUX.1-dev",
+        "traits": ["uncensored"],
+        "constraints": {
+            "promptCharacterLimit": 2048,
+            "steps": {"default": 25, "max": 30},
+            "widthHeightDivisor": 8
+        }
+    },
+    {
+        "id": "pony-realism",
+        "name": "Pony Realism",
+        "description": "Most uncensored image model",
+        "traits": ["most_uncensored", "uncensored"],
         "constraints": {
             "promptCharacterLimit": 1500,
             "steps": {"default": 20, "max": 50},

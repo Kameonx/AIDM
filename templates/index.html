@@ -33,9 +33,14 @@
       </div>
       <button id="ai-models-btn" class="side-menu-btn"><i class="fas fa-robot"></i> AI Models</button>
       <button id="image-models-btn" class="side-menu-btn"><i class="fas fa-image"></i> Image Models</button>
+      <div class="backup-container">
+        <button id="export-data-btn" class="side-menu-btn backup-btn"><i class="fas fa-download"></i> Export Data</button>
+        <button id="import-data-btn" class="side-menu-btn backup-btn"><i class="fas fa-upload"></i> Import Data</button>
+        <input type="file" id="import-file-input" accept=".json" style="display: none;">
+      </div>
     </div>
     <div class="side-menu-donation">
-      <p>Note: Work in progress, but still testable - some features may be buggy and are under development [image generation inconsistent right now, chat history not being remembered by AI after deployments].</p>
+      <p>Note: Work in progress, but still testable - some features may be buggy and are under development. Chat history is now preserved across deployments with automatic backup system!</p>
       <p>Private and uncensored. This app does not require payment, has no ads, and is funded directly by the developer. A donation would mean a lot! Here is a secure Stripe link to donate directly to me, which would support and validate my work:</p>
       <p><a href="https://donate.stripe.com/3cs8zU2CPecAfw4eUU" target="_blank">Donate</a></p>
       <p>Thank you,<br>-Kameon</p>    </div>

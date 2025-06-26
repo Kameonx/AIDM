@@ -926,8 +926,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (msg.role === 'user' && !msg.type) {
                         msg.type = 'player';
                     }
-                });                console.log("About to call displayMessages with", localHistory.length, "messages");
-                displayMessages(localHistory);                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");
+                });
+                console.log("About to call displayMessages with", localHistory.length, "messages");
+                displayMessages(localHistory);
+                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");
                 
                 console.log("=== END DEBUG ===");
             } else {
@@ -2340,17 +2342,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Event Listeners
+    debugLog("Setting up event listeners...");
+    debugLog("userInput element:", userInput);
+    debugLog("sendBtn element:", sendBtn);
+    debugLog("menuToggleBtn element:", menuToggleBtn);
+    debugLog("sideMenu element:", sideMenu);
+    
     if (userInput && sendBtn) {
+        debugLog("Setting up send button and input listeners");
         userInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !isGenerating) {
                 e.preventDefault();
+                debugLog("Enter key pressed, sending message");
                 sendMessage(userInput, 1);
             }
         });
         sendBtn.addEventListener('click', function(e) {
             e.preventDefault();
+            debugLog("Send button clicked");
             if (!isGenerating) sendMessage(userInput, 1);
         });
+    } else {
+        debugLog("ERROR: userInput or sendBtn not found!");
     }
 
     // Set up click handler for Player 1's container
@@ -2486,11 +2499,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Sidebar toggle functionality - ONLY use button to toggle
     if (menuToggleBtn && sideMenu) {
+        debugLog("Setting up sidebar toggle");
         menuToggleBtn.addEventListener('click', function() {
             debugLog('Menu toggle clicked');
             sideMenu.classList.toggle('open');
             menuToggleBtn.classList.toggle('menu-open');
         });
+    } else {
+        debugLog("ERROR: menuToggleBtn or sideMenu not found!");
+        debugLog("menuToggleBtn:", menuToggleBtn);
+        debugLog("sideMenu:", sideMenu);
     }
 
     // REMOVED: Close sidebar when clicking outside - this was causing issues
@@ -2568,12 +2586,22 @@ document.addEventListener('DOMContentLoaded', function() {
         updateUndoRedoButtons();
         loadAvailableModels(); // Load models for new games too
         loadAvailableImageModels(); // Load image models for new games too
-    }    window.sendMessage = sendMessage;
+    }
+    
+    window.sendMessage = sendMessage;
+
+    // Initialize mobile fixes
+    initMobileFixes();
+    
+    // Initialize image long-press handling
+    initImageLongPress();
 
     debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
+    
+});  // End of DOMContentLoaded event listener
 
-    // Add mobile-specific fixes
-    function initMobileFixes() {
+// Add mobile-specific fixes
+function initMobileFixes() {
         // Fix for mobile viewport issues
         function setViewportHeight() {
             const vh = window.innerHeight * 0.01;
@@ -2812,7 +2840,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Auto-close after 5 seconds
         setTimeout(closeModal, 5000);
-    }    // --- localStorage cleanup functions ---
+    }
+    
+    // --- localStorage cleanup functions ---
     
     /**
      * Clean up old localStorage data when quota is exceeded
@@ -2870,15 +2900,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Application initialization and setup ---
     
-    // Initialize mobile fixes
-    initMobileFixes();
-    
-    // Initialize image long-press handling
-    initImageLongPress();
-
     // Models are already loaded in the initialization paths above
-
-});  // End of DOMContentLoaded event listener
 
 // Global function for reasoning toggle (called from HTML)
 function toggleReasoning(reasoningId) {

@@ -36,9 +36,26 @@ document.addEventListener('DOMContentLoaded', function() {
     let historyIndex = -1;
     const MAX_HISTORY_SIZE = 50;
     
-    // Session data - ensure we get from localStorage first
-    let currentGameId = localStorage.getItem('currentGameId');
-    debugLog("Initial gameId from localStorage:", currentGameId);
+    // Helper function to get cookie value
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+    
+    // Session data - check cookie first, then localStorage
+    let currentGameId = getCookie('game_id') || localStorage.getItem('currentGameId');
+    debugLog("Initial gameId from cookie:", getCookie('game_id'));
+    debugLog("Initial gameId from localStorage:", localStorage.getItem('currentGameId'));
+    debugLog("Final currentGameId:", currentGameId);
+    
+    // If we got a game ID from cookie but it's different from localStorage, update localStorage
+    if (getCookie('game_id') && getCookie('game_id') !== localStorage.getItem('currentGameId')) {
+        debugLog("Updating localStorage with game ID from cookie:", getCookie('game_id'));
+        currentGameId = getCookie('game_id');
+        localStorage.setItem('currentGameId', currentGameId);
+    }
     
     // Player tracking - IMPORTANT: Use let instead of const to allow reassignment
     let playerNames = Utils.loadPlayerNames();
@@ -85,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Image Models functionality
     let availableImageModels = [];
-    let selectedImageModel = localStorage.getItem('selectedImageModel') || 'hidream';
+    let selectedImageModel = localStorage.getItem('selectedImageModel') || 'flux-dev-uncensored-11';
 
     // Get DOM elements for image models
     const imageModelsBtn = document.getElementById('image-models-btn');
@@ -149,11 +166,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 modelItem.classList.add('selected');
             }
 
-            // Remove 'default' trait for llama-3.3-70b only
+            // Use original traits without modification
             let traits = model.traits;
-            if (model.id === 'llama-3.3-70b') {
-                traits = traits.filter(trait => trait !== 'default');
-            }
             traits = traits.map(trait => {
                 const traitNames = {
                     'default': 'Default',
@@ -270,14 +284,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 modelItem.classList.add('selected');
             }
             
-            const traits = model.traits && model.traits.length > 0 
-                ? model.traits.map(trait => `<span class="trait-tag">${trait}</span>`).join(' ')
+            // Move 'default' trait to flux-dev-uncensored-11 for image models
+            let traits = model.traits;
+            if (model.id === 'venice-uncensored') {
+                traits = traits.filter(trait => trait !== 'default');
+            } else if (model.id === 'flux-dev-uncensored-11') {
+                // Add default trait if not present
+                if (!traits.includes('default')) {
+                    traits = ['default', ...traits];
+                }
+            } else if (model.id === 'flux-dev-uncensored') {
+                // Remove default trait from old model
+                traits = traits.filter(trait => trait !== 'default');
+            } else if (model.id === 'llama-3.3-70b') {
+                traits = traits.filter(trait => trait !== 'default');
+            }
+            
+            const traitsHtml = traits && traits.length > 0 
+                ? traits.map(trait => `<span class="trait-tag">${trait}</span>`).join(' ')
                 : '';
             
             modelItem.innerHTML = `
                 <div class="model-name">${model.name}</div>
                 <div class="model-description">${model.description}</div>
-                <div class="model-traits">${traits}</div>
+                <div class="model-traits">${traitsHtml}</div>
             `;
             
             modelItem.addEventListener('click', () => selectImageModel(model.id));
@@ -358,6 +388,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayImageMessage(imageMessage);
                   // Save to localStorage immediately
                 saveImageToLocalStorage(imageMessage);
+                
+                // Add a small delay then verify the image was saved correctly
+                setTimeout(() => {
+                    console.log("=== VERIFYING IMAGE SAVE ===");
+                    const currentHistory = Utils.loadChatHistory(currentGameId) || [];
+                    const imageMessages = currentHistory.filter(msg => msg.message_type === 'image' || (msg.images && msg.images.length > 0));
+                    console.log(`Found ${imageMessages.length} image messages in localStorage after save`);
+                    imageMessages.forEach((msg, index) => {
+                        console.log(`Image ${index + 1}: ${msg.image_prompt || 'No prompt'}, URL length: ${msg.image_url ? msg.image_url.length : 0}`);
+                    });
+                    console.log("=== END VERIFICATION ===");
+                }, 500);
                 
                 debugLog("Image generated and saved to localStorage:", data.message.image_url.substring(0, 50) + "...");
             } else {
@@ -463,10 +505,13 @@ document.addEventListener('DOMContentLoaded', function() {
       function createNewGame() {
         debugLog("Creating new game...");
         
-        // Generate new game ID locally instead of fetching from server
+        // Generate new game ID using backend-compatible format
         const newGameId = 'game_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         currentGameId = newGameId;
         localStorage.setItem('currentGameId', currentGameId);
+        
+        // Also set the cookie to keep frontend and backend in sync
+        document.cookie = `game_id=${currentGameId}; path=/; max-age=${60*60*24*365}`;
         
         chatWindow.innerHTML = ''; // Clear chat window
         playerNames = { 1: null }; // Reset player names
@@ -526,6 +571,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Also save this welcome message to localStorage
             if (currentGameId) {
+                console.log("=== SAVING WELCOME MESSAGE ===");
+                console.log("currentGameId:", currentGameId);
                 const welcomeMessage = {
                     role: "assistant",
                     type: "dm",
@@ -533,7 +580,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     timestamp: Date.now(),
                     sender: "DM"
                 };
-                saveMessageToLocalStorage(welcomeMessage);
+                console.log("Welcome message to save:", welcomeMessage);
+                
+                // Use a small delay to ensure any other localStorage operations complete first
+                setTimeout(() => {
+                    saveMessageToLocalStorage(welcomeMessage);
+                }, 100);
             }
             
             return true; // Indicates welcome message was added
@@ -605,6 +657,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const storageKey = `chatHistory_${currentGameId}`;
             const rawData = localStorage.getItem(storageKey);
             console.log("Raw localStorage data for key", storageKey, ":", rawData);
+            
+            // ALSO LIST ALL CHAT HISTORY KEYS IN LOCALSTORAGE
+            console.log("All localStorage keys with 'chatHistory':");
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.includes('chatHistory')) {
+                    console.log(`  ${key}: ${localStorage.getItem(key) ? localStorage.getItem(key).length + ' chars' : 'null'}`);
+                }
+            }
               if (localHistory && localHistory.length > 0) {
                 localHistory.forEach((msg, index) => {
                     console.log(`Message ${index}:`, {
@@ -630,6 +691,10 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 console.log("No messages in localStorage");
                 console.log("=== END DEBUG ===");
+                
+                // If we have a game ID but no messages, something went wrong
+                // Let's start fresh with this game ID instead of keeping an empty game
+                console.log("Game ID exists but no chat history found. Starting fresh with same ID.");
                 ensureWelcomeMessage();
                 debugLog("No localStorage history found, showing welcome message");
             }
@@ -793,6 +858,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Load existing messages
             const existingMessages = Utils.loadChatHistory(currentGameId) || [];
+            console.log("Existing messages before save:", existingMessages.length);
             
             // Convert the message entry to the localStorage format
             const messageToSave = {
@@ -804,6 +870,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 type: messageEntry.type || (messageEntry.role === 'user' ? 'player' : 'dm'),
                 message_type: (messageEntry.images && messageEntry.images.length > 0) ? 'image' : 'text'
             };
+            
+            console.log("Message to save:", messageToSave);
               // Add the new message (check for duplicates based on timestamp and content)
             const isDuplicate = existingMessages.some(msg => 
                 Math.abs(msg.timestamp - messageToSave.timestamp) < 1000 && 
@@ -811,14 +879,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 msg.role === messageToSave.role
             );
             
+            console.log("Is duplicate?", isDuplicate);
+            
             if (!isDuplicate) {
                 existingMessages.push(messageToSave);
+                console.log("Adding message, new total:", existingMessages.length);
                 
-                // Save back to localStorage
-                Utils.saveChatHistory(currentGameId, existingMessages);
-                
-                console.log("Message saved to localStorage successfully");
-                debugLog("Message saved to localStorage:", messageToSave);
+                // Save back to localStorage with retry mechanism to avoid race conditions
+                try {
+                    Utils.saveChatHistory(currentGameId, existingMessages);
+                    console.log("Message saved to localStorage successfully");
+                    
+                    // Verify the save worked
+                    const verifyMessages = Utils.loadChatHistory(currentGameId) || [];
+                    console.log("Verification: localStorage now has", verifyMessages.length, "messages");
+                    
+                    // EXTRA VERIFICATION: Check raw localStorage
+                    const verifyKey = `chatHistory_${currentGameId}`;
+                    const verifyRaw = localStorage.getItem(verifyKey);
+                    console.log("Raw verification for key", verifyKey, ":", verifyRaw ? verifyRaw.length + " chars" : "null");
+                    
+                    debugLog("Message saved to localStorage:", messageToSave);
+                } catch (error) {
+                    console.warn("Race condition detected in saveMessageToLocalStorage, retrying in 100ms...", error);
+                    setTimeout(() => {
+                        try {
+                            const freshMessages = Utils.loadChatHistory(currentGameId) || [];
+                            const stillDuplicate = freshMessages.some(msg => 
+                                Math.abs(msg.timestamp - messageToSave.timestamp) < 1000 && 
+                                msg.text === messageToSave.text && 
+                                msg.role === messageToSave.role
+                            );
+                            if (!stillDuplicate) {
+                                freshMessages.push(messageToSave);
+                                Utils.saveChatHistory(currentGameId, freshMessages);
+                                console.log("Message saved to localStorage on retry");
+                            }
+                        } catch (retryError) {
+                            console.error("Failed to save message even on retry:", retryError);
+                        }
+                    }, 100);
+                }
             } else {
                 console.log("Skipping duplicate message save");
             }
@@ -870,9 +971,9 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (quotaError) {
                 console.warn("LocalStorage quota exceeded, attempting compression:", quotaError);
                 
-                // If the image is large, try to compress it
-                if (imageMessage.image_url && imageMessage.image_url.length > 500000) {
-                    console.log("Compressing large image for localStorage...");
+                // Always try to compress large images (reduced threshold)
+                if (imageMessage.image_url && imageMessage.image_url.length > 100000) {
+                    console.log("Compressing image for localStorage...");
                     
                     try {
                         // Create a canvas to compress the image synchronously
@@ -881,8 +982,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             const canvas = document.createElement('canvas');
                             const ctx = canvas.getContext('2d');
                             
-                            // Reduce size to max 800px while maintaining aspect ratio
-                            const maxSize = 800;
+                            // Reduce size to max 600px while maintaining aspect ratio (more aggressive)
+                            const maxSize = 600;
                             let { width, height } = img;
                             
                             if (width > height) {
@@ -901,8 +1002,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             canvas.height = height;
                             ctx.drawImage(img, 0, 0, width, height);
                             
-                            // Compress to JPEG with lower quality
-                            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                            // Compress to JPEG with even lower quality for localStorage
+                            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.3);
                             console.log("Compressed image from", imageMessage.image_url.length, "to", compressedDataUrl.length);
                             
                             // Update the message with compressed image
@@ -950,13 +1051,52 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 } else {
                     // If image is not that large, still try fallback
-                    console.log("Image not large enough for compression, using fallback");
-                    messageToSave.images = [];
-                    messageToSave.image_url = null;
-                    messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image storage failed (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
-                    existingMessages[existingMessages.length - 1] = messageToSave;
-                    Utils.saveChatHistory(currentGameId, existingMessages);
-                    console.log("Saved image message without data due to quota limits");
+                    console.log("Image moderately sized, trying compression anyway");
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Even more aggressive compression for quota issues
+                        const maxSize = 400;
+                        let { width, height } = img;
+                        
+                        if (width > height) {
+                            if (width > maxSize) {
+                                height = (height * maxSize) / width;
+                                width = maxSize;
+                            }
+                        } else {
+                            if (height > maxSize) {
+                                width = (width * maxSize) / height;
+                                height = maxSize;
+                            }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        // Very aggressive compression
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.2);
+                        messageToSave.images = [compressedDataUrl];
+                        messageToSave.image_url = compressedDataUrl;
+                        messageToSave.content = messageToSave.content.replace(imageMessage.image_url, compressedDataUrl);
+                        existingMessages[existingMessages.length - 1] = messageToSave;
+                        
+                        try {
+                            Utils.saveChatHistory(currentGameId, existingMessages);
+                            console.log("Aggressively compressed image saved to localStorage");
+                        } catch (finalError) {
+                            console.log("Final fallback: saving without image data");
+                            messageToSave.images = [];
+                            messageToSave.image_url = null;
+                            messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image storage failed (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
+                            existingMessages[existingMessages.length - 1] = messageToSave;
+                            Utils.saveChatHistory(currentGameId, existingMessages);
+                        }
+                    };
+                    img.src = imageMessage.image_url;
                 }
             }
             
@@ -1560,8 +1700,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             timestamp: Date.now(),
                             sender: dmName
                         };
-                          console.log("About to save DM message:", dmMessage);
+                        console.log("About to save DM message:", dmMessage);
+                        console.log("=== CHECKING FOR EXISTING IMAGES BEFORE DM SAVE ===");
+                        const preHistory = Utils.loadChatHistory(currentGameId) || [];
+                        const preImageMessages = preHistory.filter(msg => msg.message_type === 'image' || (msg.images && msg.images.length > 0));
+                        console.log(`Found ${preImageMessages.length} image messages before DM message save`);
+                        
                         saveMessageToLocalStorage(dmMessage);
+                        
+                        console.log("=== CHECKING FOR EXISTING IMAGES AFTER DM SAVE ===");
+                        const postHistory = Utils.loadChatHistory(currentGameId) || [];
+                        const postImageMessages = postHistory.filter(msg => msg.message_type === 'image' || (msg.images && msg.images.length > 0));
+                        console.log(`Found ${postImageMessages.length} image messages after DM message save`);
+                        
+                        if (preImageMessages.length > postImageMessages.length) {
+                            console.error("⚠️ IMAGES WERE LOST DURING DM MESSAGE SAVE!");
+                            console.error("Pre-save images:", preImageMessages.length, "Post-save images:", postImageMessages.length);
+                        }
+                        
                         console.log("DM message save completed");
                     } else {
                         console.log("Skipping save of empty DM message (only contained image tags)");
@@ -1570,9 +1726,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Check if this response contains image generation requests
                     const hasImageRequest = /\[IMAGE:\s*([^\]]+)\]/i.test(fullResponseText);
                     if (hasImageRequest) {
-                        console.log("DM response contains image request, will check for images after longer delay");                        // Images are now handled directly in the generateImage function
-                        // No need to check for server-side images since we're using localStorage
-                        console.log("Message with image request processed, images handled via localStorage");} else {
+                        console.log("DM response contains image request, will check for images after longer delay");
+                        
+                        // Extract image prompts and generate them
+                        const imageMatches = fullResponseText.match(/\[IMAGE:\s*([^\]]+)\]/gi);
+                        if (imageMatches) {
+                            imageMatches.forEach((match, index) => {
+                                const promptMatch = match.match(/\[IMAGE:\s*([^\]]+)\]/i);
+                                if (promptMatch && promptMatch[1]) {
+                                    const imagePrompt = promptMatch[1].trim();
+                                    console.log(`Generating image ${index + 1}: ${imagePrompt}`);
+                                    
+                                    // Add a small delay between multiple image generations
+                                    setTimeout(() => {
+                                        generateImage(imagePrompt);
+                                    }, index * 1000);
+                                }
+                            });
+                        }
+                        
+                        console.log("Message with image request processed, images handled via localStorage");
+                    } else {
                         // Images are now handled directly in the generateImage function
                         // No need to check for server-side images since we're using localStorage
                         console.log("Message processed, images handled via localStorage");
@@ -1743,11 +1917,42 @@ document.addEventListener('DOMContentLoaded', function() {
         messageHistory.shift();
         historyIndex--;
     }
-      try {
+    try {
         localStorage.setItem('chatHistory', JSON.stringify(messageHistory)); 
         debugLog(`Chat state saved successfully. New history size: ${messageHistory.length}, New Index: ${historyIndex}`);
         debugLog(`Chat state saved. Messages in this state: ${messages.length}. Last saved messages:`, messages.map(m => `${m.sender}: ${(m.content || m.text || '').substring(0,20)}`));
     } catch (e) {
+        console.error("Error saving chatHistory to localStorage:", e);
+        
+        // If quota exceeded, try cleanup and retry
+        if (e.name === 'QuotaExceededError') {
+            console.log("LocalStorage quota exceeded, attempting cleanup...");
+            const cleanedUp = cleanupLocalStorage();
+            
+            if (cleanedUp) {
+                try {
+                    // Retry save after cleanup
+                    localStorage.setItem('chatHistory', JSON.stringify(messageHistory));
+                    console.log("Chat state saved successfully after cleanup");
+                } catch (retryError) {
+                    console.error("Failed to save even after cleanup:", retryError);
+                    // Remove images from current history as last resort
+                    const compactHistory = messageHistory.map(state => 
+                        state.map(msg => ({
+                            ...msg,
+                            images: msg.images && msg.images.length > 0 ? ['[Image removed to save space]'] : [],
+                            image_url: msg.image_url ? '[Image removed to save space]' : msg.image_url
+                        }))
+                    );
+                    try {
+                        localStorage.setItem('chatHistory', JSON.stringify(compactHistory));
+                        console.log("Saved compact history without images");
+                    } catch (finalError) {
+                        console.error("Final save attempt failed:", finalError);
+                    }
+                }
+            }
+        }
         debugLog("Error saving chatHistory to localStorage:", e);
     }
     updateUndoRedoButtons();
@@ -2276,7 +2481,65 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Auto-close after 5 seconds
         setTimeout(closeModal, 5000);
-    }    // Initialize mobile fixes
+    }    // --- localStorage cleanup functions ---
+    
+    /**
+     * Clean up old localStorage data when quota is exceeded
+     */
+    function cleanupLocalStorage() {
+        console.log("=== CLEANING UP LOCALSTORAGE ===");
+        
+        try {
+            // Get all localStorage keys
+            const keys = Object.keys(localStorage);
+            const gameHistoryKeys = keys.filter(key => key.startsWith('chatHistory_game_'));
+            const gameDataKeys = keys.filter(key => key.startsWith('gameData_game_'));
+            
+            console.log(`Found ${gameHistoryKeys.length} game history entries and ${gameDataKeys.length} game data entries`);
+            
+            // Sort by timestamp (oldest first) and remove old entries
+            const sortedHistoryKeys = gameHistoryKeys.sort((a, b) => {
+                const timestampA = parseInt(a.split('_')[1]) || 0;
+                const timestampB = parseInt(b.split('_')[1]) || 0;
+                return timestampA - timestampB;
+            });
+            
+            // Keep only the 3 most recent games
+            const keysToRemove = sortedHistoryKeys.slice(0, Math.max(0, sortedHistoryKeys.length - 3));
+            
+            keysToRemove.forEach(key => {
+                console.log(`Removing old game data: ${key}`);
+                localStorage.removeItem(key);
+                
+                // Also remove corresponding game data
+                const gameId = key.replace('chatHistory_', '');
+                const gameDataKey = `gameData_${gameId}`;
+                if (localStorage.getItem(gameDataKey)) {
+                    localStorage.removeItem(gameDataKey);
+                    console.log(`Removed game data: ${gameDataKey}`);
+                }
+            });
+            
+            // Also clean up old undo/redo history if it exists
+            const chatHistoryKey = 'chatHistory';
+            if (localStorage.getItem(chatHistoryKey)) {
+                console.log("Removing old undo/redo history");
+                localStorage.removeItem(chatHistoryKey);
+            }
+            
+            console.log(`Cleanup complete. Removed ${keysToRemove.length} old game(s).`);
+            console.log("=== END CLEANUP ===");
+            
+            return keysToRemove.length > 0;
+        } catch (error) {
+            console.error("Error during localStorage cleanup:", error);
+            return false;
+        }
+    }
+
+    // --- Application initialization and setup ---
+    
+    // Initialize mobile fixes
     initMobileFixes();
     
     // Initialize image long-press handling

@@ -1,9 +1,4 @@
-// IMMEDIATE DEBUG TEST
-console.log("=== JAVASCRIPT FILE LOADING ===");
-
 document.addEventListener('DOMContentLoaded', function() {
-    console.log("=== DOMContentLoaded FIRED ===");
-    
     // Debug setup
     const DEBUG = true;
     function debugLog(...args) {
@@ -49,221 +44,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return null;
     }
     
-    // Version tracking to detect deployments
-    const APP_VERSION = Date.now(); // This will change with each deployment
-    const STORED_VERSION = localStorage.getItem('app_version');
-    
-    if (STORED_VERSION && STORED_VERSION !== APP_VERSION.toString()) {
-        console.log("=== NEW DEPLOYMENT DETECTED ===");
-        console.log("Previous version:", STORED_VERSION);
-        console.log("Current version:", APP_VERSION);
-        
-        // Try to recover any data that might have been lost
-        const allGameIds = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('chatHistory_game_')) {
-                const gameId = key.replace('chatHistory_', '');
-                allGameIds.push(gameId);
-            }
-        }
-        
-        if (allGameIds.length > 0) {
-            console.log("Found existing game data for games:", allGameIds);
-            // If current game ID doesn't exist but we have others, try the most recent
-            if (!localStorage.getItem(`chatHistory_${currentGameId}`) && allGameIds.length > 0) {
-                const mostRecentGameId = allGameIds.sort().pop(); // Get most recent by name
-                console.log("Current game has no data, switching to most recent:", mostRecentGameId);
-                currentGameId = mostRecentGameId;
-                localStorage.setItem('currentGameId', currentGameId);
-            }
-        }
-    }
-    
-    // Update version tracking
-    localStorage.setItem('app_version', APP_VERSION.toString());
-
-    // Enhanced localStorage persistence with backup keys
-    function backupChatHistory(gameId) {
-        try {
-            const chatHistory = Utils.loadChatHistory(gameId);
-            if (chatHistory && chatHistory.length > 0) {
-                // Create multiple backup keys for redundancy
-                const backupKey1 = `backup_chat_${gameId}`;
-                const backupKey2 = `chat_backup_${Date.now()}`;
-                const generalBackup = 'latest_chat_backup';
-                
-                const backupData = {
-                    gameId: gameId,
-                    timestamp: Date.now(),
-                    messages: chatHistory,
-                    playerNames: playerNames,
-                    dmName: dmName
-                };
-                
-                localStorage.setItem(backupKey1, JSON.stringify(backupData));
-                localStorage.setItem(backupKey2, JSON.stringify(backupData));
-                localStorage.setItem(generalBackup, JSON.stringify(backupData));
-                
-                debugLog("Chat history backed up with keys:", [backupKey1, backupKey2, generalBackup]);
-            }
-        } catch (error) {
-            debugLog("Error backing up chat history:", error);
-        }
-    }
-
-    function recoverChatHistory(gameId) {
-        try {
-            // Try to recover from backup keys
-            const backupKey1 = `backup_chat_${gameId}`;
-            const generalBackup = 'latest_chat_backup';
-            
-            let backupData = null;
-            
-            // Try specific game backup first
-            const backup1 = localStorage.getItem(backupKey1);
-            if (backup1) {
-                backupData = JSON.parse(backup1);
-            } else {
-                // Try general backup
-                const backup2 = localStorage.getItem(generalBackup);
-                if (backup2) {
-                    backupData = JSON.parse(backup2);
-                }
-            }
-            
-            if (backupData && backupData.messages) {
-                debugLog("Recovered chat history from backup:", backupData.messages.length, "messages");
-                
-                // Restore the data
-                Utils.saveChatHistory(gameId, backupData.messages);
-                if (backupData.playerNames) {
-                    playerNames = backupData.playerNames;
-                    Utils.savePlayerNames(playerNames);
-                }
-                if (backupData.dmName) {
-                    dmName = backupData.dmName;
-                }
-                
-                return backupData.messages;
-            }
-        } catch (error) {
-            debugLog("Error recovering chat history:", error);
-        }
-        return null;
-    }
-
-    // Enhanced save function that includes automatic backup
-    function saveChatHistoryWithBackup(gameId, messages) {
-        // Save to primary storage
-        Utils.saveChatHistory(gameId, messages);
-        
-        // Create backup
-        backupChatHistory(gameId);
-        
-        debugLog("Chat history saved and backed up for game:", gameId);
-    }
-
-    // Manual backup/restore system for user data export/import
-    function exportAllData() {
-        const exportData = {
-            version: APP_VERSION,
-            timestamp: Date.now(),
-            currentGameId: currentGameId,
-            playerNames: playerNames,
-            dmName: dmName,
-            games: {}
-        };
-        
-        // Export all chat histories
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('chatHistory_')) {
-                const gameId = key.replace('chatHistory_', '');
-                const chatData = localStorage.getItem(key);
-                if (chatData) {
-                    try {
-                        exportData.games[gameId] = JSON.parse(chatData);
-                    } catch (e) {
-                        debugLog("Error parsing chat data for export:", gameId, e);
-                    }
-                }
-            }
-        }
-        
-        return JSON.stringify(exportData, null, 2);
-    }
-    
-    function importAllData(jsonData) {
-        try {
-            const importData = JSON.parse(jsonData);
-            
-            if (importData.currentGameId) {
-                currentGameId = importData.currentGameId;
-                localStorage.setItem('currentGameId', currentGameId);
-            }
-            
-            if (importData.playerNames) {
-                playerNames = importData.playerNames;
-                Utils.savePlayerNames(playerNames);
-            }
-            
-            if (importData.dmName) {
-                dmName = importData.dmName;
-            }
-            
-            if (importData.games) {
-                Object.entries(importData.games).forEach(([gameId, chatData]) => {
-                    Utils.saveChatHistory(gameId, chatData);
-                    backupChatHistory(gameId);
-                });
-            }
-            
-            debugLog("Data import successful");
-            return true;
-        } catch (error) {
-            debugLog("Error importing data:", error);
-            return false;
-        }
-    }
-
-    // Create periodic backups
-    function startPeriodicBackup() {
-        setInterval(() => {
-            if (currentGameId) {
-                backupChatHistory(currentGameId);
-            }
-        }, 60000); // Backup every minute
-    }
-
-    // Generate a deterministic game ID based on browser fingerprint + timestamp
-    function generateGameId() {
-        // Create a semi-unique browser fingerprint
-        const fingerprint = btoa(
-            navigator.userAgent + 
-            screen.width + screen.height + 
-            navigator.language + 
-            (navigator.hardwareConcurrency || 4) +
-            new Date().getTimezoneOffset()
-        ).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
-        
-        const timestamp = Date.now();
-        const randomStr = Math.random().toString(36).substring(2, 11);
-        
-        return `game_${timestamp}_${fingerprint}_${randomStr}`;
-    }
-
-    // Session data - use ONLY localStorage, ignore cookies for deployment stability
-    let currentGameId = localStorage.getItem('currentGameId');
-    
-    // If no game ID exists, generate a new one
-    if (!currentGameId) {
-        currentGameId = generateGameId();
-        localStorage.setItem('currentGameId', currentGameId);
-        debugLog("Generated new game ID:", currentGameId);
-    }
-    
+    // Session data - check cookie first, then localStorage
+    let currentGameId = getCookie('game_id') || localStorage.getItem('currentGameId');
+    debugLog("Initial gameId from cookie:", getCookie('game_id'));
+    debugLog("Initial gameId from localStorage:", localStorage.getItem('currentGameId'));
     debugLog("Final currentGameId:", currentGameId);
+    
+    // If we got a game ID from cookie but it's different from localStorage, update localStorage
+    if (getCookie('game_id') && getCookie('game_id') !== localStorage.getItem('currentGameId')) {
+        debugLog("Updating localStorage with game ID from cookie:", getCookie('game_id'));
+        currentGameId = getCookie('game_id');
+        localStorage.setItem('currentGameId', currentGameId);
+    }
     
     // Player tracking - IMPORTANT: Use let instead of const to allow reassignment
     let playerNames = Utils.loadPlayerNames();
@@ -325,22 +117,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedModel = localStorage.getItem('selectedModel') || 'venice-uncensored';
 
     function loadAvailableModels() {
-        debugLog("Loading available AI models...");
         fetch('/get_models')
         .then(response => response.json())
         .then(data => {
-            debugLog("Received AI models data:", data);
             if (data.models) {
                 availableModels = data.models;
-                debugLog("AI models loaded:", availableModels.length);
                 populateModelList();
                 updateCurrentModelDisplay();
                 
                 // IMPORTANT: Set the model on the server after loading models
                 // This ensures the server knows which model to use on page refresh
                 setServerModel(selectedModel);
-            } else {
-                debugLog("No models in response data");
             }
         })
         .catch(error => {
@@ -370,12 +157,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateModelList() {
-        debugLog("Populating model list, available models:", availableModels.length);
-        if (!modelList) {
-            debugLog("Error: modelList element not found");
-            return;
-        }
-        
         modelList.innerHTML = '';
         
         availableModels.forEach(model => {
@@ -455,14 +236,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Image Models functionality
     function loadAvailableImageModels() {
-        debugLog("Loading available image models...");
         fetch('/get_image_models')
         .then(response => response.json())
         .then(data => {
-            debugLog("Received image models data:", data);
             if (data.models) {
                 availableImageModels = data.models;
-                debugLog("Image models loaded:", availableImageModels.length);
                 
                 // Validate selectedImageModel exists, default to lustify-sdxl
                 const modelExists = availableImageModels.some(m => m.id === selectedImageModel);
@@ -478,8 +256,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Set the image model on the server after loading models
                 setServerImageModel(selectedImageModel);
-            } else {
-                debugLog("No image models in response data");
             }
         })
         .catch(error => {
@@ -507,11 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function populateImageModelList() {
-        debugLog("Populating image model list, available models:", availableImageModels.length);
-        if (!imageModelList) {
-            debugLog("Error: imageModelList element not found");
-            return;
-        }
+        if (!imageModelList) return;
         
         imageModelList.innerHTML = '';
         
@@ -708,8 +480,8 @@ document.addEventListener('DOMContentLoaded', function() {
             contentSpan.innerHTML = `
                 <div class="image-message">
                     <img src="${imageUrl}" alt="${imagePrompt}" 
-                         style="background-color: #f0f0f0;" 
-                         onload="console.log('Image loaded successfully:', this.alt); this.style.backgroundColor = 'transparent'; const chatWindow = this.closest('#chat-window'); if(chatWindow) { setTimeout(() => chatWindow.scrollTop = chatWindow.scrollHeight, 100); }"
+                         style="max-width: 100%; border-radius: 8px; margin: 10px 0; display: block; background-color: #f0f0f0;" 
+                         onload="console.log('Image loaded successfully:', this.alt); this.style.backgroundColor = 'transparent'; if(this.closest('#chat-window')) this.closest('#chat-window').scrollTop = this.closest('#chat-window').scrollHeight;"
                          onerror="console.error('Image failed to load:', this.alt, this.src.substring(0, 50)); this.style.backgroundColor = '#ffebee'; this.alt = 'Image failed to load';">
                     <div class="image-caption">
                         <em>Generated image: ${imagePrompt}</em>
@@ -882,18 +654,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 span.textContent = `${dmName}: `;
             });
         }
-          // Load chat history from localStorage with backup recovery
+          // Load chat history from localStorage instead of server
         if (currentGameId) {
             console.log("=== INITIALIZE: Loading chat history ===");
             console.log("currentGameId:", currentGameId);
             
-            let localHistory = Utils.loadChatHistory(currentGameId);
-            
-            // If no history found, try to recover from backup
-            if (!localHistory || localHistory.length === 0) {
-                console.log("No primary chat history found, attempting recovery from backup...");
-                localHistory = recoverChatHistory(currentGameId);
-            }
+            const localHistory = Utils.loadChatHistory(currentGameId);
             
             // DEBUG: Check what's in localStorage
             console.log("=== DEBUG CHAT HISTORY ===");
@@ -909,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("All localStorage keys with 'chatHistory':");
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (key && (key.includes('chatHistory') || key.includes('backup_chat') || key.includes('chat_backup'))) {
+                if (key && key.includes('chatHistory')) {
                     console.log(`  ${key}: ${localStorage.getItem(key) ? localStorage.getItem(key).length + ' chars' : 'null'}`);
                 }
             }
@@ -931,10 +697,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (msg.role === 'user' && !msg.type) {
                         msg.type = 'player';
                     }
-                });
-                console.log("About to call displayMessages with", localHistory.length, "messages");
-                displayMessages(localHistory);
-                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");
+                });                console.log("About to call displayMessages with", localHistory.length, "messages");
+                displayMessages(localHistory);                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");
                 
                 console.log("=== END DEBUG ===");
             } else {
@@ -953,10 +717,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         initializeHistory();
-        
-        // Load available models for the popups
-        loadAvailableModels();
-        loadAvailableImageModels();
         
         // CRITICAL: Pass the loaded playerNames to PlayerManager setup
         const playerResult = PlayerManager.setup({
@@ -983,11 +743,8 @@ document.addEventListener('DOMContentLoaded', function() {
         updatePlayerLabels();
         updateUndoRedoButtons();
         
-        // Start periodic backup system for deployment persistence
-        startPeriodicBackup();
-        
         // No longer need to sync with server
-        debugLog("Initialization complete - using localStorage only with backup system active");
+        debugLog("Initialization complete - using localStorage only");
     }
     
     /**
@@ -1120,8 +877,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const messageToSave = {
                 sender: messageEntry.role === 'user' ? 'user' : 'assistant',
                 text: messageEntry.content || messageEntry.text || '',
-                content: messageEntry.content || messageEntry.text || '', // Plain text content
-                contentHTML: messageEntry.contentHTML || messageEntry.content || messageEntry.text || '', // Formatted HTML content
                 images: messageEntry.images || [],
                 timestamp: messageEntry.timestamp || Date.now(),
                 role: messageEntry.role,
@@ -1204,7 +959,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const messageToSave = {
                 sender: 'assistant',
                 text: imageMessage.image_prompt || imageMessage.text || 'Generated image',
-                content: imageMessage.content || `<div class="image-message"><img src="${imageMessage.image_url}" alt="${imageMessage.image_prompt || 'Generated image'}"><div class="image-caption"><em>Generated image: ${imageMessage.image_prompt || 'Generated image'}</em></div></div>`,
+                content: imageMessage.content || `<div class="image-message"><img src="${imageMessage.image_url}" alt="${imageMessage.image_prompt || 'Generated image'}" style="max-width: 100%; border-radius: 8px; margin: 10px 0;"><div class="image-caption"><em>Generated image: ${imageMessage.image_prompt || 'Generated image'}</em></div></div>`,
                 images: [imageMessage.image_url], // Store the full image URL first
                 timestamp: imageMessage.timestamp || Date.now(),
                 role: 'assistant',
@@ -1436,27 +1191,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (msg.role === "assistant" || msg.type === "dm") {
                 // This is a DM message - always display it
-                // Use preserved HTML content first, fallback to plain text
-                const messageContent = msg.contentHTML || msg.content || msg.text || '';
+                const messageContent = msg.content || msg.text || '';
                 debugLog("Displaying DM message:", messageContent.substring(0, 50) + "...");
                 
-                // If we have contentHTML, it's already formatted - use it directly
-                if (msg.contentHTML && (msg.contentHTML.includes('<span class=') || msg.contentHTML.includes('<strong>') || msg.contentHTML.includes('<em>'))) {
-                    // Content has HTML formatting, use it directly
-                    addMessage(dmName, msg.contentHTML, false, true, true, true);
+                // Check if content is already HTML formatted from server OR has color tags that need processing
+                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
+                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
+                
+                if (hasHTMLFormatting && !hasColorTags) {
+                    // Content is already fully formatted as HTML, use it directly
+                    addMessage(dmName, messageContent, false, true, true, true);
                 } else {
-                    // Check if content is already HTML formatted from server OR has color tags that need processing
-                    const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
-                    const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
-                    
-                    if (hasHTMLFormatting && !hasColorTags) {
-                        // Content is already fully formatted as HTML, use it directly
-                        addMessage(dmName, messageContent, false, true, true, true);
-                    } else {
-                        // Process content through formatting to ensure proper display (handles color tags and text formatting)
-                        const processedContent = Utils.processFormattedText(messageContent);
-                        addMessage(dmName, processedContent, false, true, true, true);
-                    }
+                    // Process content through formatting to ensure proper display (handles color tags and text formatting)
+                    const processedContent = Utils.processFormattedText(messageContent);
+                    addMessage(dmName, processedContent, false, true, true, true);
                 }
             } else if (msg.role === "user" || msg.type === "player") {
                 // Always use playerNames mapping for sender label
@@ -1473,27 +1221,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         senderName = msg.player;
                     }
                 }
+                // Check if content is already HTML formatted OR has color tags that need processing
+                const messageContent = msg.content || msg.text || '';
+                const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
+                const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
                 
-                // Use preserved HTML content first, fallback to plain text
-                const messageContent = msg.contentHTML || msg.content || msg.text || '';
-                
-                // If we have contentHTML with formatting, use it directly
-                if (msg.contentHTML && (msg.contentHTML.includes('<span class=') || msg.contentHTML.includes('<strong>') || msg.contentHTML.includes('<em>'))) {
-                    // Content has HTML formatting, use it directly
-                    addMessage(senderName || `Player ${msg.player_number || 1}`, msg.contentHTML, false, true, true, true);
+                if (hasHTMLFormatting && !hasColorTags) {
+                    // Content is already fully formatted as HTML, use it directly  
+                    addMessage(senderName || `Player ${msg.player_number || 1}`, messageContent, false, true, true, true);
                 } else {
-                    // Check if content is already HTML formatted OR has color tags that need processing
-                    const hasHTMLFormatting = /<span class="(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood)">|<br\s*\/?>|<p\s*>/.test(messageContent);
-                    const hasColorTags = /\[(red|green|blue|yellow|purple|orange|pink|cyan|lime|teal|brown|silver|wood):[^\]]*\]/.test(messageContent);
-                    
-                    if (hasHTMLFormatting && !hasColorTags) {
-                        // Content is already fully formatted as HTML, use it directly  
-                        addMessage(senderName || `Player ${msg.player_number || 1}`, messageContent, false, true, true, true);
-                    } else {
-                        // Process player messages through formatting as well (handles color tags and text formatting)
-                        const processedContent = Utils.processFormattedText(messageContent);
-                        addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
-                    }
+                    // Process player messages through formatting as well (handles color tags and text formatting)
+                    const processedContent = Utils.processFormattedText(messageContent);
+                    addMessage(senderName || `Player ${msg.player_number || 1}`, processedContent, false, true, true, true);
                 }
             } else if (msg.role === "system" || msg.type === "system") {
                 // Only show system messages that aren't marked as invisible
@@ -1605,9 +1344,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (isTemporary) {
             setTimeout(() => msgDiv.remove(), 8000);
-        }
-        
-        if (!skipHistory) {
+        }        if (!skipHistory) {
             setTimeout(saveChatState, 0);
         }
     }
@@ -1617,15 +1354,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function sendMessage(inputElement, playerNumber) {
-        console.log("=== sendMessage called ===", inputElement?.value, playerNumber);
-        
         const userMessage = inputElement.value.trim();
         debugLog(`Attempting to send message: "${userMessage}" from player ${playerNumber}. isGenerating: ${isGenerating}`);
         
-        if (!userMessage) {
-            console.log("No message content, returning");
-            return;
-        }
+        if (!userMessage) return;
         
         // DM rename flow (secret, only when DM asks)
         if (window.awaitingDMRename) {
@@ -1701,13 +1433,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (name) playerContext[num] = name;
         });
         
-        // Save user message to localStorage immediately with formatting preserved
-        const processedUserMessage = Utils.processFormattedText(userMessage);
+        // Save user message to localStorage immediately
         const userMessageEntry = {
             role: "user",
-            content: userMessage, // Plain text
-            contentHTML: processedUserMessage, // Formatted HTML
-            text: userMessage, // Compatibility
+            content: userMessage,
             player: `player${playerNumber}`,
             timestamp: Date.now(),
             sender: sender
@@ -1845,7 +1574,6 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         let fullResponseText = ""; // Accumulate full response for checkForPlayerNames
-        let imageProcessedFromStream = false; // Track if image was already processed from stream
 
         eventSource.onmessage = function(event) {
             try {
@@ -1870,9 +1598,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.image_generated) {
                     console.log("=== RECEIVED IMAGE FROM STREAM ===");
                     console.log("Image message:", data.image_message);
-                    
-                    // Set flag to prevent duplicate image generation
-                    imageProcessedFromStream = true;
                     
                     // Ensure the image message has the correct format for localStorage
                     const formattedImageMessage = {
@@ -1977,17 +1702,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     const processedResponse = Utils.processFormattedText(fullResponseText);
                       // Remove [IMAGE: ...] tags from the displayed/saved content
                     const cleanedContent = processedResponse.replace(/\[IMAGE:\s*[^\]]+\]/gi, '').replace(/\s+/g, ' ').trim();
-                    const cleanedPlainText = fullResponseText.replace(/\[IMAGE:\s*[^\]]+\]/gi, '').replace(/\s+/g, ' ').trim();
                     
                     // Only save the DM message if it has actual content (not just empty after removing image tags)
                     if (cleanedContent) {
-                        // Save DM message directly to localStorage with both HTML and plain text content
+                        // Save DM message directly to localStorage
                         const dmMessage = {
                             role: "assistant",
                             type: "dm", 
-                            content: cleanedPlainText, // Plain text for compatibility
-                            contentHTML: cleanedContent, // Formatted HTML content
-                            text: cleanedPlainText, // Additional compatibility
+                            content: cleanedContent,
                             timestamp: Date.now(),
                             sender: dmName
                         };
@@ -2016,7 +1738,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Check if this response contains image generation requests
                     const hasImageRequest = /\[IMAGE:\s*([^\]]+)\]/i.test(fullResponseText);
-                    if (hasImageRequest && !imageProcessedFromStream) {
+                    if (hasImageRequest) {
                         console.log("DM response contains image request, will check for images after longer delay");
                         
                         // Extract image prompts and generate them
@@ -2037,8 +1759,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         console.log("Message with image request processed, images handled via localStorage");
-                    } else if (imageProcessedFromStream) {
-                        console.log("Image already processed from stream, skipping [IMAGE:] tag generation");
                     } else {
                         // Images are now handled directly in the generateImage function
                         // No need to check for server-side images since we're using localStorage
@@ -2354,33 +2074,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Event Listeners
-    console.log("=== Setting up event listeners ===");
-    debugLog("userInput:", userInput);
-    debugLog("sendBtn:", sendBtn);
-    
     if (userInput && sendBtn) {
-        console.log("=== Send button found, setting up listeners ===");
         userInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !isGenerating) {
                 e.preventDefault();
-                console.log("=== Enter pressed, calling sendMessage ===");
                 sendMessage(userInput, 1);
             }
         });
         sendBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            console.log("=== Send button clicked ===");
-            if (!isGenerating) {
-                sendMessage(userInput, 1);
-            } else {
-                console.log("Currently generating, ignoring click");
-            }
+            if (!isGenerating) sendMessage(userInput, 1);
         });
-        console.log("=== Event listeners set up successfully ===");
-    } else {
-        console.log("=== ERROR: userInput or sendBtn not found! ===");
-        debugLog("userInput:", userInput);
-        debugLog("sendBtn:", sendBtn);
     }
 
     // Set up click handler for Player 1's container
@@ -2455,77 +2159,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Export/Import Data functionality for deployment persistence
-    const exportDataBtn = document.getElementById('export-data-btn');
-    const importDataBtn = document.getElementById('import-data-btn');
-    const importFileInput = document.getElementById('import-file-input');
-    
-    if (exportDataBtn) {
-        exportDataBtn.addEventListener('click', function() {
-            try {
-                const exportData = exportAllData();
-                const blob = new Blob([exportData], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `dnd_chat_backup_${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                addSystemMessage("✅ Chat data exported successfully! Save this file to restore your data after deployments.", false, false, true);
-            } catch (error) {
-                debugLog("Error exporting data:", error);
-                addSystemMessage("❌ Error exporting chat data.", false, false, true);
-            }
-        });
-    }
-    
-    if (importDataBtn && importFileInput) {
-        importDataBtn.addEventListener('click', function() {
-            importFileInput.click();
-        });
-        
-        importFileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const success = importAllData(e.target.result);
-                    if (success) {
-                        addSystemMessage("✅ Chat data imported successfully! Refreshing page to load restored data...", false, false, true);
-                        setTimeout(() => {
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        addSystemMessage("❌ Error importing chat data. Please check the file format.", false, false, true);
-                    }
-                } catch (error) {
-                    debugLog("Error importing data:", error);
-                    addSystemMessage("❌ Error reading import file.", false, false, true);
-                }
-            };
-            reader.readAsText(file);
-            
-            // Reset the input
-            e.target.value = '';
-        });
-    }
-
     // Sidebar toggle functionality - ONLY use button to toggle
     if (menuToggleBtn && sideMenu) {
-        debugLog("Setting up sidebar toggle");
         menuToggleBtn.addEventListener('click', function() {
             debugLog('Menu toggle clicked');
             sideMenu.classList.toggle('open');
             menuToggleBtn.classList.toggle('menu-open');
         });
-    } else {
-        debugLog("ERROR: menuToggleBtn or sideMenu not found!");
-        debugLog("menuToggleBtn:", menuToggleBtn);
-        debugLog("sideMenu:", sideMenu);
     }
 
     // REMOVED: Close sidebar when clicking outside - this was causing issues
@@ -2573,16 +2213,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (currentGameId) {
         debugLog("Restoring session:", currentGameId);
         initialize();
+        loadAvailableModels(); // Load models after initialization
+        loadAvailableImageModels(); // Load image models after initialization
     } else {
         debugLog("No previous gameId. Setting up for a new game implicitly.");
         
-        // Initialize for new game
-        initialize();
+        // CRITICAL: Load player names even for new games
+        const loadedState = Utils.loadPlayerState();
+        if (loadedState && loadedState.names) {
+            playerNames = loadedState.names;
+            debugLog("Restored player names for new game:", playerNames);
+        }
         
-        // Additional setup for completely new games
         messageHistory = [];
         historyIndex = -1;
         localStorage.removeItem('chatHistory');
+        chatWindow.innerHTML = '';
+        addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
         
         // Set up PlayerManager with loaded names
         PlayerManager.setup({
@@ -2603,9 +2250,9 @@ document.addEventListener('DOMContentLoaded', function() {
         updateUndoRedoButtons();
         loadAvailableModels(); // Load models for new games too
         loadAvailableImageModels(); // Load image models for new games too
-    }
-    
-    window.sendMessage = sendMessage;
+    }    window.sendMessage = sendMessage;
+
+    debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
 
     // Add mobile-specific fixes
     function initMobileFixes() {
@@ -2688,7 +2335,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        debugLog("Mobile fixes initialized");
+          debugLog("Mobile fixes initialized");
     }
 
     // Initialize mobile image long-press handling
@@ -2847,16 +2494,77 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Auto-close after 5 seconds
         setTimeout(closeModal, 5000);
+    }    // --- localStorage cleanup functions ---
+    
+    /**
+     * Clean up old localStorage data when quota is exceeded
+     */
+    function cleanupLocalStorage() {
+        console.log("=== CLEANING UP LOCALSTORAGE ===");
+        
+        try {
+            // Get all localStorage keys
+            const keys = Object.keys(localStorage);
+            const gameHistoryKeys = keys.filter(key => key.startsWith('chatHistory_game_'));
+            const gameDataKeys = keys.filter(key => key.startsWith('gameData_game_'));
+            
+            console.log(`Found ${gameHistoryKeys.length} game history entries and ${gameDataKeys.length} game data entries`);
+            
+            // Sort by timestamp (oldest first) and remove old entries
+            const sortedHistoryKeys = gameHistoryKeys.sort((a, b) => {
+                const timestampA = parseInt(a.split('_')[1]) || 0;
+                const timestampB = parseInt(b.split('_')[1]) || 0;
+                return timestampA - timestampB;
+            });
+            
+            // Keep only the 3 most recent games
+            const keysToRemove = sortedHistoryKeys.slice(0, Math.max(0, sortedHistoryKeys.length - 3));
+            
+            keysToRemove.forEach(key => {
+                console.log(`Removing old game data: ${key}`);
+                localStorage.removeItem(key);
+                
+                // Also remove corresponding game data
+                const gameId = key.replace('chatHistory_', '');
+                const gameDataKey = `gameData_${gameId}`;
+                if (localStorage.getItem(gameDataKey)) {
+                    localStorage.removeItem(gameDataKey);
+                    console.log(`Removed game data: ${gameDataKey}`);
+                }
+            });
+            
+            // Also clean up old undo/redo history if it exists
+            const chatHistoryKey = 'chatHistory';
+            if (localStorage.getItem(chatHistoryKey)) {
+                console.log("Removing old undo/redo history");
+                localStorage.removeItem(chatHistoryKey);
+            }
+            
+            console.log(`Cleanup complete. Removed ${keysToRemove.length} old game(s).`);
+            console.log("=== END CLEANUP ===");
+            
+            return keysToRemove.length > 0;
+        } catch (error) {
+            console.error("Error during localStorage cleanup:", error);
+            return false;
+        }
     }
 
+    // --- Application initialization and setup ---
+    
     // Initialize mobile fixes
     initMobileFixes();
     
     // Initialize image long-press handling
     initImageLongPress();
 
-    debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
+    // Initialize the application
+    initialize();
     
+    // Load available models on page load
+    loadAvailableModels();
+    loadAvailableImageModels();
+
 });  // End of DOMContentLoaded event listener
 
 // Global function for reasoning toggle (called from HTML)

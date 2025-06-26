@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Image Models functionality
     let availableImageModels = [];
-    let selectedImageModel = localStorage.getItem('selectedImageModel') || 'flux-dev-uncensored-11';
+    let selectedImageModel = localStorage.getItem('selectedImageModel') || 'lustify-sdxl';
 
     // Get DOM elements for image models
     const imageModelsBtn = document.getElementById('image-models-btn');
@@ -241,6 +241,16 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.models) {
                 availableImageModels = data.models;
+                
+                // Validate selectedImageModel exists, default to lustify-sdxl
+                const modelExists = availableImageModels.some(m => m.id === selectedImageModel);
+                if (!modelExists) {
+                    // Try lustify-sdxl first, then first available model
+                    const lustifyModel = availableImageModels.find(m => m.id === 'lustify-sdxl');
+                    selectedImageModel = lustifyModel ? 'lustify-sdxl' : availableImageModels[0]?.id || 'lustify-sdxl';
+                    localStorage.setItem('selectedImageModel', selectedImageModel);
+                }
+                
                 populateImageModelList();
                 updateCurrentImageModelDisplay();
                 
@@ -284,15 +294,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 modelItem.classList.add('selected');
             }
             
-            // Move 'default' trait to flux-dev-uncensored-11 for image models
+            // Move 'default' trait to lustify-sdxl for image models
             let traits = model.traits;
             if (model.id === 'venice-uncensored') {
                 traits = traits.filter(trait => trait !== 'default');
-            } else if (model.id === 'flux-dev-uncensored-11') {
+            } else if (model.id === 'lustify-sdxl') {
                 // Add default trait if not present
                 if (!traits.includes('default')) {
                     traits = ['default', ...traits];
                 }
+            } else if (model.id === 'flux-dev-uncensored-11') {
+                // Remove default trait from old model
+                traits = traits.filter(trait => trait !== 'default');
             } else if (model.id === 'flux-dev-uncensored') {
                 // Remove default trait from old model
                 traits = traits.filter(trait => trait !== 'default');

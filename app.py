@@ -1835,9 +1835,15 @@ def compress_image():
         app.logger.error(f"Error in image compression: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-if __name__ == "__main__":
-    # Ensure chat directory exists
-    os.makedirs(CHAT_DIR, exist_ok=True)
-    
-    # Run the Flask app - localhost only for security
-    app.run(debug=True, host='127.0.0.1', port=5000)
+@app.route('/import_history', methods=['POST'])
+def import_history():
+    """Import chat history from client and save it to server"""
+    user_id = get_user_id()
+    data = request.get_json()
+    game_id = data.get('game_id')
+    history = data.get('history')
+    if not game_id or history is None:
+        return jsonify({"success": False, "error": "Missing game_id or history"}), 400
+    # Save imported history to server storage
+    save_chat_history(user_id, history, game_id)
+    return jsonify({"success": True})

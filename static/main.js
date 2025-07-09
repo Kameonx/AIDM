@@ -1752,6 +1752,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Check if this response contains image generation requests
                     const hasImageRequest = /\[IMAGE:\s*([^\]]+)\]/i.test(fullResponseText);
+                   
                     if (hasImageRequest) {
                         console.log("DM response contains image request, will check for images after longer delay");
                         
@@ -2201,6 +2202,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 debugLog('Error copying to clipboard:', err);
                 addSystemMessage('Error copying chat to clipboard.', false, false, true);
             });
+        });
+    }
+
+    // Export data functionality
+    const exportDataBtn = document.getElementById('export-data-btn');
+    const importDataBtn = document.getElementById('import-data-btn');
+    const importFileInput = document.getElementById('import-file-input');
+    if (exportDataBtn) {
+        exportDataBtn.addEventListener('click', function() {
+            const key = 'chatHistory_' + currentGameId;
+            const data = localStorage.getItem(key) || '[]';
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'chat_history_' + currentGameId + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+    // Import data functionality
+    if (importDataBtn && importFileInput) {
+        importDataBtn.addEventListener('click', () => importFileInput.click());
+        importFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const imported = JSON.parse(evt.target.result);
+                    if (Array.isArray(imported)) {
+                        const key = 'chatHistory_' + currentGameId;
+                        localStorage.setItem(key, JSON.stringify(imported));
+                        chatWindow.innerHTML = '';
+                        displayMessages(imported);
+                        addSystemMessage('Data imported successfully.', false, false, true);
+                    } else {
+                        addSystemMessage('Invalid import format.', false, false, true);
+                    }
+                } catch (err) {
+                    addSystemMessage('Error importing data: ' + err.message, false, false, true);
+                }
+            };
+            reader.readAsText(file);
+            importFileInput.value = '';
         });
     }
 

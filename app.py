@@ -1847,3 +1847,6 @@ def import_history():
     # Save imported history to server storage
     save_chat_history(user_id, history, game_id)
     return jsonify({"success": True})
+
+if __name__ == '__main__':
+    app.run(debug=True)

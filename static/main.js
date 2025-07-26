@@ -1571,8 +1571,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const responseTextElem = loadingDiv.querySelector('[id^="response-text"]');
             if (responseTextElem) {
                 responseTextElem.classList.remove('typing');
-                const oldCursor = responseTextElem.querySelector('.cursor');
-                if (oldCursor) oldCursor.remove();
+                const cursor = responseTextElem.querySelector('.cursor');
+                if (cursor) cursor.remove();
                 
                 if (!responseTextElem.textContent.trim()) {
                     responseTextElem.textContent = "Response timeout. Please try again.";
@@ -1712,7 +1712,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     PlayerManager.checkForPlayerNames(fullResponseText);
                     // Note: Image generation is now handled automatically on the server side
-                    // when the DM includes [IMAGE: description] tags in responses                    // Save the completed DM response to localStorage
+                    // This ensures the server knows which model to use on page refresh
+                    setServerModel(selectedModel);
+                    // Save the completed DM response to localStorage
                     const processedResponse = Utils.processFormattedText(fullResponseText);
                       // Remove [IMAGE: ...] tags from the displayed/saved content
                     const cleanedContent = processedResponse.replace(/\[IMAGE:\s*[^\]]+\]/gi, '').replace(/\s+/g, ' ').trim();
@@ -1749,27 +1751,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         console.log("Skipping save of empty DM message (only contained image tags)");
                     }
-                    
-                    // Check if this response contains image generation requests
-                    const hasImageRequest = /\[IMAGE:\s*([^\]]+)\]/i.test(fullResponseText);
-                   
-                    if (hasImageRequest) {
-                        console.log("DM response contains image request, will check for images after longer delay");
-                        
-                        // Extract only the first image prompt and generate it once
-                        const imageMatches = fullResponseText.match(/\[IMAGE:\s*([^\]]+)\]/i);
-                        if (imageMatches && imageMatches[1]) {
-                            const imagePrompt = imageMatches[1].trim();
-                            console.log(`Generating single image: ${imagePrompt}`);
-                            generateImage(imagePrompt);
-                        }
-                    } else {
-                        // Images are now handled directly in the generateImage function
-                        // No need to check for server-side images since we're using localStorage
-                        console.log("Message processed, images handled via localStorage");
-                    }
-                    
-                    console.log("=== END SAVING DM MESSAGE ===");
                 }
             }
             

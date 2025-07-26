@@ -403,8 +403,8 @@ const PlayerManager = (function() {
         
         // First look for exact pattern: "Player X is now named Y"
         if (/Player \d+ is now named/.test(text)) {
-            // Accept multi-word names (with spaces)
-            const exactNameRegex = /Player (\d+) is (?:now |)named ([A-Za-z][\w\s'-]{1,50})/gi;
+            // Accept multi-word names (with spaces) and require 'is now named'
+            const exactNameRegex = /Player (\d+) is now named\s+([A-Za-z][\w\s'-]{1,50})/gi;
             let match;
             
             debugLog("Found 'Player X is now named' pattern, checking for specific matches...");
@@ -431,6 +431,9 @@ const PlayerManager = (function() {
                     debugLog(`Player ${playerNum} hasn't sent any messages yet. Not updating name to ${pName}`);
                 }
             }
+            // If no valid exact-name match, stop further parsing to avoid mis-captures
+            debugLog("Exact 'is now named' pattern found but no valid captures; skipping direct-address regex");
+            return false;
         }
         
         // Check for DM rename request
@@ -443,7 +446,7 @@ const PlayerManager = (function() {
 
         // Look for directly addressed players - try to find "Player X" followed by a name
         // Accept multi-word names
-        const directAddressRegex = /(?:Player|player) (\d+).*?(?:is|called|name is) ([A-Za-z][\w\s'-]{1,50})/i;
+        const directAddressRegex = /(?:Player|player) (\d+).*?(?:is named|is called|called|name is)\s+([A-Za-z][\w\s'-]{1,50})/i;
         let match = text.match(directAddressRegex);
         if (match && match[1] && match[2]) {
             const playerNum = parseInt(match[1]);

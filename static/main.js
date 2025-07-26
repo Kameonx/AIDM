@@ -1756,24 +1756,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (hasImageRequest) {
                         console.log("DM response contains image request, will check for images after longer delay");
                         
-                        // Extract image prompts and generate them
-                        const imageMatches = fullResponseText.match(/\[IMAGE:\s*([^\]]+)\]/gi);
-                        if (imageMatches) {
-                            imageMatches.forEach((match, index) => {
-                                const promptMatch = match.match(/\[IMAGE:\s*([^\]]+)\]/i);
-                                if (promptMatch && promptMatch[1]) {
-                                    const imagePrompt = promptMatch[1].trim();
-                                    console.log(`Generating image ${index + 1}: ${imagePrompt}`);
-                                    
-                                    // Add a small delay between multiple image generations
-                                    setTimeout(() => {
-                                        generateImage(imagePrompt);
-                                    }, index * 1000);
-                                }
-                            });
+                        // Extract only the first image prompt and generate it once
+                        const imageMatches = fullResponseText.match(/\[IMAGE:\s*([^\]]+)\]/i);
+                        if (imageMatches && imageMatches[1]) {
+                            const imagePrompt = imageMatches[1].trim();
+                            console.log(`Generating single image: ${imagePrompt}`);
+                            generateImage(imagePrompt);
                         }
-                        
-                        console.log("Message with image request processed, images handled via localStorage");
                     } else {
                         // Images are now handled directly in the generateImage function
                         // No need to check for server-side images since we're using localStorage

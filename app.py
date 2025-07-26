@@ -687,7 +687,7 @@ def stream_response():
                     if image_requests:
                         app.logger.debug(f"Found {len(image_requests)} image requests to generate")
                         for i, prompt in enumerate(image_requests):
-                            app.logger.debug(f"Generating image {i+1}/{len(image_requests)}: {prompt[:50]}...")
+                            app.logger.debug(f"Generating image {i+1}/{len(image_requests)}: {prompt[:50]}..." )
                             try:
                                 # Generate the image and get the data
                                 selected_model = session.get('selected_image_model', DEFAULT_IMAGE_MODEL_ID)
@@ -716,6 +716,7 @@ def stream_response():
                                 
                                 if response.status_code == 200:
                                     result = response.json()
+                                    
                                     if 'images' in result and result['images']:
                                         image_data = result['images'][0] if isinstance(result['images'], list) else result['images']
                                         

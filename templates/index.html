@@ -67,7 +67,7 @@
                   </div>
                   {% elif message.role == 'user' %}
                   <div class="message player-message">
-                      <span class="message-sender">{{ message.sender or 'Player' }}: </span>
+                      <span class="message-sender">{{ message.player or 'Player' }}: </span>
                       <span class="message-content">{{ message.content|safe }}</span>
                   </div>
                   {% endif %}

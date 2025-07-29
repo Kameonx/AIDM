@@ -127,11 +127,15 @@ const PlayerManager = (function() {
         input.id = `player${playerNum}-input`;
         input.placeholder = `Player ${playerNum}, type your message...`;
         input.className = 'player-input-field';
-        input.autocomplete = 'off';
+        input.autocomplete = 'new-password';
         input.autocorrect = 'off';
         input.autocapitalize = 'off';
         input.spellcheck = false;
-        input.setAttribute('data-form-type', 'other');
+        input.setAttribute('data-form-type', 'chat');
+        input.setAttribute('data-lpignore', 'true');
+        input.setAttribute('data-1p-ignore', 'true');
+        input.setAttribute('name', `chat-message-${playerNum}`);
+        input.setAttribute('role', 'textbox');
         input.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && onSendMessage) {
                 e.preventDefault();

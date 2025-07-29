@@ -128,6 +128,10 @@ const PlayerManager = (function() {
         input.placeholder = `Player ${playerNum}, type your message...`;
         input.className = 'player-input-field';
         input.autocomplete = 'off';
+        input.autocorrect = 'off';
+        input.autocapitalize = 'off';
+        input.spellcheck = false;
+        input.setAttribute('data-form-type', 'other');
         input.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && onSendMessage) {
                 e.preventDefault();

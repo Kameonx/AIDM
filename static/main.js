@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let messageHistory = [];
     let historyIndex = -1;
     const MAX_HISTORY_SIZE = 50;
+    // Flag to prevent welcome message while loading history
+    let isLoadingHistory = false;
     
     // Helper function to get cookie value
     function getCookie(name) {
@@ -66,6 +68,25 @@ document.addEventListener('DOMContentLoaded', function() {
         debugLog("Updating localStorage with game ID from cookie:", getCookie('game_id'));
         currentGameId = getCookie('game_id');
         localStorage.setItem('currentGameId', currentGameId);
+    }
+
+    // If there's still no game ID, try to adopt the most recent local chatHistory_* key
+    if (!currentGameId) {
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('chatHistory_game_'));
+        if (keys.length > 0) {
+            // Choose the most recent by embedded timestamp: chatHistory_game_<ms>_<rand>
+            keys.sort((a,b) => {
+                const ta = parseInt((a.split('chatHistory_game_')[1] || '').split('_')[0]) || 0;
+                const tb = parseInt((b.split('chatHistory_game_')[1] || '').split('_')[0]) || 0;
+                return tb - ta;
+            });
+            const adoptedKey = keys[0];
+            const adoptedId = adoptedKey.replace('chatHistory_', '');
+            currentGameId = adoptedId;
+            localStorage.setItem('currentGameId', currentGameId);
+            document.cookie = `game_id=${currentGameId}; path=/; max-age=${60*60*24*365}`;
+            debugLog('Adopted existing local game session:', currentGameId);
+        }
     }
     
     // Player tracking - IMPORTANT: Use let instead of const to allow reassignment
@@ -592,13 +613,15 @@ document.addEventListener('DOMContentLoaded', function() {
         updateUndoRedoButtons(); // Explicitly update buttons after history reset
         debugLog("New game created locally:", currentGameId);
     }    function ensureWelcomeMessage() {
+        // Do not show welcome while history is loading
+        if (isLoadingHistory) {
+            debugLog('Skipping welcome message while history is loading');
+            return false;
+        }
         if (chatWindow.children.length === 0) {
             addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
-            
             // Also save this welcome message to localStorage
             if (currentGameId) {
-                console.log("=== SAVING WELCOME MESSAGE ===");
-                console.log("currentGameId:", currentGameId);
                 const welcomeMessage = {
                     role: "assistant",
                     type: "dm",
@@ -606,14 +629,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     timestamp: Date.now(),
                     sender: "DM"
                 };
-                console.log("Welcome message to save:", welcomeMessage);
-                
                 // Use a small delay to ensure any other localStorage operations complete first
                 setTimeout(() => {
                     saveMessageToLocalStorage(welcomeMessage);
                 }, 100);
             }
-            
             return true; // Indicates welcome message was added
         }
         return false; // Indicates messages already existed
@@ -668,12 +688,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 span.textContent = `${dmName}: `;
             });
         }
-          // Load chat history from localStorage instead of server
+                    // Load chat history from localStorage instead of server
         if (currentGameId) {
             console.log("=== INITIALIZE: Loading chat history ===");
             console.log("currentGameId:", currentGameId);
             
-            const localHistory = Utils.loadChatHistory(currentGameId);
+                        isLoadingHistory = true;
+                        const localHistory = Utils.loadChatHistory(currentGameId);
             
             // DEBUG: Check what's in localStorage
             console.log("=== DEBUG CHAT HISTORY ===");
@@ -713,17 +734,52 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });                console.log("About to call displayMessages with", localHistory.length, "messages");
                 displayMessages(localHistory);                debugLog("Loaded chat history from localStorage:", localHistory.length, "messages");
+                isLoadingHistory = false;
                 
                 console.log("=== END DEBUG ===");
             } else {
                 console.log("No messages in localStorage");
                 console.log("=== END DEBUG ===");
                 
-                // If we have a game ID but no messages, something went wrong
-                // Let's start fresh with this game ID instead of keeping an empty game
-                console.log("Game ID exists but no chat history found. Starting fresh with same ID.");
-                ensureWelcomeMessage();
-                debugLog("No localStorage history found, showing welcome message");
+                // Fallback: try to load history from server if localStorage is empty
+                if (currentGameId) {
+                    debugLog("Attempting server fallback history load for game:", currentGameId);
+                    fetch('/load_history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ game_id: currentGameId })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        const serverHistory = (data && Array.isArray(data.history)) ? data.history : [];
+                        if (serverHistory.length > 0) {
+                            // Normalize message types
+                            serverHistory.forEach(msg => {
+                                if (msg.role === 'assistant' && !msg.type) msg.type = 'dm';
+                                else if (msg.role === 'user' && !msg.type) msg.type = 'player';
+                            });
+                            // Persist to localStorage and display
+                            try { Utils.saveChatHistory(currentGameId, serverHistory); } catch (e) { debugLog('Error saving server history to localStorage:', e); }
+                            displayMessages(serverHistory);
+                            debugLog("Loaded chat history from server fallback:", serverHistory.length, "messages");
+            isLoadingHistory = false;
+                        } else {
+                            // Still nothing: show welcome
+                            ensureWelcomeMessage();
+                            debugLog("Server fallback returned empty, showing welcome message");
+            isLoadingHistory = false;
+                        }
+                    })
+                    .catch(err => {
+                        debugLog("Error loading server fallback history:", err);
+                        isLoadingHistory = false;
+                        ensureWelcomeMessage();
+                    });
+                } else {
+                    isLoadingHistory = false;
+                    ensureWelcomeMessage();
+                    debugLog("No game ID and no localStorage history, showing welcome message");
+                }
             }
         } else {
             ensureWelcomeMessage();
@@ -1494,6 +1550,14 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         saveMessageToLocalStorage(userMessageEntry);
         
+        // Build recent history for context (limit to last 150 messages to keep payload reasonable)
+        const fullLocal = Utils.loadChatHistory(currentGameId) || [];
+        const clientHistoryForServer = fullLocal.slice(-150).map(m => ({
+            role: m.role || (m.type === 'dm' ? 'assistant' : (m.type === 'system' ? 'system' : 'user')),
+            content: m.content || m.text || '',
+            player: m.player || (m.role === 'user' ? (m.player || undefined) : undefined)
+        }));
+
         fetch('/chat', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1501,7 +1565,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 message: userMessage,
                 game_id: currentGameId,
                 player_number: playerNumber,
-                player_names: playerContext
+                player_names: playerContext,
+                client_history: clientHistoryForServer
             })
         })
         .then(response => {
@@ -2244,6 +2309,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         localStorage.setItem(key, JSON.stringify(imported));
                         chatWindow.innerHTML = '';
                         displayMessages(imported);
+                        // Persist undo/redo baseline and make sure next send includes imported context
+                        messageHistory = [];
+                        historyIndex = -1;
+                        localStorage.removeItem('chatHistory');
+                        setTimeout(saveChatState, 50);
                         addSystemMessage('Data imported successfully.', false, false, true);
                     } else {
                         addSystemMessage('Invalid import format.', false, false, true);

@@ -394,6 +394,33 @@ function saveChatHistory(gameId, chatHistory) {
             return;
         }
         
+        // Read existing for safety checks and backup
+        const existingRaw = localStorage.getItem(key);
+        let existingLen = 0;
+        if (existingRaw) {
+            try {
+                const existingArr = JSON.parse(existingRaw);
+                if (Array.isArray(existingArr)) existingLen = existingArr.length;
+            } catch (_) { /* ignore parse issues */ }
+        }
+        
+        // Safety: don't overwrite a non-empty history with an empty array unintentionally
+        if (existingLen > 0 && chatHistory.length === 0) {
+            console.warn("Utils.saveChatHistory - Refusing to overwrite non-empty history with empty array. Keeping existing.");
+            return;
+        }
+        
+        // Backup current value before writing new data
+        if (existingRaw) {
+            const backupKey = `chatHistoryBackup_${gameId}`;
+            try {
+                localStorage.setItem(backupKey, existingRaw);
+                console.log("Utils.saveChatHistory - Backup saved to", backupKey);
+            } catch (e) {
+                console.warn("Utils.saveChatHistory - Failed to save backup:", e);
+            }
+        }
+        
         const serialized = JSON.stringify(chatHistory);
         localStorage.setItem(key, serialized);
         console.log("Utils.saveChatHistory - SUCCESS, stored", serialized.length, "characters");
@@ -421,9 +448,33 @@ function loadChatHistory(gameId) {
         } else {
             console.log("Utils.loadChatHistory - No data found for key:", key);
         }
+        // Attempt recovery from backup if main key missing or empty
+        const backupKey = `chatHistoryBackup_${gameId}`;
+        const backup = localStorage.getItem(backupKey);
+        if (backup) {
+            try {
+                const hist = JSON.parse(backup);
+                if (Array.isArray(hist) && hist.length > 0) {
+                    console.warn("Utils.loadChatHistory - Restoring from backup:", backupKey, "messages:", hist.length);
+                    return hist;
+                }
+            } catch (_) { /* ignore */ }
+        }
     } catch (e) {
         console.log("Utils.loadChatHistory - ERROR:", e);
         Utils.debugLog("Error loading chat history:", e);
+        // On parse error, attempt backup restore
+        try {
+            const backupKey = `chatHistoryBackup_${gameId}`;
+            const backup = localStorage.getItem(backupKey);
+            if (backup) {
+                const hist = JSON.parse(backup);
+                if (Array.isArray(hist) && hist.length > 0) {
+                    console.warn("Utils.loadChatHistory - Error on main, restored from backup:", hist.length, "messages");
+                    return hist;
+                }
+            }
+        } catch (_) { /* ignore */ }
     }
     return [];
 }

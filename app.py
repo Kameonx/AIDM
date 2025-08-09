@@ -11,6 +11,7 @@ import string
 import io
 import base64
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, make_response, send_from_directory
+import secrets
 
 # Import configuration
 from config import (
@@ -47,7 +48,7 @@ def get_chat_file_path(user_id, game_id=None):
 
 def load_chat_history(user_id, game_id=None):
     """Load chat history - respects storage mode preference"""
-    storage_mode = session.get('storage_mode', 'hybrid')
+    storage_mode = session.get('storage_mode', 'client-only')
     
     # In client-only mode, return empty (frontend will handle loading from localStorage)
     if storage_mode == 'client-only':
@@ -63,7 +64,7 @@ def load_chat_history(user_id, game_id=None):
 
 def save_chat_history(user_id, chat_history, game_id=None):
     """Save chat history - respects storage mode preference"""
-    storage_mode = session.get('storage_mode', 'hybrid')
+    storage_mode = session.get('storage_mode', 'client-only')
     
     # In client-only mode, don't save to server
     if storage_mode == 'client-only':
@@ -372,6 +373,8 @@ def send_static(path):
 def index():
     user_id = get_user_id()
     game_id = request.cookies.get('game_id')
+    # Force client-only mode for privacy
+    session['storage_mode'] = 'client-only'
     
     if not game_id:
         # Generate a new game id if none is stored
@@ -388,6 +391,10 @@ def index():
     response.set_cookie('game_id', game_id, max_age=60*60*24*365)
     return response
 
+# Ephemeral in-memory context cache for client-only mode
+# Maps opaque token -> list of messages used for AI context; not persisted to disk
+CLIENT_CONTEXT_CACHE = {}
+
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
@@ -401,33 +408,58 @@ def chat():
         player_number = data.get('player_number', 1)  # Default to player 1
         is_system = data.get('is_system', False)
         invisible_to_players = data.get('invisible_to_players', False)  # New flag
-        
-        # Load chat history
-        chat_history = load_chat_history(user_id, game_id)
-        
-        # Add user message to history with player number
-        message_entry = {
-            "role": "user" if not is_system else "system",
-            "content": user_input,
-            "player": f"player{player_number}" if not is_system else "system"
-        }
-        
-        # Mark invisible messages so they don't show in chat
-        if invisible_to_players:
-            message_entry["invisible"] = True
-        
-        chat_history.append(message_entry)
-        
-        # Save chat history
-        save_chat_history(user_id, chat_history, game_id)
-        
-        # Return message ID for streaming
-        return jsonify({
-            "message_id": len(chat_history),
-            "streaming": True,
-            "player_number": player_number,
-            "invisible": invisible_to_players  # Let client know this is invisible
-        })
+        client_history = data.get('client_history')  # Client-sent history for client-only mode
+        storage_mode = session.get('storage_mode', 'client-only')
+        # Client-only: build history from client, store ephemerally, do not persist
+        if storage_mode == 'client-only':
+            history = []
+            if isinstance(client_history, list):
+                # Basic validation: only keep role/content/player fields
+                for msg in client_history[-200:]:  # cap to last 200 messages
+                    role = msg.get('role')
+                    content = msg.get('content') or msg.get('text') or ''
+                    if role in ('user', 'assistant', 'system') and isinstance(content, str):
+                        entry = { 'role': role, 'content': content }
+                        if msg.get('player'):
+                            entry['player'] = msg['player']
+                        history.append(entry)
+            # Append this user/system message
+            entry = {
+                'role': 'user' if not is_system else 'system',
+                'content': user_input
+            }
+            if not is_system:
+                entry['player'] = f'player{player_number}'
+            if invisible_to_players:
+                entry['invisible'] = True
+            history.append(entry)
+            # Create opaque token and store ephemerally
+            token = secrets.token_urlsafe(16)
+            CLIENT_CONTEXT_CACHE[token] = history
+            return jsonify({
+                'message_id': token,
+                'streaming': True,
+                'player_number': player_number,
+                'invisible': invisible_to_players
+            })
+        else:
+            # Hybrid/server mode (not used now): maintain server history as before
+            chat_history = load_chat_history(user_id, game_id)
+            message_entry = {
+                "role": "user" if not is_system else "system",
+                "content": user_input,
+                "player": f"player{player_number}" if not is_system else "system"
+            }
+            if invisible_to_players:
+                message_entry["invisible"] = True
+            chat_history.append(message_entry)
+            save_chat_history(user_id, chat_history, game_id)
+            return jsonify({
+                "message_id": len(chat_history),
+                "streaming": True,
+                "player_number": player_number,
+                "invisible": invisible_to_players
+            })
         
     except Exception as e:
         app.logger.error("Error in /chat endpoint: %s", str(e))
@@ -476,8 +508,18 @@ def stream_response():
         if model_id:
             session['selected_model'] = get_valid_model(model_id)
 
-    # Load chat history for this specific user
-    chat_history = load_chat_history(user_id, game_id)    # Print debug info
+    # Determine storage mode and choose history source
+    storage_mode = session.get('storage_mode', 'client-only')
+    if isinstance(message_id, str) and message_id in CLIENT_CONTEXT_CACHE:
+        chat_history = CLIENT_CONTEXT_CACHE.get(message_id, [])
+        # One-time use: delete to avoid lingering
+        try:
+            del CLIENT_CONTEXT_CACHE[message_id]
+        except KeyError:
+            pass
+    else:
+        chat_history = load_chat_history(user_id, game_id)
+    # Print debug info
     app.logger.debug(f"Starting stream: game_id={game_id}, msg_id={message_id}, model={session.get('selected_model')}")
 
     def generate():
@@ -674,7 +716,7 @@ def stream_response():
                         app.logger.error(f"Raw response: {response.text}")
                         yield f"data: {json.dumps({'content': 'Error parsing AI response', 'full': 'Error parsing AI response', 'error': True})}\n\n"
                 
-                # Store the complete response in chat history
+                # Store the complete response in chat history (skipped in client-only save)
                 if full_response:
                     # Process image generation requests first
                     processed_response, image_requests = process_image_requests(full_response)
@@ -682,6 +724,7 @@ def stream_response():
                     # Always format the content before storing
                     formatted_content = format_message_content(processed_response)
                     chat_history.append({"role": "assistant", "content": formatted_content})
+                    # Will no-op in client-only mode
                     save_chat_history(user_id, chat_history, game_id)
                     app.logger.debug(f"Saved formatted response to chat history, length: {len(formatted_content)}")                    # Generate images if requested and yield them to the client
                     if image_requests:
@@ -748,7 +791,7 @@ def stream_response():
                                             "storage_optimized": True
                                         }
                                         
-                                        # Add to chat history
+                                        # Add to chat history (no-op save in client-only mode)
                                         chat_history.append(image_message)
                                         save_chat_history(user_id, chat_history, game_id)
                                         

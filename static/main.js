@@ -1038,11 +1038,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             messageToSave.image_url = compressedDataUrl;
                             messageToSave.content = messageToSave.content.replace(imageMessage.image_url, compressedDataUrl);
                             
-                            // Update in the array and try to save again
-                            existingMessages[existingMessages.length - 1] = messageToSave;
-                            
+                            // Reload current history and update the most recent matching image entry
+                            let latest = Utils.loadChatHistory(currentGameId) || existingMessages;
+                            // Find last message with message_type === 'image' and matching timestamp or content marker
+                            let idx = -1;
+                            for (let i = latest.length - 1; i >= 0; i--) {
+                                const m = latest[i];
+                                if (m && (m.message_type === 'image' || (m.images && m.images.length > 0))) {
+                                    idx = i;
+                                    break;
+                                }
+                            }
+                            if (idx >= 0) {
+                                latest[idx] = messageToSave;
+                            } else {
+                                latest.push(messageToSave);
+                            }
                             try {
-                                Utils.saveChatHistory(currentGameId, existingMessages);
+                                Utils.saveChatHistory(currentGameId, latest);
                                 console.log("Compressed image message saved to localStorage successfully");
                             } catch (stillTooLarge) {
                                 console.error("Even compressed image is too large, saving without image data");
@@ -1050,8 +1063,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                 messageToSave.images = [];
                                 messageToSave.image_url = null;
                                 messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image too large for storage (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
-                                existingMessages[existingMessages.length - 1] = messageToSave;
-                                Utils.saveChatHistory(currentGameId, existingMessages);
+                                // Save updated fallback
+                                let latestFallback = Utils.loadChatHistory(currentGameId) || [];
+                                if (idx >= 0 && idx < latestFallback.length) {
+                                    latestFallback[idx] = messageToSave;
+                                } else {
+                                    latestFallback.push(messageToSave);
+                                }
+                                Utils.saveChatHistory(currentGameId, latestFallback);
                                 console.log("Saved image message without data due to quota limits");
                             }
                         };
@@ -1109,18 +1128,36 @@ document.addEventListener('DOMContentLoaded', function() {
                         messageToSave.images = [compressedDataUrl];
                         messageToSave.image_url = compressedDataUrl;
                         messageToSave.content = messageToSave.content.replace(imageMessage.image_url, compressedDataUrl);
-                        existingMessages[existingMessages.length - 1] = messageToSave;
-                        
+                        // Reload and update the latest image message entry
+                        let latest2 = Utils.loadChatHistory(currentGameId) || existingMessages;
+                        let idx2 = -1;
+                        for (let i = latest2.length - 1; i >= 0; i--) {
+                            const m = latest2[i];
+                            if (m && (m.message_type === 'image' || (m.images && m.images.length > 0))) {
+                                idx2 = i;
+                                break;
+                            }
+                        }
+                        if (idx2 >= 0) {
+                            latest2[idx2] = messageToSave;
+                        } else {
+                            latest2.push(messageToSave);
+                        }
                         try {
-                            Utils.saveChatHistory(currentGameId, existingMessages);
+                            Utils.saveChatHistory(currentGameId, latest2);
                             console.log("Aggressively compressed image saved to localStorage");
                         } catch (finalError) {
                             console.log("Final fallback: saving without image data");
                             messageToSave.images = [];
                             messageToSave.image_url = null;
                             messageToSave.content = `<div class="image-message"><div class="image-placeholder" style="padding: 20px; background: #f0f0f0; text-align: center; border-radius: 8px;">📷 Image storage failed (${imageMessage.image_prompt || 'Generated image'})</div></div>`;
-                            existingMessages[existingMessages.length - 1] = messageToSave;
-                            Utils.saveChatHistory(currentGameId, existingMessages);
+                            let latest3 = Utils.loadChatHistory(currentGameId) || [];
+                            if (idx2 >= 0 && idx2 < latest3.length) {
+                                latest3[idx2] = messageToSave;
+                            } else {
+                                latest3.push(messageToSave);
+                            }
+                            Utils.saveChatHistory(currentGameId, latest3);
                         }
                     };
                     img.src = imageMessage.image_url;
@@ -2239,48 +2276,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (redoBtn) {
         redoBtn.addEventListener('click', redoChat);
-    }    // Initial setup - clean and clear flow
-    if (currentGameId) {
-        debugLog("Restoring session:", currentGameId);
-        initialize();
-        loadAvailableModels(); // Load models after initialization
-        loadAvailableImageModels(); // Load image models after initialization
-    } else {
-        debugLog("No previous gameId. Setting up for a new game implicitly.");
-        
-        // CRITICAL: Load player names even for new games
-        const loadedState = Utils.loadPlayerState();
-        if (loadedState && loadedState.names) {
-            playerNames = loadedState.names;
-            debugLog("Restored player names for new game:", playerNames);
-        }
-        
-        messageHistory = [];
-        historyIndex = -1;
-        localStorage.removeItem('chatHistory');
-        chatWindow.innerHTML = '';
-        addMessage("DM", "Hello adventurer! Let's begin your quest. What is your name?", false, false, false);
-        
-        // Set up PlayerManager with loaded names
-        PlayerManager.setup({
-            playerNames: playerNames,
-            nextPlayerNumber: 2,
-            additionalPlayersContainer: additionalPlayersContainer,
-            removePlayerBtn: removePlayerBtn,
-            currentGameId: currentGameId,
-            debugLog: debugLog,
-            addSystemMessage: addSystemMessage,
-            createLoadingDivForDM: createLoadingDivForDM,
-            sendStreamRequest: sendStreamRequest,
-            savePlayerNames: savePlayerNames,
-            savePlayerState: savePlayerState
-        });
-          nextPlayerNumber = PlayerManager.ensurePlayersExist(player1Container, sendMessage);
-        updatePlayerLabels(); // Apply saved names to UI
-        updateUndoRedoButtons();
-        loadAvailableModels(); // Load models for new games too
-        loadAvailableImageModels(); // Load image models for new games too
-    }    window.sendMessage = sendMessage;
+    }
+    
+    // Expose sendMessage globally (used by PlayerManager and others)
+    window.sendMessage = sendMessage;
 
     debugLog("=== TOP-LEVEL DOMCONTENTLOADED FINISHED ===");
 
@@ -2581,17 +2580,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Application initialization and setup ---
-    
-    // Initialize mobile fixes
+    // Initialize once at end of DOMContentLoaded
     initMobileFixes();
-    
-    // Initialize image long-press handling
     initImageLongPress();
-
-    // Initialize the application
     initialize();
-    
-    // Load available models on page load
     loadAvailableModels();
     loadAvailableImageModels();
     

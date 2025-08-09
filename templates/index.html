@@ -52,34 +52,9 @@
 
   <div class="app-wrapper">
     <div class="chat-container">
-      <div class="chat-window" id="chat-window">
-          <!-- Messages will go here -->          {% if chat_history %}
-              {% for message in chat_history %}
-                  {% if message.message_type == 'image' %}
-                  <div class="message dm-message">
-                      <span class="message-sender">DM: </span>
-                      <span class="message-content">{{ message.content|safe }}</span>
-                  </div>
-                  {% elif message.role == 'assistant' %}
-                  <div class="message dm-message">
-                      <span class="message-sender">DM: </span>
-                      <span class="message-content">{{ message.content|safe }}</span>
-                  </div>
-                  {% elif message.role == 'user' %}
-                  <div class="message player-message">
-                      <span class="message-sender">{{ message.player or 'Player' }}: </span>
-                      <span class="message-content">{{ message.content|safe }}</span>
-                  </div>
-                  {% endif %}
-              {% endfor %}
-          {% else %}
-              <!-- Fallback welcome message -->
-              <div class="message dm-message">
-                  <span class="message-sender">DM: </span>
-                  <span class="message-content">Hello adventurer! Let's begin your quest. What is your name?</span>
-              </div>
-          {% endif %}
-      </div>
+    <div class="chat-window" id="chat-window">
+      <!-- Messages will be rendered by client-side JS from localStorage -->
+    </div>
       
       <!-- Scroll to bottom button -->
       <button id="scroll-to-bottom-btn" class="scroll-to-bottom" title="Go to latest message">

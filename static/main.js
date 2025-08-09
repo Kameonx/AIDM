@@ -1951,10 +1951,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Create base message object (following your other app's pattern)
                 const messageObj = {
                     sender: senderText,
+                    // Store minimal content for undo/redo snapshots to avoid quota issues
                     content: contentText,
                     text: contentText, // Add both for compatibility
-                    contentHTML: contentHTML,
-                    images: images, // Store base64 image URLs like your other app
+                    // Do not store base64 HTML in snapshots (can exceed quota). Keep minimal HTML for non-image.
+                    contentHTML: isImageMessage ? '' : contentHTML,
+                    // Do NOT store base64 image data in undo history; it explodes storage size
+                    images: isImageMessage ? [] : images,
                     type: isSystem ? 'system' : (isDM ? 'dm' : 'player'),
                     role: isSystem ? 'system' : (isDM ? 'assistant' : 'user'),
                     timestamp: timestamp
@@ -1966,7 +1969,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const captionElement = msg.querySelector('.image-caption');
                     
                     messageObj.message_type = "image";
-                    messageObj.image_url = images[0]; // Use first image as primary
+                    // Do NOT store the actual image in snapshots
+                    messageObj.image_url = null;
                     
                     if (imgElement) {
                         messageObj.image_prompt = imgElement.alt || '';
@@ -1982,7 +1986,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     messageObj.role = "assistant"; // Image messages are from the assistant/DM
-                    console.log("Saved image message with prompt:", messageObj.image_prompt);
+                    // Replace content with a lightweight placeholder so restore works without base64
+                    const prompt = messageObj.image_prompt || 'Generated image';
+                    messageObj.content = `[Image omitted: ${prompt}]`;
+                    messageObj.text = messageObj.content;
+                    messageObj.contentHTML = '';
+                    console.log("Saved lightweight image snapshot with prompt:", messageObj.image_prompt);
                 }
 
                 return messageObj;
@@ -2609,15 +2618,31 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log(`Found ${gameHistoryKeys.length} game history entries and ${gameDataKeys.length} game data entries`);
             
-            // Sort by timestamp (oldest first) and remove old entries
+            // Sort by embedded timestamp (oldest first)
+            // Keys look like: chatHistory_game_<ms>_<rand>
             const sortedHistoryKeys = gameHistoryKeys.sort((a, b) => {
-                const timestampA = parseInt(a.split('_')[1]) || 0;
-                const timestampB = parseInt(b.split('_')[1]) || 0;
-                return timestampA - timestampB;
+                const parseTs = (key) => {
+                    const tail = (key.split('chatHistory_game_')[1] || '');
+                    const tsStr = tail.split('_')[0] || '0';
+                    const ts = parseInt(tsStr);
+                    return isNaN(ts) ? 0 : ts;
+                };
+                return parseTs(a) - parseTs(b);
             });
-            
-            // Keep only the 3 most recent games
-            const keysToRemove = sortedHistoryKeys.slice(0, Math.max(0, sortedHistoryKeys.length - 3));
+
+            // Never remove the active game's history
+            const activeHistoryKey = currentGameId ? `chatHistory_${currentGameId}` : null;
+
+            // Keep the 3 most recent games (besides the active one which is always kept)
+            const protectedSet = new Set();
+            if (activeHistoryKey) protectedSet.add(activeHistoryKey);
+            const recentToKeep = 3;
+            for (let i = sortedHistoryKeys.length - 1; i >= 0 && protectedSet.size < recentToKeep + (activeHistoryKey ? 1 : 0); i--) {
+                const k = sortedHistoryKeys[i];
+                protectedSet.add(k);
+            }
+
+            const keysToRemove = sortedHistoryKeys.filter(k => !protectedSet.has(k));
             
             keysToRemove.forEach(key => {
                 console.log(`Removing old game data: ${key}`);
